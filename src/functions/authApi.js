@@ -61,7 +61,9 @@ async function handle(request, context, handler) {
   }
 
   try {
-    await store.ensureSeedUsers();
+    if (process.env.AUTO_SEED_USERS === "true") {
+      await store.ensureSeedUsers();
+    }
     return await handler(request, context);
   } catch (error) {
     context.error(error);
