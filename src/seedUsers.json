@@ -14,6 +14,13 @@
     "mappedMiningRole": "MIS User"
   },
   {
+    "name": "RAJESH THAKRE",
+    "mobile": "8308310981",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
     "name": "DHRUV CHACHRA",
     "mobile": "8624882393",
     "sourceTransactionPower": "Checker",
@@ -63,38 +70,115 @@
     "mappedMiningRole": "Management"
   },
   {
-    "name": "Sanskar Manohare",
+    "name": "SURAJ KUMAR SHARMA",
+    "mobile": "8228055644",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "ASHISH THAKUR",
+    "mobile": "9850396090",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "GULNAWAZ",
+    "mobile": "7587552827",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "FARUKH KHAN",
+    "mobile": "9753109222",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "CHANDAN TIWARI",
+    "mobile": "6306416709",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "AMIT SHARMA",
+    "mobile": "7709972657",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "VIVEK KHADILKAR",
+    "mobile": "7875447101",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "ROHIT SINGH PARIHAR",
+    "mobile": "9977327762",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "KISHOR DHANDRE",
+    "mobile": "9423604667",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "MOHAMMED SABIR",
+    "mobile": "8902400042",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "ARUN KUMAR SONI",
+    "mobile": "8707728110",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "RANJIT KUMAR DAS",
+    "mobile": "7739542404",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "CHITRANJAN SINGH",
+    "mobile": "7776037660",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "STUPAL MOON",
+    "mobile": "7499339026",
+    "sourceTransactionPower": "None",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Viewer"
+  },
+  {
+    "name": "SANSKAR VINOD MANOHAR",
     "mobile": "7887402820",
     "sourceTransactionPower": "Maker 1",
     "sourceSoftwarePower": "Maker 1",
     "mappedMiningRole": "MIS User"
   },
   {
-    "name": "Anoop Paul",
-    "mobile": "9925565281",
-    "sourceTransactionPower": "Maker 1",
-    "sourceSoftwarePower": "Admin",
-    "mappedMiningRole": "Super Admin"
-  },
-  {
-    "name": "Nagendra Chintala",
+    "name": "NAGENDRA CHINTALA",
     "mobile": "9766850321",
     "sourceTransactionPower": "Maker 1",
     "sourceSoftwarePower": "Admin",
     "mappedMiningRole": "Super Admin"
-  },
-  {
-    "name": "Dhiraj Nagrale",
-    "mobile": "8208986604",
-    "sourceTransactionPower": "Maker 1",
-    "sourceSoftwarePower": "None",
-    "mappedMiningRole": "MIS User"
-  },
-  {
-    "name": "Akshay",
-    "mobile": "9209639802",
-    "sourceTransactionPower": "Maker 2",
-    "sourceSoftwarePower": "None",
-    "mappedMiningRole": "Fleet Manager"
   }
 ]
