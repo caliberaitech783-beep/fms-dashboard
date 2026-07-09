@@ -8,7 +8,8 @@ import { validateNewPassword } from "../utils/passwordValidation";
 
 const USERS_STORAGE_KEY = "mining.auth.users.v1";
 const PASSWORD_HISTORY_STORAGE_KEY = "mining.auth.passwordHistory.v1";
-const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? "").replace(/\/$/, "");
+const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
+const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_AUTH_API_BASE_URL).replace(/\/$/, "");
 
 export interface CreateUserInput {
   name: string;
