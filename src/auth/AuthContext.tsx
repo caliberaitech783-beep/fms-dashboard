@@ -19,8 +19,10 @@ import {
   clearAuthSession,
   consumeUpdateMessage,
   getAuthSession,
+  getRememberedCredentials,
   getRememberedUserId,
   setAuthSession,
+  setRememberedCredentials,
   setRememberedUserId,
   setUpdateMessage,
 } from "./sessionService";
@@ -31,6 +33,7 @@ interface AuthContextValue {
   auditLogs: AuditLog[];
   loading: boolean;
   rememberedUserId: string;
+  rememberedPassword: string;
   updateMessage: string | null;
   login: (userId: string, password: string, remember: boolean) => Promise<void>;
   logout: () => Promise<void>;
@@ -142,7 +145,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginAt: new Date().toISOString(),
       token,
     });
-    setRememberedUserId(remember ? user.userId : null);
+    if (remember) {
+      setRememberedCredentials(user.userId, password);
+    } else {
+      setRememberedCredentials(null, null);
+      setRememberedUserId(null);
+    }
     setCurrentUser(user);
     setUpdateMessageState(null);
     await refreshUsers();
@@ -171,6 +179,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginAt: new Date().toISOString(),
       token: getAuthSession()?.token ?? null,
     });
+    if (getRememberedCredentials().userId === updatedUser.userId) {
+      setRememberedCredentials(updatedUser.userId, newPassword);
+    }
     setCurrentUser(updatedUser);
     await refreshUsers();
   };
@@ -223,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     auditLogs,
     loading,
     rememberedUserId: getRememberedUserId(),
+    rememberedPassword: getRememberedCredentials().password,
     updateMessage,
     login,
     logout,

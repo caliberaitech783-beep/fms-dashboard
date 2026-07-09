@@ -4,10 +4,10 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../ui/Button";
 
 export function LoginForm() {
-  const { login, rememberedUserId, updateMessage } = useAuth();
+  const { login, rememberedUserId, rememberedPassword, updateMessage } = useAuth();
   const [userId, setUserId] = useState(rememberedUserId);
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(Boolean(rememberedUserId));
+  const [password, setPassword] = useState(rememberedPassword);
+  const [remember, setRemember] = useState(Boolean(rememberedUserId || rememberedPassword));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +96,7 @@ export function LoginForm() {
                 onChange={(event) => setRemember(event.target.checked)}
                 className="h-4 w-4 rounded border-coal-300 text-ore-600 focus:ring-ore-500"
               />
-              Remember mobile/user ID only
+              Remember user ID and password
             </label>
 
             <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
