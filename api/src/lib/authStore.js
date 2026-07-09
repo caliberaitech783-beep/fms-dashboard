@@ -355,18 +355,6 @@ async function ensureSeedUsers() {
       await saveUser(user);
       await savePasswordHistory(user.userId, passwordHash, createdAt);
       await addAuditLog({ actor: null, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "seed" } });
-    } else {
-      existing.name = seed.name;
-      existing.mobile = userId;
-      existing.role = normalizeRole(seed.mappedMiningRole);
-      existing.sourceTransactionPower = normalizeNullable(seed.sourceTransactionPower);
-      existing.sourceSoftwarePower = normalizeNullable(seed.sourceSoftwarePower);
-      existing.failedLoginAttempts = 0;
-      existing.lockedUntil = null;
-      existing.mustChangePassword = false;
-      existing.updatedAt = now();
-      existing.updatedBy = "seed";
-      await saveUser(existing);
     }
   }
 }
