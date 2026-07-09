@@ -21,6 +21,7 @@ import {
   getAuthSession,
   getRememberedCredentials,
   getRememberedUserId,
+  purgeLocalAuthArtifactsForCleanSlate,
   setAuthSession,
   setRememberedCredentials,
   setRememberedUserId,
@@ -65,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+
+    purgeLocalAuthArtifactsForCleanSlate();
 
     initializeUserStore().then(async () => {
       if (!mounted) {

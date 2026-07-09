@@ -4,6 +4,15 @@ const SESSION_STORAGE_KEY = "mining.auth.session.v1";
 const REMEMBERED_USER_ID_KEY = "mining.auth.rememberedUserId.v1";
 const REMEMBERED_CREDENTIALS_KEY = "mining.auth.rememberedCredentials.v1";
 const UPDATE_MESSAGE_KEY = "mining.auth.updateMessage.v1";
+const CLEAN_SLATE_PURGE_KEY = "mining.auth.cleanSlatePurge.v1";
+const CLEAN_SLATE_PURGE_VERSION = "2026-07-09-users-wiped-v1";
+const LOCAL_AUTH_KEYS = [
+  "mining.auth.auditLogs.v1",
+  "mining.auth.passwordHistory.v1",
+  "mining.auth.users.v1",
+  REMEMBERED_CREDENTIALS_KEY,
+  REMEMBERED_USER_ID_KEY,
+];
 
 interface RememberedCredentials {
   userId: string;
@@ -21,6 +30,20 @@ export function setAuthSession(session: AuthSession) {
 
 export function clearAuthSession() {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+export function purgeLocalAuthArtifactsForCleanSlate() {
+  if (localStorage.getItem(CLEAN_SLATE_PURGE_KEY) === CLEAN_SLATE_PURGE_VERSION) {
+    return;
+  }
+
+  for (const key of LOCAL_AUTH_KEYS) {
+    localStorage.removeItem(key);
+  }
+
+  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  sessionStorage.removeItem(UPDATE_MESSAGE_KEY);
+  localStorage.setItem(CLEAN_SLATE_PURGE_KEY, CLEAN_SLATE_PURGE_VERSION);
 }
 
 export function getRememberedUserId(): string {
