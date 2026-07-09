@@ -250,7 +250,7 @@ app.http("users", {
       department,
       isActive: body.isActive !== false,
       isPending: false,
-      mustChangePassword: true,
+      mustChangePassword: false,
       passwordChangedAt: null,
       lastLoginAt: null,
       lastLogoutAt: null,
@@ -286,7 +286,7 @@ app.http("resetPassword", {
 
     const passwordHash = store.hashPassword(target.userId);
     target.passwordHash = passwordHash;
-    target.mustChangePassword = true;
+    target.mustChangePassword = false;
     target.failedLoginAttempts = 0;
     target.lockedUntil = null;
     target.lastPasswordResetAt = new Date().toISOString();
