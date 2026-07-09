@@ -1,0 +1,16 @@
+{
+  "name": "fms-dashboard-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Azure Functions API for shared FMS dashboard authentication and user management.",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "test": "node --check src/functions/authApi.js && node --check src/lib/authStore.js"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.3.2",
+    "@azure/functions": "^4.16.2"
+  },
+  "devDependencies": {}
+}
