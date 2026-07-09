@@ -338,7 +338,7 @@ async function ensureSeedUsers() {
         department: null,
         isActive: true,
         isPending: false,
-        mustChangePassword: true,
+        mustChangePassword: false,
         passwordChangedAt: null,
         lastLoginAt: null,
         lastLogoutAt: null,
@@ -363,6 +363,7 @@ async function ensureSeedUsers() {
       existing.sourceSoftwarePower = normalizeNullable(seed.sourceSoftwarePower);
       existing.failedLoginAttempts = 0;
       existing.lockedUntil = null;
+      existing.mustChangePassword = false;
       existing.updatedAt = now();
       existing.updatedBy = "seed";
       await saveUser(existing);
