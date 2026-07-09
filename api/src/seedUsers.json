@@ -1,0 +1,100 @@
+[
+  {
+    "name": "MOHIT CHADDA",
+    "mobile": "9921545111",
+    "sourceTransactionPower": "Checker",
+    "sourceSoftwarePower": "Admin",
+    "mappedMiningRole": "Super Admin"
+  },
+  {
+    "name": "SACHIN TAWADE",
+    "mobile": "9579586633",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "Maker 1",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "DHRUV CHACHRA",
+    "mobile": "8624882393",
+    "sourceTransactionPower": "Checker",
+    "sourceSoftwarePower": "Admin",
+    "mappedMiningRole": "Super Admin"
+  },
+  {
+    "name": "MAHI CHADDA",
+    "mobile": "8788077868",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "MANISH CHADDA",
+    "mobile": "9822265747",
+    "sourceTransactionPower": "Checker",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Management"
+  },
+  {
+    "name": "ANUJ CHADDA",
+    "mobile": "9922930486",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "RAHUL CHADDA",
+    "mobile": "9921212811",
+    "sourceTransactionPower": "Checker",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Management"
+  },
+  {
+    "name": "KIRTI CHADDA",
+    "mobile": "8308823174",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "HONEY CHACHRA",
+    "mobile": "9168805852",
+    "sourceTransactionPower": "Checker",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Management"
+  },
+  {
+    "name": "Sanskar Manohare",
+    "mobile": "7887402820",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "Maker 1",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "Anoop Paul",
+    "mobile": "9925565281",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "Admin",
+    "mappedMiningRole": "Super Admin"
+  },
+  {
+    "name": "Nagendra Chintala",
+    "mobile": "9766850321",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "Admin",
+    "mappedMiningRole": "Super Admin"
+  },
+  {
+    "name": "Dhiraj Nagrale",
+    "mobile": "8208986604",
+    "sourceTransactionPower": "Maker 1",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "MIS User"
+  },
+  {
+    "name": "Akshay",
+    "mobile": "9209639802",
+    "sourceTransactionPower": "Maker 2",
+    "sourceSoftwarePower": "None",
+    "mappedMiningRole": "Fleet Manager"
+  }
+]

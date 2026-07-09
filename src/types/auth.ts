@@ -90,6 +90,7 @@ export interface AuthSession {
   mustChangePassword: boolean;
   appVersion: string;
   loginAt: string;
+  token?: string | null;
 }
 
 export interface SeedUserDefinition {

@@ -1,6 +1,8 @@
 import type { AppUser, AuditAction, AuditLog } from "../types/auth";
+import { getAuthSession } from "../auth/sessionService";
 
 const AUDIT_STORAGE_KEY = "mining.auth.auditLogs.v1";
+const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? "").replace(/\/$/, "");
 
 function makeId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
@@ -13,6 +15,26 @@ function readAuditLogs(): AuditLog[] {
 
 function writeAuditLogs(logs: AuditLog[]) {
   localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(logs.slice(0, 500)));
+}
+
+function remoteAuthEnabled(): boolean {
+  return Boolean(AUTH_API_BASE_URL);
+}
+
+async function remoteRequest<T>(path: string): Promise<T> {
+  const token = getAuthSession()?.token;
+  const response = await fetch(`${AUTH_API_BASE_URL}${path}`, {
+    headers: {
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    return [] as T;
+  }
+
+  return response.json() as Promise<T>;
 }
 
 export function addAuditLog({
@@ -45,6 +67,10 @@ export function addAuditLog({
   return log;
 }
 
-export function getAuditLogs(): AuditLog[] {
+export async function getAuditLogs(): Promise<AuditLog[]> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AuditLog[]>("/audit-logs");
+  }
+
   return readAuditLogs();
 }

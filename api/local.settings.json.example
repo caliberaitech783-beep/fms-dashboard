@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AUTH_TOKEN_SECRET": "replace-with-a-long-random-secret",
+    "ALLOWED_ORIGINS": "http://localhost:5173,https://fms.cmll.in",
+    "USERS_TABLE_NAME": "FmsUsers",
+    "AUDIT_TABLE_NAME": "FmsAuditLogs",
+    "PASSWORD_HISTORY_TABLE_NAME": "FmsPasswordHistory"
+  }
+}

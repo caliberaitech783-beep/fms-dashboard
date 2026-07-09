@@ -1,5 +1,6 @@
 import seedUsers from "../data/seed/users.json";
 import { APP_VERSION } from "../constants/appVersion";
+import { getAuthSession } from "../auth/sessionService";
 import { hashPassword, verifyPassword } from "../auth/passwordService";
 import { addAuditLog } from "./auditLogService";
 import type { AppUser, PasswordHistoryRecord, SeedUserDefinition, UserRole } from "../types/auth";
@@ -7,6 +8,7 @@ import { validateNewPassword } from "../utils/passwordValidation";
 
 const USERS_STORAGE_KEY = "mining.auth.users.v1";
 const PASSWORD_HISTORY_STORAGE_KEY = "mining.auth.passwordHistory.v1";
+const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? "").replace(/\/$/, "");
 
 export interface CreateUserInput {
   name: string;
@@ -14,6 +16,11 @@ export interface CreateUserInput {
   role: UserRole;
   department?: string;
   isActive?: boolean;
+}
+
+export interface AuthenticatedUser {
+  user: AppUser;
+  token: string | null;
 }
 
 function now(): string {
@@ -42,6 +49,35 @@ function writePasswordHistory(history: PasswordHistoryRecord[]) {
   localStorage.setItem(PASSWORD_HISTORY_STORAGE_KEY, JSON.stringify(history));
 }
 
+function remoteAuthEnabled(): boolean {
+  return Boolean(AUTH_API_BASE_URL);
+}
+
+async function remoteRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getAuthSession()?.token;
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${AUTH_API_BASE_URL}${path}`, {
+    ...init,
+    headers,
+  });
+
+  const payload = await response.json().catch(() => null) as { message?: string } | T | null;
+  if (!response.ok) {
+    const message = payload && typeof payload === "object" && "message" in payload ? payload.message : null;
+    throw new Error(message || "Request failed.");
+  }
+
+  return payload as T;
+}
+
 function normalizeSeedUser(seed: SeedUserDefinition): SeedUserDefinition {
   return {
     ...seed,
@@ -51,6 +87,10 @@ function normalizeSeedUser(seed: SeedUserDefinition): SeedUserDefinition {
 }
 
 export async function initializeUserStore(): Promise<{ created: number; updated: number; skipped: number; errors: number }> {
+  if (remoteAuthEnabled()) {
+    return { created: 0, updated: 0, skipped: 0, errors: 0 };
+  }
+
   const seeds = (seedUsers as SeedUserDefinition[]).map(normalizeSeedUser);
   const users = readUsers();
   const history = readPasswordHistory();
@@ -122,7 +162,14 @@ export async function initializeUserStore(): Promise<{ created: number; updated:
   return { created, updated, skipped: 0, errors: 0 };
 }
 
-export function getUsers(): AppUser[] {
+export async function getUsers(): Promise<AppUser[]> {
+  if (remoteAuthEnabled()) {
+    if (!getAuthSession()?.token) {
+      return [];
+    }
+    return remoteRequest<AppUser[]>("/users");
+  }
+
   return readUsers().sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -130,11 +177,26 @@ export function getPasswordHistory(userId: string): PasswordHistoryRecord[] {
   return readPasswordHistory().filter((entry) => entry.userId === userId);
 }
 
-export function getUserById(userId: string): AppUser | null {
+export async function getUserById(userId: string): Promise<AppUser | null> {
+  if (remoteAuthEnabled()) {
+    if (!getAuthSession()?.token) {
+      return null;
+    }
+    const user = await remoteRequest<AppUser>("/auth/me").catch(() => null);
+    return user?.userId === userId ? user : null;
+  }
+
   return readUsers().find((user) => user.userId === userId) ?? null;
 }
 
-export async function authenticateUser(userId: string, password: string): Promise<AppUser> {
+export async function authenticateUser(userId: string, password: string): Promise<AuthenticatedUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AuthenticatedUser>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ userId, password }),
+    });
+  }
+
   const users = readUsers();
   const user = users.find((item) => item.userId === userId.trim());
   const genericError = new Error("Invalid mobile/user ID or password.");
@@ -166,10 +228,17 @@ export async function authenticateUser(userId: string, password: string): Promis
   user.updatedAt = now();
   writeUsers(users);
   addAuditLog({ actor: user, action: "LOGIN_SUCCESS", targetType: "User", targetId: user.userId, metadata: { appVersion: APP_VERSION } });
-  return user;
+  return { user, token: null };
 }
 
 export async function changeUserPassword(userId: string, currentPassword: string, newPassword: string, confirmPassword: string): Promise<AppUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AppUser>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+  }
+
   const users = readUsers();
   const user = users.find((item) => item.userId === userId);
   if (!user) {
@@ -209,6 +278,13 @@ function assertSuperAdmin(actor: AppUser) {
 }
 
 export async function createUser(actor: AppUser, input: CreateUserInput): Promise<AppUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AppUser>("/users", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
   assertSuperAdmin(actor);
   const name = input.name.trim();
   const userId = input.userId.trim();
@@ -273,6 +349,12 @@ export async function createUser(actor: AppUser, input: CreateUserInput): Promis
 }
 
 export async function resetUserPassword(actor: AppUser, targetUserId: string): Promise<AppUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AppUser>(`/users/${encodeURIComponent(targetUserId)}/reset-password`, {
+      method: "POST",
+    });
+  }
+
   assertSuperAdmin(actor);
   const users = readUsers();
   const target = users.find((user) => user.userId === targetUserId);
@@ -298,7 +380,14 @@ export async function resetUserPassword(actor: AppUser, targetUserId: string): P
   return target;
 }
 
-export function setUserActive(actor: AppUser, targetUserId: string, isActive: boolean): AppUser {
+export async function setUserActive(actor: AppUser, targetUserId: string, isActive: boolean): Promise<AppUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AppUser>(`/users/${encodeURIComponent(targetUserId)}/active`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive }),
+    });
+  }
+
   assertSuperAdmin(actor);
   const users = readUsers();
   const target = users.find((user) => user.userId === targetUserId);
@@ -318,7 +407,14 @@ export function setUserActive(actor: AppUser, targetUserId: string, isActive: bo
   return target;
 }
 
-export function setUserRole(actor: AppUser, targetUserId: string, role: UserRole): AppUser {
+export async function setUserRole(actor: AppUser, targetUserId: string, role: UserRole): Promise<AppUser> {
+  if (remoteAuthEnabled()) {
+    return remoteRequest<AppUser>(`/users/${encodeURIComponent(targetUserId)}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+  }
+
   assertSuperAdmin(actor);
   const users = readUsers();
   const target = users.find((user) => user.userId === targetUserId);
@@ -333,7 +429,12 @@ export function setUserRole(actor: AppUser, targetUserId: string, role: UserRole
   return target;
 }
 
-export function markUserLoggedOut(user: AppUser) {
+export async function markUserLoggedOut(user: AppUser): Promise<void> {
+  if (remoteAuthEnabled()) {
+    await remoteRequest<{ ok: boolean }>("/auth/logout", { method: "POST" }).catch(() => ({ ok: false }));
+    return;
+  }
+
   const users = readUsers();
   const target = users.find((item) => item.userId === user.userId);
   if (target) {

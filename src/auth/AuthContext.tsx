@@ -33,13 +33,13 @@ interface AuthContextValue {
   rememberedUserId: string;
   updateMessage: string | null;
   login: (userId: string, password: string, remember: boolean) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
   createUser: (input: CreateUserInput) => Promise<void>;
   resetPassword: (targetUserId: string) => Promise<void>;
-  updateUserActive: (targetUserId: string, isActive: boolean) => void;
-  updateUserRole: (targetUserId: string, role: UserRole) => void;
-  refreshUsers: () => void;
+  updateUserActive: (targetUserId: string, isActive: boolean) => Promise<void>;
+  updateUserRole: (targetUserId: string, role: UserRole) => Promise<void>;
+  refreshUsers: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -51,15 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [updateMessage, setUpdateMessageState] = useState<string | null>(null);
 
-  const refreshUsers = () => {
-    setUsers(getUsers());
-    setAuditLogs(getAuditLogs());
+  const refreshUsers = async () => {
+    const [latestUsers, latestAuditLogs] = await Promise.all([
+      getUsers(),
+      getAuditLogs(),
+    ]);
+    setUsers(latestUsers);
+    setAuditLogs(latestAuditLogs);
   };
 
   useEffect(() => {
     let mounted = true;
 
-    initializeUserStore().then(() => {
+    initializeUserStore().then(async () => {
       if (!mounted) {
         return;
       }
@@ -72,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = getAuthSession();
       if (session) {
         if (session.appVersion !== APP_VERSION) {
-          const user = getUserById(session.userId);
+          const user = await getUserById(session.userId);
           if (user) {
             addAuditLog({
               actor: user,
@@ -86,12 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUpdateMessage("The application has been updated. Please log in again to load the latest version.");
           setUpdateMessageState("The application has been updated. Please log in again to load the latest version.");
         } else {
-          setCurrentUser(getUserById(session.userId));
+          setCurrentUser(await getUserById(session.userId));
         }
       }
 
-      refreshUsers();
+      await refreshUsers();
       setLoading(false);
+    }).catch(() => {
+      if (mounted) {
+        clearAuthSession();
+        setCurrentUser(null);
+        setLoading(false);
+      }
     });
 
     return () => {
@@ -100,10 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    const interval = window.setInterval(async () => {
       const session = getAuthSession();
       if (session && session.appVersion !== APP_VERSION) {
-        const user = getUserById(session.userId);
+        const user = await getUserById(session.userId);
         if (user) {
           addAuditLog({
             actor: user,
@@ -123,27 +133,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (userId: string, password: string, remember: boolean) => {
-    const user = await authenticateUser(userId, password);
+    const { user, token } = await authenticateUser(userId, password);
     setAuthSession({
       userId: user.userId,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
       appVersion: APP_VERSION,
       loginAt: new Date().toISOString(),
+      token,
     });
     setRememberedUserId(remember ? user.userId : null);
     setCurrentUser(user);
     setUpdateMessageState(null);
-    refreshUsers();
+    await refreshUsers();
   };
 
-  const logout = () => {
+  const logout = async () => {
     if (currentUser) {
-      markUserLoggedOut(currentUser);
+      await markUserLoggedOut(currentUser);
     }
     clearAuthSession();
     setCurrentUser(null);
-    refreshUsers();
+    await refreshUsers();
   };
 
   const changePassword = async (currentPassword: string, newPassword: string, confirmPassword: string) => {
@@ -158,9 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mustChangePassword: updatedUser.mustChangePassword,
       appVersion: APP_VERSION,
       loginAt: new Date().toISOString(),
+      token: getAuthSession()?.token ?? null,
     });
     setCurrentUser(updatedUser);
-    refreshUsers();
+    await refreshUsers();
   };
 
   const createUser = async (input: CreateUserInput) => {
@@ -179,30 +191,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (updated.userId === currentUser.userId) {
       setCurrentUser(updated);
     }
-    refreshUsers();
+    await refreshUsers();
   };
 
-  const updateUserActive = (targetUserId: string, isActive: boolean) => {
+  const updateUserActive = async (targetUserId: string, isActive: boolean) => {
     if (!currentUser) {
       throw new Error("No active session.");
     }
-    const updated = setUserActive(currentUser, targetUserId, isActive);
+    const updated = await setUserActive(currentUser, targetUserId, isActive);
     if (updated.userId === currentUser.userId && !updated.isActive) {
       clearAuthSession();
       setCurrentUser(null);
     }
-    refreshUsers();
+    await refreshUsers();
   };
 
-  const updateUserRole = (targetUserId: string, role: UserRole) => {
+  const updateUserRole = async (targetUserId: string, role: UserRole) => {
     if (!currentUser) {
       throw new Error("No active session.");
     }
-    const updated = setUserRole(currentUser, targetUserId, role);
+    const updated = await setUserRole(currentUser, targetUserId, role);
     if (updated.userId === currentUser.userId) {
       setCurrentUser(updated);
     }
-    refreshUsers();
+    await refreshUsers();
   };
 
   const value = useMemo<AuthContextValue>(() => ({
