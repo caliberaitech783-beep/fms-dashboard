@@ -1,0 +1,63 @@
+import type {
+  Alert,
+  FleetTelemetryRecord,
+  IntegrationSource,
+  Vehicle,
+} from "./fleet";
+
+export interface KpiMetric {
+  label: string;
+  value: string;
+  subLabel?: string;
+  tone?: "neutral" | "good" | "warning" | "danger" | "info";
+}
+
+export interface NamedMetric {
+  name: string;
+  fuelConsumedLitres: number;
+  productionM3: number;
+  distanceKm?: number;
+  runningHours?: number;
+  idleHours?: number;
+  trips?: number;
+  efficiency?: number | null;
+}
+
+export interface ShiftMetric extends NamedMetric {
+  shift: string;
+}
+
+export interface StatusDistribution {
+  status: string;
+  value: number;
+}
+
+export interface DashboardOverview {
+  kpis: KpiMetric[];
+  productionFuelTrend: NamedMetric[];
+  shiftComparison: ShiftMetric[];
+  sitePerformance: NamedMetric[];
+  companyPerformance: NamedMetric[];
+  modelPerformance: NamedMetric[];
+  statusDistribution: StatusDistribution[];
+  categoryFuel: NamedMetric[];
+  runningIdleTrend: NamedMetric[];
+  highFuelVehicles: VehiclePerformanceRow[];
+  lowEfficiencyVehicles: VehiclePerformanceRow[];
+  idleVehicles: VehiclePerformanceRow[];
+  criticalAlerts: Alert[];
+  integrationHealth: IntegrationSource[];
+}
+
+export interface VehiclePerformanceRow {
+  vehicle: Vehicle;
+  fuelConsumedLitres: number;
+  distanceKm: number;
+  runningHours: number;
+  idleHours: number;
+  trips: number;
+  productionM3: number;
+  efficiency: number | null;
+  fuelPerM3: number | null;
+  latestRecord?: FleetTelemetryRecord;
+}
