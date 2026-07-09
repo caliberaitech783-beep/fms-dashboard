@@ -4,6 +4,8 @@ import type { AppUser, AuditLog, UserRole } from "../types/auth";
 import {
   authenticateUser,
   changeUserPassword,
+  createUser as createUserRecord,
+  type CreateUserInput,
   getUserById,
   getUsers,
   initializeUserStore,
@@ -33,6 +35,7 @@ interface AuthContextValue {
   login: (userId: string, password: string, remember: boolean) => Promise<void>;
   logout: () => void;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
+  createUser: (input: CreateUserInput) => Promise<void>;
   resetPassword: (targetUserId: string) => Promise<void>;
   updateUserActive: (targetUserId: string, isActive: boolean) => void;
   updateUserRole: (targetUserId: string, role: UserRole) => void;
@@ -160,6 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUsers();
   };
 
+  const createUser = async (input: CreateUserInput) => {
+    if (!currentUser) {
+      throw new Error("No active session.");
+    }
+    await createUserRecord(currentUser, input);
+    refreshUsers();
+  };
+
   const resetPassword = async (targetUserId: string) => {
     if (!currentUser) {
       throw new Error("No active session.");
@@ -204,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     changePassword,
+    createUser,
     resetPassword,
     updateUserActive,
     updateUserRole,

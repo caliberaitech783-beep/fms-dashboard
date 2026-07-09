@@ -7,8 +7,14 @@ import { validateNewPassword } from "../utils/passwordValidation";
 
 const USERS_STORAGE_KEY = "mining.auth.users.v1";
 const PASSWORD_HISTORY_STORAGE_KEY = "mining.auth.passwordHistory.v1";
-const LOCK_MINUTES = 15;
-const MAX_FAILED_ATTEMPTS = 5;
+
+export interface CreateUserInput {
+  name: string;
+  userId: string;
+  role: UserRole;
+  department?: string;
+  isActive?: boolean;
+}
 
 function now(): string {
   return new Date().toISOString();
@@ -95,6 +101,18 @@ export async function initializeUserStore(): Promise<{ created: number; updated:
       existing.sourceSoftwarePower = seed.sourceSoftwarePower;
       existing.updatedAt = now();
       existing.updatedBy = "seed";
+      existing.failedLoginAttempts = 0;
+      existing.lockedUntil = null;
+      updated += 1;
+    }
+  }
+
+  for (const user of users) {
+    if (user.lockedUntil) {
+      user.lockedUntil = null;
+      user.failedLoginAttempts = 0;
+      user.updatedAt = now();
+      user.updatedBy = "system";
       updated += 1;
     }
   }
@@ -131,17 +149,10 @@ export async function authenticateUser(userId: string, password: string): Promis
     throw genericError;
   }
 
-  if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
-    addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "locked" } });
-    throw new Error("Account is temporarily locked. Please contact administrator or try later.");
-  }
-
   const passwordMatches = await verifyPassword(password, user.passwordHash);
   if (!passwordMatches) {
     user.failedLoginAttempts += 1;
-    if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
-      user.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60_000).toISOString();
-    }
+    user.lockedUntil = null;
     user.updatedAt = now();
     writeUsers(users);
     addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "invalid_credentials" } });
@@ -197,6 +208,70 @@ function assertSuperAdmin(actor: AppUser) {
   }
 }
 
+export async function createUser(actor: AppUser, input: CreateUserInput): Promise<AppUser> {
+  assertSuperAdmin(actor);
+  const name = input.name.trim();
+  const userId = input.userId.trim();
+  const department = input.department?.trim() || null;
+
+  if (!name) {
+    throw new Error("User name is required.");
+  }
+
+  if (!userId) {
+    throw new Error("Mobile number / user ID is required.");
+  }
+
+  if (userId.length < 4) {
+    throw new Error("Mobile number / user ID must be at least 4 characters.");
+  }
+
+  const users = readUsers();
+  const duplicate = users.find((user) => user.userId.toLowerCase() === userId.toLowerCase() || user.mobile.toLowerCase() === userId.toLowerCase());
+  if (duplicate) {
+    throw new Error("A user with this mobile number / user ID already exists.");
+  }
+
+  const passwordHash = await hashPassword(userId);
+  const createdAt = now();
+  const user: AppUser = {
+    id: makeId("user", userId),
+    name,
+    mobile: userId,
+    userId,
+    passwordHash,
+    role: input.role,
+    sourceTransactionPower: null,
+    sourceSoftwarePower: null,
+    siteAccess: [],
+    department,
+    isActive: input.isActive ?? true,
+    isPending: false,
+    mustChangePassword: true,
+    passwordChangedAt: null,
+    lastLoginAt: null,
+    lastLogoutAt: null,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    createdAt,
+    updatedAt: createdAt,
+    createdBy: actor.userId,
+    updatedBy: actor.userId,
+    lastPasswordResetAt: null,
+    lastPasswordResetBy: null,
+    appVersionAtLogin: null,
+  };
+
+  users.push(user);
+  writeUsers(users);
+
+  const history = readPasswordHistory();
+  history.push({ id: makeId("history"), userId: user.userId, passwordHash, createdAt });
+  writePasswordHistory(history);
+  addAuditLog({ actor, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "admin_ui", role: user.role } });
+  return user;
+}
+
 export async function resetUserPassword(actor: AppUser, targetUserId: string): Promise<AppUser> {
   assertSuperAdmin(actor);
   const users = readUsers();
@@ -205,9 +280,11 @@ export async function resetUserPassword(actor: AppUser, targetUserId: string): P
     throw new Error("User not found.");
   }
 
-  const passwordHash = await hashPassword(target.mobile);
+  const passwordHash = await hashPassword(target.userId);
   target.passwordHash = passwordHash;
   target.mustChangePassword = true;
+  target.failedLoginAttempts = 0;
+  target.lockedUntil = null;
   target.lastPasswordResetAt = now();
   target.lastPasswordResetBy = actor.userId;
   target.updatedAt = now();

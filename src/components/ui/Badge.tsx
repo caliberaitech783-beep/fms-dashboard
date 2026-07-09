@@ -28,7 +28,7 @@ export function Badge({ children, tone = "neutral", className }: BadgeProps) {
 export function statusTone(status: string): "neutral" | "good" | "warning" | "danger" | "info" {
   if (["running", "connected", "healthy", "sent", "ready", "acknowledged"].includes(status)) return "good";
   if (["idle", "delayed", "pending", "queued", "maintenance"].includes(status)) return "warning";
-  if (["offline", "failed", "critical", "unacknowledged"].includes(status)) return "danger";
+  if (["offline", "failed", "critical", "unacknowledged", "locked"].includes(status)) return "danger";
   if (["info", "not_configured"].includes(status)) return "info";
   return "neutral";
 }

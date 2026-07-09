@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { UserPlus } from "lucide-react";
 import type { AppUser, AuditLog, UserRole } from "../../types/auth";
 import { useAuth } from "../../auth/AuthContext";
 import { formatDateTime } from "../../utils/formatters";
@@ -10,12 +11,24 @@ import { StatusBadge } from "../ui/StatusBadge";
 
 const roles: UserRole[] = ["Super Admin", "Management", "Site Manager", "Fleet Manager", "Fuel Manager", "MIS User", "Viewer"];
 
+const initialCreateForm = {
+  name: "",
+  userId: "",
+  role: "MIS User" as UserRole,
+  department: "",
+  isActive: true,
+};
+
 export function UserManagementDashboard() {
-  const { currentUser, users, auditLogs, resetPassword, updateUserActive, updateUserRole } = useAuth();
+  const { currentUser, users, auditLogs, createUser, resetPassword, updateUserActive, updateUserRole } = useAuth();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [resetTarget, setResetTarget] = useState<AppUser | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState(initialCreateForm);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const isSuperAdmin = currentUser?.role === "Super Admin";
 
@@ -37,6 +50,7 @@ export function UserManagementDashboard() {
     { header: "Role", render: (row) => <Badge tone={row.role === "Super Admin" ? "good" : "info"}>{row.role}</Badge> },
     { header: "Status", render: (row) => <StatusBadge status={row.isActive ? "active" : "inactive"} /> },
     { header: "Password", render: (row) => <StatusBadge status={row.mustChangePassword ? "pending" : "ready"} /> },
+    { header: "Login", render: (row) => <StatusBadge status={row.lockedUntil ? "locked" : "ready"} /> },
     { header: "Last Login", render: (row) => formatDateTime(row.lastLoginAt) },
     {
       header: "Role Edit",
@@ -75,7 +89,30 @@ export function UserManagementDashboard() {
     if (!resetTarget) return;
     await resetPassword(resetTarget.userId);
     setResetTarget(null);
-    setMessage("Password reset successfully. User must login with mobile number and change password immediately.");
+    setMessage("Password reset successfully. User must login with mobile number / user ID and change password immediately.");
+  };
+
+  const openCreateForm = () => {
+    setCreateForm(initialCreateForm);
+    setCreateError(null);
+    setShowCreateForm(true);
+  };
+
+  const submitCreateUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateError(null);
+    setCreating(true);
+
+    try {
+      await createUser(createForm);
+      setMessage(`User ${createForm.name.trim()} added. Initial password is the mobile number / user ID, and password change is required on first login.`);
+      setCreateForm(initialCreateForm);
+      setShowCreateForm(false);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Could not add user.");
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -86,7 +123,15 @@ export function UserManagementDashboard() {
         </div>
       )}
 
-      <Panel title="User Management" subtitle="Seeded mining portal users and role-based access.">
+      <Panel
+        title="User Management"
+        subtitle="Create users, assign roles, reset passwords, and control account access."
+        actions={isSuperAdmin ? (
+          <Button type="button" variant="primary" icon={<UserPlus size={16} />} onClick={openCreateForm}>
+            Add User
+          </Button>
+        ) : null}
+      >
         <div className="mb-4 grid gap-2 md:grid-cols-3">
           <input
             value={search}
@@ -111,6 +156,90 @@ export function UserManagementDashboard() {
       <Panel title="Audit Logs" subtitle="Local audit trail for login, logout, password, and user actions.">
         <DataTable columns={auditColumns} rows={auditLogs.slice(0, 80)} getRowKey={(row) => row.id} maxHeight="max-h-[420px]" />
       </Panel>
+
+      {showCreateForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-coal-950/50 p-4">
+          <form onSubmit={submitCreateUser} className="w-full max-w-xl rounded-lg bg-white p-5 shadow-command">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-coal-950">Add user</h3>
+                <p className="mt-1 text-sm text-coal-600">
+                  Initial password will be the mobile number / user ID. The user must change it on first login.
+                </p>
+              </div>
+              <Button type="button" variant="ghost" onClick={() => setShowCreateForm(false)}>Close</Button>
+            </div>
+
+            {createError && (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {createError}
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold text-coal-500">Name</span>
+                <input
+                  value={createForm.name}
+                  onChange={(event) => setCreateForm((form) => ({ ...form, name: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                  autoFocus
+                  required
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold text-coal-500">Mobile Number / User ID</span>
+                <input
+                  value={createForm.userId}
+                  onChange={(event) => setCreateForm((form) => ({ ...form, userId: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                  inputMode="text"
+                  required
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold text-coal-500">Role</span>
+                <select
+                  value={createForm.role}
+                  onChange={(event) => setCreateForm((form) => ({ ...form, role: event.target.value as UserRole }))}
+                  className="h-10 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                >
+                  {roles.map((role) => <option key={role} value={role}>{role}</option>)}
+                </select>
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold text-coal-500">Department</span>
+                <input
+                  value={createForm.department}
+                  onChange={(event) => setCreateForm((form) => ({ ...form, department: event.target.value }))}
+                  className="h-10 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                  placeholder="Optional"
+                />
+              </label>
+            </div>
+
+            <label className="mt-4 flex items-center gap-2 text-sm text-coal-700">
+              <input
+                checked={createForm.isActive}
+                onChange={(event) => setCreateForm((form) => ({ ...form, isActive: event.target.checked }))}
+                type="checkbox"
+                className="h-4 w-4 rounded border-coal-300 text-ore-600"
+              />
+              Active user
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" onClick={() => setShowCreateForm(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={creating}>
+                {creating ? "Adding..." : "Add User"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {resetTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-coal-950/50 p-4">
