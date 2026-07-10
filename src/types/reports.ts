@@ -16,6 +16,7 @@ export type ReportType =
   | "Utilization Report"
   | "Fuel Consumption Report"
   | "Site-wise Asset / Vehicle Count Report"
+  | "Driver wise Report"
   | "WhatsApp PDF Delivery Log";
 
 export const reportTypes: ReportType[] = [
@@ -36,6 +37,7 @@ export const reportTypes: ReportType[] = [
   "Utilization Report",
   "Fuel Consumption Report",
   "Site-wise Asset / Vehicle Count Report",
+  "Driver wise Report",
   "WhatsApp PDF Delivery Log",
 ];
 

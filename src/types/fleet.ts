@@ -71,6 +71,9 @@ export interface FleetTelemetryRecord {
   source: DataSource;
   vehicleId: string;
   vehicleNumber: string;
+  driverId?: string | null;
+  driverName?: string | null;
+  driverMobile?: string | null;
   trackerId: string;
   timestamp: string;
   date: string;

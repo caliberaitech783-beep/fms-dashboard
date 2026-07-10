@@ -1,5 +1,7 @@
 import type { DashboardFilters } from "../types/fleet";
+import type { FleetTelemetryRecord, Vehicle } from "../types/fleet";
 import type { ReportPreview, ReportType } from "../types/reports";
+import { ALERT_THRESHOLDS } from "../constants/thresholds";
 import {
   aggregateByCompany,
   aggregateByLead,
@@ -9,6 +11,7 @@ import {
   aggregateDashboardKpis,
   calculateFuelPerM3,
   calculateIdlePercentage,
+  calculateRunningPercentage,
   calculateUtilization,
   generateAlerts,
   getVehiclePerformanceRows,
@@ -25,6 +28,7 @@ export const reportService = {
   async getReportPreview(reportType: ReportType, filters: DashboardFilters): Promise<ReportPreview> {
     const { sites, vehicles, filteredVehicles, filteredRecords, whatsAppDeliveryLogs } = await getFilteredPortalData(filters);
     const siteMap = new Map(sites.map((site) => [site.id, site.name]));
+    const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
     const vehicleRows = getVehiclePerformanceRows(filteredRecords, filteredVehicles);
     const totals = sumRecords(filteredRecords);
     const rows: Record<string, string | number | null>[] = [];
@@ -45,7 +49,43 @@ export const reportService = {
       };
     }
 
-    if (reportType.includes("Company-wise")) {
+    if (reportType === "Driver wise Report") {
+      filteredRecords.forEach((record) => {
+        const vehicle = vehicleMap.get(record.vehicleId);
+        const driverPerformance = classifyDriverPerformance(record, vehicle);
+        if (driverPerformance.category === "Normal") return;
+
+        rows.push({
+          date: record.date || record.timestamp.slice(0, 10),
+          site: record.siteId ? siteMap.get(record.siteId) ?? record.siteName ?? record.siteId : record.siteName ?? "Not available",
+          shift: record.shift === "ALL_DAY" ? "All day" : `Shift ${record.shift}`,
+          driverName: record.driverName || "Unassigned",
+          driverMobile: record.driverMobile || "-",
+          vehicleNumber: record.vehicleNumber,
+          performanceCategory: driverPerformance.category,
+          economy: driverPerformance.economy,
+          norm: vehicle?.standardFuelNorm ?? null,
+          unit: vehicle?.fuelMeasurementUnit ?? (record.assetCategory === "Truck" ? "km/L" : "L/hr"),
+          economyVariancePercent: driverPerformance.economyVariancePercent,
+          runningHours: record.runningHours,
+          runningPercentage: record.runningPercentage ?? calculateRunningPercentage(record.runningHours, record.engineHours),
+          idleHours: record.idleHours,
+          idlePercentage: record.idlePercentage ?? calculateIdlePercentage(record.idleHours, record.engineHours),
+          fuelConsumedLitres: record.fuelConsumedLitres,
+          trips: record.trips,
+          productionM3: record.productionM3,
+          status: record.status,
+        });
+      });
+
+      rows.sort((left, right) => [
+        String(left.site).localeCompare(String(right.site), undefined, { numeric: true }),
+        String(left.shift).localeCompare(String(right.shift), undefined, { numeric: true }),
+        performanceOrder(String(left.performanceCategory)) - performanceOrder(String(right.performanceCategory)),
+        String(left.driverName).localeCompare(String(right.driverName), undefined, { numeric: true }),
+        String(left.vehicleNumber).localeCompare(String(right.vehicleNumber), undefined, { numeric: true }),
+      ].find((value) => value !== 0) ?? 0);
+    } else if (reportType.includes("Company-wise")) {
       aggregateByCompany(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
     } else if (reportType.includes("Model-wise")) {
       aggregateByModel(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
@@ -143,6 +183,52 @@ export const reportService = {
     console.info("Excel export is a Phase 2 placeholder.");
   },
 };
+
+function classifyDriverPerformance(record: FleetTelemetryRecord, vehicle?: Vehicle) {
+  const idlePercentage = record.idlePercentage ?? calculateIdlePercentage(record.idleHours, record.engineHours);
+  const runningPercentage = record.runningPercentage ?? calculateRunningPercentage(record.runningHours, record.engineHours);
+  const economy = vehicle?.assetCategory === "HEMM"
+    ? record.hemmFuelRateLitrePerHour
+    : record.truckEfficiencyKmPerLitre;
+  const norm = vehicle?.standardFuelNorm ?? null;
+  const economyVariancePercent = calculateEconomyVariancePercent(economy, norm, vehicle?.assetCategory);
+
+  if (record.status === "idle" || (idlePercentage ?? 0) >= ALERT_THRESHOLDS.excessiveIdlePercentage) {
+    return { category: "Idling", economy, economyVariancePercent };
+  }
+
+  if ((runningPercentage ?? 0) >= 80 && (record.trips ?? record.productionM3 ?? 0) > 0) {
+    return { category: "High Performance", economy, economyVariancePercent };
+  }
+
+  if ((economyVariancePercent ?? 0) > 0) {
+    return { category: "Above Economy", economy, economyVariancePercent };
+  }
+
+  return { category: "Normal", economy, economyVariancePercent };
+}
+
+function calculateEconomyVariancePercent(
+  economy: number | null | undefined,
+  norm: number | null | undefined,
+  assetCategory: Vehicle["assetCategory"] | undefined,
+) {
+  if (economy === null || economy === undefined || norm === null || norm === undefined || norm <= 0) {
+    return null;
+  }
+
+  const variance = assetCategory === "HEMM"
+    ? ((norm - economy) / norm) * 100
+    : ((economy - norm) / norm) * 100;
+  return Math.round(variance * 10) / 10;
+}
+
+function performanceOrder(category: string) {
+  if (category === "High Performance") return 0;
+  if (category === "Above Economy") return 1;
+  if (category === "Idling") return 2;
+  return 3;
+}
 
 function rowsToCsv(rows: Record<string, string | number | null>[], columns: string[]) {
   const escapeCell = (value: string | number | null) => {
