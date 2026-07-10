@@ -11,6 +11,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "alerts:read",
     "reports:read",
     "reports:export",
+    "notifications:read",
+    "notifications:manage",
     "integrations:manage",
     "whatsapp:manage",
     "master-data:manage",
@@ -26,6 +28,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "alerts:read",
     "reports:read",
     "reports:export",
+    "notifications:read",
   ],
   "Site Manager": [
     "dashboard:management",
@@ -34,11 +37,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "production:read",
     "alerts:read",
     "reports:read",
+    "notifications:read",
   ],
-  "Fleet Manager": ["fleet:read", "alerts:read", "reports:read"],
-  "Fuel Manager": ["fuel:read", "alerts:read", "reports:read"],
-  "MIS User": ["dashboard:management", "reports:read", "master-data:manage"],
-  Viewer: ["dashboard:management", "reports:read"],
+  "Fleet Manager": ["fleet:read", "alerts:read", "reports:read", "notifications:read"],
+  "Fuel Manager": ["fuel:read", "alerts:read", "reports:read", "notifications:read"],
+  "MIS User": ["dashboard:management", "reports:read", "master-data:manage", "notifications:read"],
+  Viewer: ["dashboard:management", "reports:read", "notifications:read"],
 };
 
 const NAV_PERMISSIONS: Record<NavItemId, Permission[]> = {
@@ -48,6 +52,8 @@ const NAV_PERMISSIONS: Record<NavItemId, Permission[]> = {
   production: ["production:read", "dashboard:full"],
   alerts: ["alerts:read", "dashboard:full"],
   reports: ["reports:read", "dashboard:full"],
+  notifications: ["notifications:read", "dashboard:full"],
+  "admin-notifications": ["notifications:manage", "dashboard:full"],
   integrations: ["integrations:manage", "dashboard:full"],
   whatsapp: ["whatsapp:manage", "dashboard:full"],
   "master-data": ["master-data:manage", "dashboard:full"],

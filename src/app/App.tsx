@@ -11,11 +11,13 @@ import { MobileNav } from "../components/layout/MobileNav";
 import { Sidebar } from "../components/layout/Sidebar";
 import { TopBar } from "../components/layout/TopBar";
 import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
+import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
 import { FuelDashboard } from "../components/dashboard/FuelDashboard";
 import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
 import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
 import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
+import { NotificationCenterDashboard } from "../components/dashboard/NotificationCenterDashboard";
 import { ProductionDashboard } from "../components/dashboard/ProductionDashboard";
 import { ReportsDashboard } from "../components/dashboard/ReportsDashboard";
 import { SettingsDashboard } from "../components/dashboard/SettingsDashboard";
@@ -56,11 +58,11 @@ function AppContent() {
 
 function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const { currentUser } = useAuth();
-  const [activeSection, setActiveSection] = useState<NavItemId>("management");
+  const [activeSection, setActiveSection] = useState<NavItemId>(() => initialSectionFromUrl());
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
-  const showGlobalFilters = activeSection !== "users";
+  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -80,7 +82,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen bg-coal-50">
       <Sidebar active={activeSection} onChange={setActiveSection} items={allowedItems} />
       <main className="lg:pl-72">
-        <TopBar user={currentUser} onLogout={onLogout} />
+        <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => setActiveSection("notifications")} />
         {showGlobalFilters && (
           <GlobalFilters
             filters={filters}
@@ -107,6 +109,11 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+function initialSectionFromUrl(): NavItemId {
+  const section = new URLSearchParams(window.location.search).get("section");
+  return NAV_ITEMS.some((item) => item.id === section) ? section as NavItemId : "management";
+}
+
 function renderSection(
   activeSection: NavItemId,
   data: ReturnType<typeof useDashboardData>,
@@ -125,6 +132,10 @@ function renderSection(
       return <AlertsDashboard alerts={data.alerts} fleetRows={data.fleetRows} loading={data.loading} />;
     case "reports":
       return <ReportsDashboard reports={data.reports} filters={filters} loading={data.loading} />;
+    case "notifications":
+      return <NotificationCenterDashboard />;
+    case "admin-notifications":
+      return <AdminNotificationsDashboard />;
     case "integrations":
       return <IntegrationsDashboard integrations={data.integrations} loading={data.loading} />;
     case "whatsapp":
