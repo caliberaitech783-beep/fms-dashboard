@@ -70,6 +70,10 @@ export function addAuditLog({
 
 export async function getAuditLogs(): Promise<AuditLog[]> {
   if (remoteAuthEnabled()) {
+    const session = getAuthSession();
+    if (!session?.token || session.role !== "Super Admin") {
+      return [];
+    }
     return remoteRequest<AuditLog[]>("/audit-logs");
   }
 

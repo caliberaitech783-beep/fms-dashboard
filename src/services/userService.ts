@@ -165,7 +165,8 @@ export async function initializeUserStore(): Promise<{ created: number; updated:
 
 export async function getUsers(): Promise<AppUser[]> {
   if (remoteAuthEnabled()) {
-    if (!getAuthSession()?.token) {
+    const session = getAuthSession();
+    if (!session?.token || session.role !== "Super Admin") {
       return [];
     }
     return remoteRequest<AppUser[]>("/users");
