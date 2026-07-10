@@ -1,11 +1,13 @@
-import { Megaphone, Search, Send } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Megaphone, RefreshCw, Search, Send } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { notificationService } from "../../services/notificationService";
-import type { NotificationChannel } from "../../types/notifications";
+import type { NotificationChannel, NotificationDelivery } from "../../types/notifications";
 import type { UserRole } from "../../types/auth";
 import { Button } from "../ui/Button";
+import { DataTable, type DataTableColumn } from "../ui/DataTable";
 import { Panel } from "../ui/Panel";
+import { StatusBadge } from "../ui/StatusBadge";
 
 const roles: UserRole[] = ["Super Admin", "Management", "Site Manager", "Fleet Manager", "Fuel Manager", "MIS User", "Viewer"];
 const channels: NotificationChannel[] = ["in-app", "push", "whatsapp"];
@@ -21,6 +23,7 @@ export function AdminNotificationsDashboard() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [targetCount, setTargetCount] = useState<number | null>(null);
+  const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
 
   const activeUsers = useMemo(() => users.filter((user) => user.isActive), [users]);
   const criteria = useMemo(() => ({
@@ -28,6 +31,15 @@ export function AdminNotificationsDashboard() {
     ...(selectedRole ? { roles: [selectedRole] } : {}),
     ...(!selectedUserId && !selectedRole ? { allUsers: true } : {}),
   }), [selectedRole, selectedUserId]);
+
+  const refreshDeliveries = async () => {
+    if (currentUser?.role !== "Super Admin") return;
+    setDeliveries(await notificationService.getAdminNotificationDeliveries());
+  };
+
+  useEffect(() => {
+    refreshDeliveries().catch(() => setDeliveries([]));
+  }, [currentUser?.role]);
 
   if (currentUser?.role !== "Super Admin") {
     return (
@@ -42,11 +54,33 @@ export function AdminNotificationsDashboard() {
     setError(null);
     try {
       await action();
+      await refreshDeliveries();
       setMessage(success);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Action failed.");
     }
   };
+
+  const deliveryColumns: DataTableColumn<NotificationDelivery>[] = [
+    { header: "Delivery", render: (row) => <span className="font-mono text-xs">{row.idempotencyKey.slice(0, 12)}</span> },
+    { header: "User", render: (row) => row.targetUserId },
+    { header: "Channel", render: (row) => row.channel },
+    { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+    { header: "Attempts", render: (row) => `${row.attemptCount}/${row.maxAttempts}` },
+    { header: "Failure", className: "min-w-56", render: (row) => row.failureReason || "-" },
+    {
+      header: "Action",
+      render: (row) => (
+        <Button
+          size="sm"
+          disabled={!["failed", "blocked"].includes(row.status) || row.permanentFailure}
+          onClick={() => runAction(() => notificationService.retryAdminNotificationDelivery(row.idempotencyKey), "Delivery retry queued.")}
+        >
+          Retry
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -146,7 +180,14 @@ export function AdminNotificationsDashboard() {
           </div>
         </div>
       </Panel>
+
+      <Panel
+        title="Notification Delivery History"
+        subtitle="Provider accepted means the provider accepted the request; it is not a user read receipt."
+        actions={<Button icon={<RefreshCw className="h-4 w-4" />} onClick={() => runAction(refreshDeliveries, "Delivery history refreshed.")}>Refresh</Button>}
+      >
+        <DataTable columns={deliveryColumns} rows={deliveries} getRowKey={(row) => row.idempotencyKey} />
+      </Panel>
     </div>
   );
 }
-

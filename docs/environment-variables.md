@@ -24,6 +24,12 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT`
+- `WNS_AZURE_CLIENT_ID`
+- `WNS_AZURE_TENANT_ID`
+- `WNS_AZURE_OBJECT_ID`
+- `WNS_AZURE_CLIENT_SECRET`
+- `WNS_PACKAGE_FAMILY_NAME`
+- `WNS_CHANNEL_TABLE_NAME`
 - `NOTIFICATION_DEVICES_TABLE_NAME`
 - `NOTIFICATION_PREFERENCES_TABLE_NAME`
 - `NOTIFICATION_INBOX_TABLE_NAME`
@@ -63,4 +69,4 @@ Never print these values in workflow logs.
 - Meta Developer Dashboard: WhatsApp app secret, webhook verify token, callback URL, phone number ID, business account ID, templates
 - Apple Developer: signing identity, certificate, team ID, notarization credentials
 - Windows signing provider or Microsoft Partner Center: code-signing certificate and identity
-
+- Microsoft Entra / Windows App SDK push setup: client ID, tenant ID, object ID, client secret, and PFN mapping when terminated-app push is enabled

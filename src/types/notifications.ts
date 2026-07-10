@@ -66,6 +66,21 @@ export interface AdminNotificationTargetPreview {
 
 export interface AdminNotificationSendResult {
   targetCount: number;
-  results: Array<{ userId: string; notificationId: string; channel: string; status: string }>;
+  results: Array<{ userId: string; notificationId?: string; deviceId?: string; channel: string; status: string }>;
 }
 
+export interface NotificationDelivery {
+  idempotencyKey: string;
+  eventId: string;
+  targetUserId: string;
+  channel: NotificationChannel;
+  status: string;
+  providerMessageId: string;
+  failureReason: string;
+  attemptCount: number;
+  maxAttempts: number;
+  permanentFailure: boolean;
+  nextAttemptAt: string;
+  createdAt: string;
+  updatedAt: string;
+}

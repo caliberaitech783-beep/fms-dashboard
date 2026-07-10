@@ -245,7 +245,7 @@ export function NotificationCenterDashboard() {
               </Button>
             )}
             {updateReady && (
-              <Button onClick={() => activateWaitingServiceWorker()}>Load new version</Button>
+              <Button onClick={() => activateWaitingServiceWorker()}>New version available — Update now</Button>
             )}
             <div className="rounded-md border border-coal-200 p-3 text-sm text-coal-600">
               Android and desktop browsers may show an install prompt. On iPhone/iPad, use Share then Add to Home Screen, then open the installed app before enabling push.
@@ -265,4 +265,3 @@ export function NotificationCenterDashboard() {
     </div>
   );
 }
-

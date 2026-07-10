@@ -114,6 +114,17 @@ function queryBoolean(request, name) {
   return request.query.get(name) === "true";
 }
 
+function deviceInputFromBody(body) {
+  return {
+    deviceId: body.deviceId,
+    label: body.label || body.deviceName,
+    platform: body.platform,
+    appType: body.appType,
+    appVersion: body.appVersion,
+    pushSubscription: body.pushSubscription || body.subscription || null,
+  };
+}
+
 app.http("notificationDevices", {
   route: "notifications/devices",
   authLevel: "anonymous",
@@ -135,6 +146,72 @@ app.http("notificationDevices", {
     });
     await store.addAuditLog({ actor, action: "DEVICE_REGISTERED", targetType: "Device", targetId: device.deviceId });
     return response(request, 200, device);
+  }),
+});
+
+app.http("devicesRegister", {
+  route: "devices/register",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    const body = await readJson(request);
+    const device = await notificationStore.saveDevice(actor.userId, deviceInputFromBody(body));
+    await store.addAuditLog({ actor, action: "DEVICE_REGISTERED", targetType: "Device", targetId: device.deviceId });
+    return response(request, 200, device);
+  }),
+});
+
+app.http("devicesList", {
+  route: "devices",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    return response(request, 200, await notificationStore.listDevices(actor.userId));
+  }),
+});
+
+app.http("devicesDelete", {
+  route: "devices/{deviceId}",
+  authLevel: "anonymous",
+  methods: ["DELETE", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    const device = await notificationStore.revokeDevice(actor.userId, decodeURIComponent(request.params.deviceId || ""));
+    await store.addAuditLog({ actor, action: "DEVICE_REVOKED", targetType: "Device", targetId: device.deviceId });
+    return response(request, 200, device);
+  }),
+});
+
+app.http("pushSubscribe", {
+  route: "push/subscribe",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    const body = await readJson(request);
+    const device = await notificationStore.saveDevice(actor.userId, deviceInputFromBody({
+      ...body,
+      pushSubscription: body.subscription || body.pushSubscription,
+    }));
+    await store.addAuditLog({ actor, action: "PUSH_SUBSCRIBED", targetType: "Device", targetId: device.deviceId });
+    return response(request, 200, device);
+  }),
+});
+
+app.http("pushUnsubscribe", {
+  route: "push/unsubscribe",
+  authLevel: "anonymous",
+  methods: ["DELETE", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    const body = await readJson(request);
+    const result = body.deviceId
+      ? await notificationStore.revokeDevice(actor.userId, body.deviceId)
+      : await notificationStore.revokeDeviceByEndpoint(body.endpoint || "");
+    await store.addAuditLog({ actor, action: "PUSH_UNSUBSCRIBED", targetType: "Device", targetId: body.deviceId || null });
+    return response(request, 200, result);
   }),
 });
 
@@ -167,6 +244,23 @@ app.http("notificationPreferences", {
   }),
 });
 
+app.http("notificationPreferencesCanonical", {
+  route: "notification-preferences",
+  authLevel: "anonymous",
+  methods: ["GET", "PUT", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    if (request.method === "GET") {
+      return response(request, 200, await notificationStore.getPreferences(actor.userId));
+    }
+
+    const body = await readJson(request);
+    const preferences = await notificationStore.savePreferences(actor.userId, body);
+    await store.addAuditLog({ actor, action: "NOTIFICATION_PREFERENCES_UPDATED", targetType: "User", targetId: actor.userId });
+    return response(request, 200, preferences);
+  }),
+});
+
 app.http("notificationInbox", {
   route: "notifications/inbox",
   authLevel: "anonymous",
@@ -181,6 +275,19 @@ app.http("notificationInbox", {
   }),
 });
 
+app.http("notificationsCanonical", {
+  route: "notifications",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    return response(request, 200, await notificationStore.listInbox(actor.userId, {
+      unreadOnly: queryBoolean(request, "unreadOnly"),
+      limit: Number(request.query.get("limit") || 100),
+    }));
+  }),
+});
+
 app.http("notificationRead", {
   route: "notifications/inbox/{notificationId}/read",
   authLevel: "anonymous",
@@ -191,8 +298,28 @@ app.http("notificationRead", {
   }),
 });
 
+app.http("notificationReadCanonical", {
+  route: "notifications/{notificationId}/read",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    return response(request, 200, await notificationStore.markRead(actor.userId, decodeURIComponent(request.params.notificationId || "")));
+  }),
+});
+
 app.http("notificationReadAll", {
   route: "notifications/inbox/read-all",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    return response(request, 200, await notificationStore.markAllRead(actor.userId));
+  }),
+});
+
+app.http("notificationReadAllCanonical", {
+  route: "notifications/read-all",
   authLevel: "anonymous",
   methods: ["POST", "OPTIONS"],
   handler: (request, context) => handle(request, context, async () => {
@@ -344,6 +471,52 @@ app.http("adminNotificationCancel", {
   }),
 });
 
+app.http("adminNotificationCancelCanonical", {
+  route: "admin/notifications/{scheduleId}/schedule",
+  authLevel: "anonymous",
+  methods: ["DELETE", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    requireSuperAdmin(actor);
+    await store.addAuditLog({
+      actor,
+      action: "ADMIN_NOTIFICATION_CANCEL_REQUESTED",
+      targetType: "NotificationSchedule",
+      targetId: decodeURIComponent(request.params.scheduleId || ""),
+    });
+    return response(request, 202, { status: "cancel_requested" });
+  }),
+});
+
+app.http("adminNotificationDeliveries", {
+  route: "admin/notification-deliveries",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    requireSuperAdmin(actor);
+    return response(request, 200, await notificationStore.listDeliveries({ limit: Number(request.query.get("limit") || 100) }));
+  }),
+});
+
+app.http("adminNotificationDeliveryRetry", {
+  route: "admin/notification-deliveries/{deliveryId}/retry",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: (request, context) => handle(request, context, async () => {
+    const actor = await requireActor(request);
+    requireSuperAdmin(actor);
+    const result = await notificationStore.retryDelivery(decodeURIComponent(request.params.deliveryId || ""));
+    await store.addAuditLog({
+      actor,
+      action: "ADMIN_NOTIFICATION_RETRY_REQUESTED",
+      targetType: "NotificationDelivery",
+      targetId: result.idempotencyKey,
+    });
+    return response(request, 202, result);
+  }),
+});
+
 app.http("whatsappWebhook", {
   route: "webhooks/whatsapp",
   authLevel: "anonymous",
@@ -381,4 +554,3 @@ app.http("whatsappWebhook", {
     }
   },
 });
-

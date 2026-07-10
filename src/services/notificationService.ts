@@ -4,6 +4,7 @@ import type {
   AdminNotificationSendResult,
   AdminNotificationTargetPreview,
   NotificationChannel,
+  NotificationDelivery,
   NotificationInboxItem,
   NotificationPreferences,
   UserDevice,
@@ -14,6 +15,8 @@ const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
 const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_AUTH_API_BASE_URL).replace(/\/$/, "");
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const DEVICE_ID_KEY = "mining.notifications.deviceId.v1";
+
+type TauriWindow = Window & { __TAURI_INTERNALS__?: unknown };
 
 function getDeviceId() {
   const existing = localStorage.getItem(DEVICE_ID_KEY);
@@ -33,6 +36,7 @@ function devicePlatform() {
 }
 
 function detectAppType() {
+  if ((window as TauriWindow).__TAURI_INTERNALS__) return "tauri-desktop";
   const standalone = window.matchMedia("(display-mode: standalone)").matches
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return standalone ? "pwa" : "browser";
@@ -81,18 +85,27 @@ async function createPushSubscription() {
   return subscription.toJSON();
 }
 
+async function getCurrentPushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return null;
+  }
+
+  const registration = await navigator.serviceWorker.ready.catch(() => null);
+  return registration ? registration.pushManager.getSubscription() : null;
+}
+
 export const notificationService = {
   getInbox(unreadOnly = false) {
-    return request<NotificationInboxItem[]>(`/notifications/inbox${unreadOnly ? "?unreadOnly=true" : ""}`);
+    return request<NotificationInboxItem[]>(`/notifications${unreadOnly ? "?unreadOnly=true" : ""}`);
   },
   markRead(notificationId: string) {
-    return request<NotificationInboxItem>(`/notifications/inbox/${encodeURIComponent(notificationId)}/read`, { method: "POST" });
+    return request<NotificationInboxItem>(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" });
   },
   markAllRead() {
-    return request<{ updated: number }>("/notifications/inbox/read-all", { method: "POST" });
+    return request<{ updated: number }>("/notifications/read-all", { method: "POST" });
   },
   getDevices() {
-    return request<UserDevice[]>("/notifications/devices");
+    return request<UserDevice[]>("/devices");
   },
   async registerCurrentDevice({ push = false }: { push?: boolean } = {}) {
     let pushSubscription = null;
@@ -110,7 +123,7 @@ export const notificationService = {
       }
     }
 
-    return request<UserDevice>("/notifications/devices", {
+    return request<UserDevice>(push ? "/push/subscribe" : "/devices/register", {
       method: "POST",
       body: JSON.stringify({
         deviceId: getDeviceId(),
@@ -119,18 +132,38 @@ export const notificationService = {
         appType: detectAppType(),
         appVersion: APP_VERSION,
         pushSubscription,
+        subscription: pushSubscription,
       }),
     });
   },
   revokeDevice(deviceId: string) {
-    return request<UserDevice>(`/notifications/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+    return request<UserDevice>(`/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+  },
+  async revokeCurrentDevice() {
+    const deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    const subscription = await getCurrentPushSubscription().catch(() => null);
+    const endpoint = subscription?.endpoint || "";
+
+    if (!deviceId && !endpoint) {
+      return { revoked: 0 };
+    }
+
+    try {
+      return await request<{ revoked?: number } | UserDevice>("/push/unsubscribe", {
+        method: "DELETE",
+        body: JSON.stringify({ deviceId, endpoint }),
+      });
+    } finally {
+      await subscription?.unsubscribe().catch(() => false);
+      localStorage.removeItem(DEVICE_ID_KEY);
+    }
   },
   getPreferences() {
-    return request<NotificationPreferences>("/notifications/preferences");
+    return request<NotificationPreferences>("/notification-preferences");
   },
   updatePreferences(input: Partial<NotificationPreferences>) {
-    return request<NotificationPreferences>("/notifications/preferences", {
-      method: "PATCH",
+    return request<NotificationPreferences>("/notification-preferences", {
+      method: "PUT",
       body: JSON.stringify(input),
     });
   },
@@ -171,5 +204,10 @@ export const notificationService = {
       body: JSON.stringify(input),
     });
   },
+  getAdminNotificationDeliveries() {
+    return request<NotificationDelivery[]>("/admin/notification-deliveries");
+  },
+  retryAdminNotificationDelivery(deliveryId: string) {
+    return request<{ idempotencyKey: string; status: string; retried: boolean }>(`/admin/notification-deliveries/${encodeURIComponent(deliveryId)}/retry`, { method: "POST" });
+  },
 };
-

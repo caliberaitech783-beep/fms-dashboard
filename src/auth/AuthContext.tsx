@@ -15,6 +15,7 @@ import {
   setUserRole,
 } from "../services/userService";
 import { addAuditLog, getAuditLogs } from "../services/auditLogService";
+import { notificationService } from "../services/notificationService";
 import {
   clearAuthSession,
   consumeUpdateMessage,
@@ -161,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     if (currentUser) {
+      await notificationService.revokeCurrentDevice().catch(() => null);
       await markUserLoggedOut(currentUser);
     }
     clearAuthSession();

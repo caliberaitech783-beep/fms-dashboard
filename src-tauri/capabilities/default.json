@@ -3,6 +3,11 @@
   "identifier": "default",
   "description": "Default desktop window capability with no filesystem or shell access.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
 }
-

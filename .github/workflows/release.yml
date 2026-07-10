@@ -15,6 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run validate:pwa
       - run: npm run build
       - run: zip -r cmll-fms-pwa.zip dist
       - uses: actions/upload-artifact@v4
@@ -32,6 +33,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - run: npm run validate:pwa
       - run: npm run desktop:build
       - uses: actions/upload-artifact@v4
         with:
@@ -48,9 +50,9 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - run: npm run validate:pwa
       - run: npm run desktop:build
       - uses: actions/upload-artifact@v4
         with:
           name: cmll-fms-macos
           path: src-tauri/target/release/bundle/**
-

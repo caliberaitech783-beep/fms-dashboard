@@ -26,11 +26,13 @@
 - The service worker does not cache `/api/*`, auth responses, requests with `Authorization`, or non-GET requests.
 - Versioned static assets and the offline page may be cached.
 - Logout should continue to clear local auth/session artifacts.
+- Logout revokes the current registered push device before clearing the bearer token so a shared browser cannot keep another user's subscription.
 
 ## Desktop Shell
 
 - Tauri is selected over Electron for a smaller, least-privilege shell.
 - Current Tauri capabilities grant only `core:default`.
+- Current Tauri capabilities additionally grant notification and autostart commands required by the desktop app.
 - Filesystem and shell permissions are not enabled.
 - Signed updates are configured as a release requirement but blocked until signing keys exist.
 
@@ -39,4 +41,3 @@
 - WhatsApp webhook GET uses `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
 - WhatsApp webhook POST validates `x-hub-signature-256` with `WHATSAPP_APP_SECRET`.
 - Invalid signatures are rejected.
-
