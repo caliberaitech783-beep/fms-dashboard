@@ -60,6 +60,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
+  const showGlobalFilters = activeSection !== "users";
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -80,13 +81,15 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
       <Sidebar active={activeSection} onChange={setActiveSection} items={allowedItems} />
       <main className="lg:pl-72">
         <TopBar user={currentUser} onLogout={onLogout} />
-        <GlobalFilters
-          filters={filters}
-          options={options}
-          setFilter={setFilter}
-          resetFilters={resetFilters}
-          onRefresh={() => setRefreshKey((current) => current + 1)}
-        />
+        {showGlobalFilters && (
+          <GlobalFilters
+            filters={filters}
+            options={options}
+            setFilter={setFilter}
+            resetFilters={resetFilters}
+            onRefresh={() => setRefreshKey((current) => current + 1)}
+          />
+        )}
         <div className="px-4 py-4 lg:px-6">
           <div className="mb-4">
             <MobileNav active={activeSection} onChange={setActiveSection} items={allowedItems} />
