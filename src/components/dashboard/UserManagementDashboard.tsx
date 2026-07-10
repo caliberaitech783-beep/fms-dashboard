@@ -10,6 +10,7 @@ import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 
 const roles: UserRole[] = ["Super Admin", "Management", "Site Manager", "Fleet Manager", "Fuel Manager", "MIS User", "Viewer"];
+type UserSummaryFilter = "all" | "active" | "inactive" | "pending-password" | "today-login" | "never-logged" | "locked" | "online-now";
 
 const initialCreateForm = {
   name: "",
@@ -24,6 +25,7 @@ export function UserManagementDashboard() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [summaryFilter, setSummaryFilter] = useState<UserSummaryFilter>("all");
   const [resetTarget, setResetTarget] = useState<AppUser | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState(initialCreateForm);
@@ -31,10 +33,57 @@ export function UserManagementDashboard() {
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const isSuperAdmin = currentUser?.role === "Super Admin";
+  const todayKey = new Date().toDateString();
+
+  const isLocked = (user: AppUser) => Boolean(user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now());
+  const hasLoggedInToday = (user: AppUser) => Boolean(user.lastLoginAt && new Date(user.lastLoginAt).toDateString() === todayKey);
+  const isOnlineNow = (user: AppUser) => {
+    if (!user.lastLoginAt || !user.isActive || isLocked(user)) {
+      return false;
+    }
+
+    return !user.lastLogoutAt || new Date(user.lastLoginAt).getTime() > new Date(user.lastLogoutAt).getTime();
+  };
+
+  const summaryCards = useMemo(
+    () => [
+      { key: "all" as const, label: "Total Users", value: users.length },
+      { key: "active" as const, label: "Active Users", value: users.filter((user) => user.isActive).length },
+      { key: "inactive" as const, label: "Inactive Users", value: users.filter((user) => !user.isActive).length },
+      { key: "pending-password" as const, label: "Pending Password", value: users.filter((user) => user.mustChangePassword).length },
+      { key: "today-login" as const, label: "Today Login", value: users.filter(hasLoggedInToday).length },
+      { key: "never-logged" as const, label: "Never Logged", value: users.filter((user) => !user.lastLoginAt).length },
+      { key: "locked" as const, label: "Locked Users", value: users.filter(isLocked).length },
+      { key: "online-now" as const, label: "Online Now", value: users.filter(isOnlineNow).length },
+    ],
+    [todayKey, users],
+  );
+
+  const summaryFilteredUsers = useMemo(() => {
+    switch (summaryFilter) {
+      case "active":
+        return users.filter((user) => user.isActive);
+      case "inactive":
+        return users.filter((user) => !user.isActive);
+      case "pending-password":
+        return users.filter((user) => user.mustChangePassword);
+      case "today-login":
+        return users.filter(hasLoggedInToday);
+      case "never-logged":
+        return users.filter((user) => !user.lastLoginAt);
+      case "locked":
+        return users.filter(isLocked);
+      case "online-now":
+        return users.filter(isOnlineNow);
+      case "all":
+      default:
+        return users;
+    }
+  }, [summaryFilter, todayKey, users]);
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return users.filter((user) => {
+    return summaryFilteredUsers.filter((user) => {
       if (query && !`${user.name} ${user.mobile} ${user.userId}`.toLowerCase().includes(query)) return false;
       if (roleFilter !== "All" && user.role !== roleFilter) return false;
       if (statusFilter === "Active" && !user.isActive) return false;
@@ -42,7 +91,14 @@ export function UserManagementDashboard() {
       if (statusFilter === "Must Change Password" && !user.mustChangePassword) return false;
       return true;
     });
-  }, [roleFilter, search, statusFilter, users]);
+  }, [roleFilter, search, statusFilter, summaryFilteredUsers]);
+
+  const selectSummaryFilter = (filter: UserSummaryFilter) => {
+    setSummaryFilter(filter);
+    setSearch("");
+    setRoleFilter("All");
+    setStatusFilter("All");
+  };
 
   const userColumns: DataTableColumn<AppUser>[] = [
     { header: "Name", render: (row) => <span className="font-semibold text-coal-900">{row.name}</span>, className: "min-w-56" },
@@ -122,6 +178,26 @@ export function UserManagementDashboard() {
           {message}
         </div>
       )}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => {
+          const isSelected = summaryFilter === card.key;
+
+          return (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => selectSummaryFilter(card.key)}
+              className={`rounded-lg border bg-white px-4 py-3 text-left shadow-sm transition hover:border-ore-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ore-100 ${
+                isSelected ? "border-ore-600 ring-2 ring-ore-100" : "border-coal-200"
+              }`}
+            >
+              <span className="text-xs font-semibold uppercase tracking-wide text-coal-500">{card.label}</span>
+              <span className="mt-2 block text-3xl font-semibold text-coal-950">{card.value}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <Panel
         title="User Management"
