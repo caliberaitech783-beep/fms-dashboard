@@ -13,7 +13,7 @@ async function workbookFixture() {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Sheet1");
   worksheet.addRow(["firm name", "status", "revert", "contact / phone number"]);
-  worksheet.addRow(["Sample Firm", "Open", "Pending", "9423604667"]);
+  worksheet.addRow(["Sample Firm", "Open", "Pending", "9000000000"]);
   await workbook.xlsx.writeFile(inputPath);
   return { inputPath, outputPath };
 }
@@ -75,4 +75,3 @@ test("real sync uses supplied client and writes response id", async () => {
   assert.equal(worksheet.getCell("E2").value, "Synced");
   assert.equal(worksheet.getCell("G2").value, "remote-123");
 });
-

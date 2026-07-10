@@ -30,7 +30,7 @@ async function createWorkbook(filePath, { blankPhoneHeader = false, withExtraSit
   worksheet.getCell("A2").value = "Sample Firm";
   worksheet.getCell("B2").value = "Open";
   worksheet.getCell("C2").value = "Pending";
-  worksheet.getCell("D2").value = "9423604667";
+  worksheet.getCell("D2").value = "9000000000";
   if (withExtraSite) {
     worksheet.getCell("E2").value = "Sasti";
   }
@@ -49,7 +49,7 @@ test("parses Sheet1 while preserving A-D semantics and phone text", async () => 
   assert.equal(parsed.rows[0].firmName, "Sample Firm");
   assert.equal(parsed.rows[0].status, "Open");
   assert.equal(parsed.rows[0].revert, "Pending");
-  assert.equal(parsed.rows[0].contactPhone, "9423604667");
+  assert.equal(parsed.rows[0].contactPhone, "9000000000");
   assert.equal(parsed.rows[0].extraFields.site, "Sasti");
   assert.deepEqual(validateTrackingRow(parsed.rows[0]), []);
 });
@@ -73,4 +73,3 @@ test("adds sync result columns after existing user columns", async () => {
   assert.equal(parsed.worksheet.getCell("F2").value, "Dry Run");
   assert.equal(parsed.worksheet.getCell("H2").value, "remote-1");
 });
-
