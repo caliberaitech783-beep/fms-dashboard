@@ -1,4 +1,4 @@
-export type ContractType = "OCM" | "OB";
+export type ContractType = "Coal" | "OB";
 
 export type AssetCategory = "Truck" | "HEMM" | "Unknown";
 

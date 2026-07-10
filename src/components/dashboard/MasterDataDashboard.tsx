@@ -123,7 +123,7 @@ export function MasterDataDashboard({ fleetRows, loading }: MasterDataDashboardP
       )}
 
       {activeTab === "Types of Work Master" && (
-        <SimpleRows rows={["OCM", "OB"].map((contract) => ({ name: contract, status: "Active" }))} />
+        <SimpleRows rows={["Coal", "OB"].map((contract) => ({ name: contract, status: "Active" }))} />
       )}
       {activeTab === "Shift Master" && (
         <SimpleRows rows={Object.entries(SHIFT_DEFINITIONS).map(([code, shift]) => ({ name: `Shift ${code}`, status: `${shift.start} to ${shift.end}` }))} />

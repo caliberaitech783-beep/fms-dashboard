@@ -27,13 +27,13 @@ import {
 export const DUMMY_DATA_END_DATE = "2026-07-08";
 
 export const sites: Site[] = [
-  { id: "site-wcl-sasti-ocm", name: "Sasti OCM", location: "WCL", contractType: "OCM", active: true },
-  { id: "site-wcl-dhoptala-ocm", name: "Dhoptala OCM", location: "WCL", contractType: "OCM", active: true },
-  { id: "site-wcl-lalpeth-ocm", name: "Lalpeth OCM", location: "WCL", contractType: "OCM", active: true },
-  { id: "site-wcl-majri-ocm", name: "Majri OCM", location: "WCL", contractType: "OCM", active: true },
-  { id: "site-wcl-gauri-pauni", name: "Gauri Pauni OCM", location: "WCL", contractType: "OCM", active: true },
-  { id: "site-ncl-jayant-1", name: "Jayant 1", location: "NCL", contractType: "OCM", active: true },
-  { id: "site-ncl-jayant-2", name: "Jayant 2", location: "NCL", contractType: "OCM", active: true },
+  { id: "site-wcl-sasti-ocm", name: "Sasti OCM", location: "WCL", contractType: "Coal", active: true },
+  { id: "site-wcl-dhoptala-ocm", name: "Dhoptala OCM", location: "WCL", contractType: "Coal", active: true },
+  { id: "site-wcl-lalpeth-ocm", name: "Lalpeth OCM", location: "WCL", contractType: "Coal", active: true },
+  { id: "site-wcl-majri-ocm", name: "Majri OCM", location: "WCL", contractType: "Coal", active: true },
+  { id: "site-wcl-gauri-pauni", name: "Gauri Pauni OCM", location: "WCL", contractType: "Coal", active: true },
+  { id: "site-ncl-jayant-1", name: "Jayant 1", location: "NCL", contractType: "Coal", active: true },
+  { id: "site-ncl-jayant-2", name: "Jayant 2", location: "NCL", contractType: "Coal", active: true },
   { id: "site-ncl-dch-west", name: "DCH West", location: "NCL", contractType: "OB", active: true },
   { id: "site-ncl-dch-east", name: "DCH East", location: "NCL", contractType: "OB", active: true },
 ];
