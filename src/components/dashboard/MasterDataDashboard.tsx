@@ -19,7 +19,6 @@ const tabs = [
   "Site Master",
   "Types of Work Master",
   "Shift Master",
-  "Loading/Unloading Points",
   "Lead Master",
   "Fuel Norm Master",
 ];
@@ -127,9 +126,6 @@ export function MasterDataDashboard({ fleetRows, loading }: MasterDataDashboardP
       )}
       {activeTab === "Shift Master" && (
         <SimpleRows rows={Object.entries(SHIFT_DEFINITIONS).map(([code, shift]) => ({ name: `Shift ${code}`, status: `${shift.start} to ${shift.end}` }))} />
-      )}
-      {activeTab === "Loading/Unloading Points" && (
-        <SimpleRows rows={["LP-01 East Face", "LP-02 North Bench", "Crusher Hopper 1", "Waste Dump A", "ROM Stockyard"].map((name) => ({ name, status: "Sample point" }))} />
       )}
       {activeTab === "Lead Master" && (
         <SimpleRows rows={[{ name: "Manual entry", status: "Active lead input" }]} />

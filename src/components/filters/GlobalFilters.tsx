@@ -12,7 +12,6 @@ interface GlobalFiltersProps {
   setFilter: <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => void;
   resetFilters: () => void;
   onRefresh: () => void;
-  showLoadingPointFilters?: boolean;
 }
 
 export function GlobalFilters({
@@ -21,22 +20,7 @@ export function GlobalFilters({
   setFilter,
   resetFilters,
   onRefresh,
-  showLoadingPointFilters = true,
 }: GlobalFiltersProps) {
-  useEffect(() => {
-    if (showLoadingPointFilters) {
-      return;
-    }
-
-    if (filters.loadingPoint !== "All") {
-      setFilter("loadingPoint", "All");
-    }
-
-    if (filters.unloadingPoint !== "All") {
-      setFilter("unloadingPoint", "All");
-    }
-  }, [filters.loadingPoint, filters.unloadingPoint, setFilter, showLoadingPointFilters]);
-
   return (
     <div className="sticky top-0 z-20 border-b border-coal-200 bg-coal-50/95 px-4 py-3 backdrop-blur lg:px-6">
       <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -74,12 +58,6 @@ export function GlobalFilters({
           step="0.1"
           onChange={(value) => setFilter("lead", value.trim() === "" ? "All" : value)}
         />
-        {showLoadingPointFilters && (
-          <>
-            <FilterSelect label="Loading" value={filters.loadingPoint} options={withAll(options.loadingPoints, "All Loading")} onChange={(value) => setFilter("loadingPoint", value)} />
-            <FilterSelect label="Unloading" value={filters.unloadingPoint} options={withAll(options.unloadingPoints, "All Unloading")} onChange={(value) => setFilter("unloadingPoint", value)} />
-          </>
-        )}
       </div>
     </div>
   );

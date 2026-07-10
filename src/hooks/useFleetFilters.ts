@@ -17,8 +17,6 @@ export const defaultFilters: DashboardFilters = {
   vehicleNumber: "",
   status: "All",
   lead: "All",
-  loadingPoint: "All",
-  unloadingPoint: "All",
 };
 
 export interface FilterOptions {
@@ -29,8 +27,6 @@ export interface FilterOptions {
   companies: string[];
   models: string[];
   statuses: string[];
-  loadingPoints: string[];
-  unloadingPoints: string[];
 }
 
 export function useFleetFilters() {
@@ -43,8 +39,6 @@ export function useFleetFilters() {
     companies: [],
     models: [],
     statuses: [],
-    loadingPoints: [],
-    unloadingPoints: [],
   });
 
   useEffect(() => {
@@ -63,8 +57,6 @@ export function useFleetFilters() {
         companies: uniqueSorted(data.vehicles.map((vehicle) => vehicle.company)),
         models: uniqueSorted(data.vehicles.map((vehicle) => vehicle.modelNumber)),
         statuses: uniqueSorted(data.vehicles.map((vehicle) => vehicle.status)),
-        loadingPoints: uniqueSorted(data.records.map((record) => record.loadingPoint)),
-        unloadingPoints: uniqueSorted(data.records.map((record) => record.unloadingPoint)),
       });
     });
 

@@ -86,7 +86,6 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
           setFilter={setFilter}
           resetFilters={resetFilters}
           onRefresh={() => setRefreshKey((current) => current + 1)}
-          showLoadingPointFilters={activeSection !== "management"}
         />
         <div className="px-4 py-4 lg:px-6">
           <div className="mb-4">

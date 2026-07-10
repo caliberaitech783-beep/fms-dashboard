@@ -98,8 +98,6 @@ export interface FleetTelemetryRecord {
   capacityM3: number | null;
   productionM3: number | null;
   leadKm: number | null;
-  loadingPoint: string | null;
-  unloadingPoint: string | null;
   status: VehicleStatus;
   truckEfficiencyKmPerLitre: number | null;
   hemmFuelRateLitrePerHour: number | null;
@@ -206,8 +204,6 @@ export interface DashboardFilters {
   vehicleNumber: string;
   status: VehicleStatus | "All";
   lead: string;
-  loadingPoint: string;
-  unloadingPoint: string;
 }
 
 export interface VehicleWithTelemetry {

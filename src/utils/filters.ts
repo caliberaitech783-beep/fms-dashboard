@@ -41,8 +41,6 @@ export function filterTelemetryRecords(
     if (timestamp < from || timestamp > to) return false;
     if (!isAll(filters.shift) && record.shift !== filters.shift) return false;
     if (!isAll(filters.lead) && Number(record.leadKm) !== Number(filters.lead)) return false;
-    if (!isAll(filters.loadingPoint) && record.loadingPoint !== filters.loadingPoint) return false;
-    if (!isAll(filters.unloadingPoint) && record.unloadingPoint !== filters.unloadingPoint) return false;
 
     return true;
   });

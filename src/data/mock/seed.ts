@@ -38,9 +38,6 @@ export const sites: Site[] = [
   { id: "site-ncl-dch-east", name: "DCH East", location: "NCL", contractType: "OB", active: true },
 ];
 
-export const loadingPoints = ["LP-01 East Face", "LP-02 North Bench", "LP-03 Coal Seam", "LP-04 OB Cut", "LP-05 Iron Bench"];
-export const unloadingPoints = ["Crusher Hopper 1", "Crusher Hopper 2", "Waste Dump A", "Waste Dump B", "ROM Stockyard"];
-
 const companies: Company[] = ["Volvo", "Scania", "LiuGong", "Eicher", "Tata Hitachi", "Case", "Komatsu"];
 const truckTypes: AssetType[] = ["Tipper", "Truck", "Haul Pack"];
 const hemmTypes: AssetType[] = ["Excavator", "Loader", "Grader", "Crane", "Other"];
@@ -195,8 +192,6 @@ function createTelemetry(vehicleList: Vehicle[]): FleetTelemetryRecord[] {
           capacityM3: vehicle.capacityM3,
           productionM3,
           leadKm,
-          loadingPoint: pick(loadingPoints, vehicleIndex + shiftIndex + dayOffset),
-          unloadingPoint: pick(unloadingPoints, vehicleIndex + dayOffset),
           status,
           truckEfficiencyKmPerLitre: vehicle.assetCategory === "Truck" ? calculateTruckEfficiency(distanceKm, fuelConsumedLitres) : null,
           hemmFuelRateLitrePerHour: vehicle.assetCategory === "HEMM" ? calculateHemmFuelRate(fuelConsumedLitres, runningHours) : null,
