@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
 const { buildIdempotencyKey, maskPhone, normalizePhone, resolveTargetUsers } = require("./notificationPolicy");
+const { hasVapidConfig, sendWebPush } = require("./pushSender");
 
 const PARTITION = {
   DEVICE: "DEVICE",
@@ -156,6 +157,28 @@ function preferencesFromEntity(entity, userId) {
   };
 }
 
+function pushEndpointFromSubscription(subscription) {
+  return subscription && typeof subscription === "object" ? String(subscription.endpoint || "") : "";
+}
+
+async function deactivateDuplicateSubscriptions(ownerUserId, ownerDeviceId, endpoint) {
+  if (!endpoint) return 0;
+  let revoked = 0;
+  for await (const entity of devicesTable.listEntities()) {
+    if (entity.isActive === false) continue;
+    const subscription = parseJson(entity.pushSubscriptionJson, null);
+    if (pushEndpointFromSubscription(subscription) !== endpoint) continue;
+    const entityUserId = decodeRowKey(entity.partitionKey);
+    if (entityUserId === ownerUserId && entity.deviceId === ownerDeviceId) continue;
+    entity.isActive = false;
+    entity.revokedAt = now();
+    entity.pushSubscriptionJson = "";
+    await devicesTable.updateEntity(entity, "Replace");
+    revoked += 1;
+  }
+  return revoked;
+}
+
 async function saveDevice(userId, input = {}) {
   await setupTables();
   const createdAt = now();
@@ -168,6 +191,9 @@ async function saveDevice(userId, input = {}) {
   } catch (error) {
     if (error.statusCode !== 404) throw error;
   }
+
+  const endpoint = pushEndpointFromSubscription(input.pushSubscription);
+  await deactivateDuplicateSubscriptions(userId, deviceId, endpoint);
 
   const entity = {
     partitionKey,
@@ -197,6 +223,10 @@ async function listDevices(userId) {
   return rows.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+async function listActivePushDevices(userId) {
+  return (await listDevices(userId)).filter((device) => device.isActive && pushEndpointFromSubscription(device.pushSubscription));
+}
+
 async function revokeDevice(userId, deviceId) {
   await setupTables();
   const partitionKey = rowKeyFor(userId);
@@ -207,6 +237,22 @@ async function revokeDevice(userId, deviceId) {
   entity.pushSubscriptionJson = "";
   await devicesTable.updateEntity(entity, "Replace");
   return deviceFromEntity(entity);
+}
+
+async function revokeDeviceByEndpoint(endpoint) {
+  await setupTables();
+  let revoked = 0;
+  for await (const entity of devicesTable.listEntities()) {
+    const subscription = parseJson(entity.pushSubscriptionJson, null);
+    if (pushEndpointFromSubscription(subscription) === endpoint && entity.isActive !== false) {
+      entity.isActive = false;
+      entity.revokedAt = now();
+      entity.pushSubscriptionJson = "";
+      await devicesTable.updateEntity(entity, "Replace");
+      revoked += 1;
+    }
+  }
+  return { revoked };
 }
 
 async function getPreferences(userId) {
@@ -299,6 +345,16 @@ async function recordDelivery(input) {
   await setupTables();
   const createdAt = now();
   const rowKey = input.idempotencyKey || buildIdempotencyKey(input);
+  let existing = null;
+  try {
+    existing = await deliveriesTable.getEntity(PARTITION.DELIVERY, rowKey);
+  } catch (error) {
+    if (error.statusCode !== 404) throw error;
+  }
+  const attemptCount = Number(input.attemptCount ?? existing?.attemptCount ?? 0);
+  const permanentFailure = input.permanentFailure === true || existing?.permanentFailure === true;
+  const failedTransiently = input.status === "failed" && !permanentFailure;
+  const retryDelayMs = Math.min(60 * 60 * 1000, (2 ** Math.max(0, attemptCount)) * 60 * 1000);
   const entity = {
     partitionKey: PARTITION.DELIVERY,
     rowKey,
@@ -309,11 +365,103 @@ async function recordDelivery(input) {
     status: input.status,
     providerMessageId: input.providerMessageId || "",
     failureReason: input.failureReason || "",
-    createdAt,
+    attemptCount,
+    maxAttempts: input.maxAttempts || existing?.maxAttempts || 5,
+    permanentFailure,
+    nextAttemptAt: input.nextAttemptAt || (failedTransiently ? new Date(Date.now() + retryDelayMs).toISOString() : ""),
+    createdAt: existing?.createdAt || createdAt,
     updatedAt: createdAt,
   };
   await deliveriesTable.upsertEntity(entity, "Merge");
   return entity;
+}
+
+async function listDeliveries({ limit = 100 } = {}) {
+  await setupTables();
+  const rows = [];
+  for await (const entity of deliveriesTable.listEntities({ queryOptions: { filter: `PartitionKey eq '${PARTITION.DELIVERY}'` } })) {
+    rows.push({
+      idempotencyKey: entity.idempotencyKey,
+      eventId: entity.eventId,
+      targetUserId: entity.targetUserId,
+      channel: entity.channel,
+      status: entity.status,
+      providerMessageId: entity.providerMessageId || "",
+      failureReason: entity.failureReason || "",
+      attemptCount: entity.attemptCount || 0,
+      maxAttempts: entity.maxAttempts || 5,
+      permanentFailure: entity.permanentFailure === true,
+      nextAttemptAt: entity.nextAttemptAt || "",
+      createdAt: entity.createdAt,
+      updatedAt: entity.updatedAt,
+    });
+  }
+  return rows.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, limit);
+}
+
+async function retryDelivery(idempotencyKey) {
+  await setupTables();
+  const entity = await deliveriesTable.getEntity(PARTITION.DELIVERY, idempotencyKey);
+  if (!["failed", "blocked"].includes(entity.status)) {
+    return { idempotencyKey, status: entity.status, retried: false };
+  }
+  if (entity.permanentFailure === true) {
+    return { idempotencyKey, status: entity.status, retried: false, reason: "Permanent failure cannot be retried." };
+  }
+  const attemptCount = Number(entity.attemptCount || 0);
+  const maxAttempts = Number(entity.maxAttempts || 5);
+  if (attemptCount >= maxAttempts) {
+    return { idempotencyKey, status: entity.status, retried: false, reason: "Maximum retry attempts reached." };
+  }
+  entity.status = "queued";
+  entity.failureReason = "";
+  entity.attemptCount = attemptCount + 1;
+  entity.nextAttemptAt = "";
+  entity.updatedAt = now();
+  await deliveriesTable.updateEntity(entity, "Replace");
+  return { idempotencyKey, status: "queued", retried: true, attemptCount: entity.attemptCount };
+}
+
+async function sendPushForNotification(user, notification) {
+  const devices = await listActivePushDevices(user.userId);
+  if (!devices.length) {
+    await recordDelivery({
+      sourceEventId: notification.id,
+      targetUserId: user.userId,
+      templateId: "manual-admin",
+      channel: "push",
+      scheduleWindow: "immediate",
+      status: "blocked",
+      failureReason: "No active push subscription registered.",
+    });
+    return [{ userId: user.userId, channel: "push", status: "blocked" }];
+  }
+
+  const deliveries = [];
+  for (const device of devices) {
+    const deliveryInput = {
+      sourceEventId: notification.id,
+      targetUserId: user.userId,
+      templateId: "manual-admin",
+      channel: "push",
+      scheduleWindow: "immediate",
+    };
+    const pushResult = hasVapidConfig()
+      ? await sendWebPush(device.pushSubscription, notification)
+      : { status: "blocked", reason: "VAPID keys are not configured.", permanentFailure: false };
+    await recordDelivery({
+      ...deliveryInput,
+      status: pushResult.status,
+      providerMessageId: pushResult.providerMessageId || "",
+      failureReason: pushResult.reason || "",
+      permanentFailure: pushResult.permanentFailure === true,
+    });
+    if (pushResult.permanentFailure && device.pushSubscription?.endpoint) {
+      await revokeDeviceByEndpoint(device.pushSubscription.endpoint);
+    }
+    deliveries.push({ userId: user.userId, deviceId: device.deviceId, channel: "push", status: pushResult.status });
+  }
+  return deliveries;
 }
 
 async function sendInAppNotification({ actor, users, criteria = {}, title, body, severity = "info", channels = ["in-app"], deepLinkUrl = "/", metadata = {} }) {
@@ -342,15 +490,15 @@ async function sendInAppNotification({ actor, users, criteria = {}, title, body,
       results.push({ userId: user.userId, notificationId: notification.id, channel: "in-app", status: "queued" });
     }
     if (channels.includes("push")) {
-      await recordDelivery({
-        sourceEventId: `push-${Date.now()}`,
-        targetUserId: user.userId,
-        templateId: "manual-admin",
-        channel: "push",
-        scheduleWindow: "immediate",
-        status: process.env.VAPID_PRIVATE_KEY ? "queued" : "blocked",
-        failureReason: process.env.VAPID_PRIVATE_KEY ? "" : "VAPID_PRIVATE_KEY is not configured.",
+      const notification = await createInboxNotification(user.userId, {
+        title,
+        body,
+        severity,
+        deepLinkUrl,
+        metadata: { ...metadata, actorUserId: actor?.userId || null, channel: "push_shadow" },
       });
+      const pushResults = await sendPushForNotification(user, notification);
+      results.push(...pushResults);
     }
     if (channels.includes("whatsapp")) {
       await recordDelivery({
@@ -443,16 +591,19 @@ module.exports = {
   createInboxNotification,
   getPreferences,
   getWhatsAppConsent,
+  listActivePushDevices,
   listDevices,
+  listDeliveries,
   listInbox,
   markAllRead,
   markRead,
   recordWhatsAppWebhook,
+  retryDelivery,
   revokeDevice,
+  revokeDeviceByEndpoint,
   saveDevice,
   savePreferences,
   saveWhatsAppContact,
   sendInAppNotification,
   setWhatsAppConsent,
 };
-
