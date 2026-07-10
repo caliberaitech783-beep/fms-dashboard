@@ -1,8 +1,13 @@
 const { app } = require("@azure/functions");
 const store = require("../lib/authStore");
-const { syncTrackingWorkbookBuffer } = require("../lib/tracking/syncWorkflow");
-const { createTrackingApiClientFromEnv } = require("../lib/tracking/trackingApiClient");
 const { safeErrorMessage } = require("../lib/tracking/masking");
+
+function trackingDependencies() {
+  return {
+    ...require("../lib/tracking/syncWorkflow"),
+    ...require("../lib/tracking/trackingApiClient"),
+  };
+}
 
 function allowedOrigin(request) {
   const configured = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in")
@@ -101,6 +106,7 @@ app.http("trackingSync", {
       }
 
       const dryRun = body.dryRun !== false;
+      const { syncTrackingWorkbookBuffer, createTrackingApiClientFromEnv } = trackingDependencies();
       const summary = await syncTrackingWorkbookBuffer(Buffer.from(fileBase64, "base64"), {
         dryRun,
         defaultSite: String(body.defaultSite || ""),
