@@ -7,6 +7,9 @@
     "ALLOWED_ORIGINS": "http://localhost:5173,https://fms.cmll.in",
     "USERS_TABLE_NAME": "FmsUsers",
     "AUDIT_TABLE_NAME": "FmsAuditLogs",
-    "PASSWORD_HISTORY_TABLE_NAME": "FmsPasswordHistory"
+    "PASSWORD_HISTORY_TABLE_NAME": "FmsPasswordHistory",
+    "TRACKING_API_USERNAME": "replace-with-tracking-api-username",
+    "TRACKING_API_PASSWORD": "replace-with-tracking-api-password",
+    "TRACKING_API_BASE_URL": "https://tracking-api.example.com/records"
   }
 }
