@@ -6,11 +6,15 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "test": "node --check src/functions/authApi.js && node --check src/lib/authStore.js"
+    "test": "node --check src/functions/authApi.js && node --check src/functions/frontend.js && node --check src/functions/trackingSync.js && node --check src/lib/authStore.js && node --test \"test/**/*.test.js\"",
+    "tracking:sync": "node scripts/sync-tracking-sheet.js"
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",
-    "@azure/functions": "^4.16.2"
+    "@azure/functions": "^4.16.2",
+    "exceljs": "^4.4.0"
   },
-  "devDependencies": {}
+  "overrides": {
+    "uuid": "11.1.1"
+  }
 }
