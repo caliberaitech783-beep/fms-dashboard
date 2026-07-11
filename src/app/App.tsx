@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
 import { canAccessNav } from "../auth/permissions";
 import { NAV_ITEMS, type NavItemId } from "../constants/routes";
@@ -11,11 +11,13 @@ import { MobileNav } from "../components/layout/MobileNav";
 import { Sidebar } from "../components/layout/Sidebar";
 import { TopBar } from "../components/layout/TopBar";
 import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
+import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
 import { FuelDashboard } from "../components/dashboard/FuelDashboard";
 import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
 import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
 import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
+import { NotificationCenterDashboard } from "../components/dashboard/NotificationCenterDashboard";
 import { ProductionDashboard } from "../components/dashboard/ProductionDashboard";
 import { ReportsDashboard } from "../components/dashboard/ReportsDashboard";
 import { SettingsDashboard } from "../components/dashboard/SettingsDashboard";
@@ -23,6 +25,7 @@ import { UserManagementDashboard } from "../components/dashboard/UserManagementD
 import { WhatsAppDeliveryDashboard } from "../components/dashboard/WhatsAppDeliveryDashboard";
 import { LoadingState } from "../components/ui/LoadingState";
 import { Panel } from "../components/ui/Panel";
+import { TimingToast } from "../components/ui/TimingToast";
 
 export function App() {
   return (
@@ -56,11 +59,17 @@ function AppContent() {
 
 function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const { currentUser } = useAuth();
-  const [activeSection, setActiveSection] = useState<NavItemId>("management");
+  const [activeSection, setActiveSection] = useState<NavItemId>(() => initialSectionFromUrl());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [timingNotice, setTimingNotice] = useState<{
+    id: number;
+    elapsedMs: number;
+    message: string;
+  } | null>(null);
+  const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
-  const showGlobalFilters = activeSection !== "users";
+  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -72,15 +81,53 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     }
   }, [activeSection, allowedItems]);
 
+  useEffect(() => {
+    if (data.loading) {
+      return;
+    }
+
+    const pendingTimer = sectionTimerRef.current;
+    if (!pendingTimer || pendingTimer.section !== activeSection) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setTimingNotice({
+        id: Date.now(),
+        elapsedMs: performance.now() - pendingTimer.startedAt,
+        message: "Data loaded",
+      });
+      sectionTimerRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSection, data.loading]);
+
   if (!currentUser) {
     return null;
   }
 
+  const showTimingNotice = (message: string, elapsedMs: number) => {
+    setTimingNotice({
+      id: Date.now(),
+      elapsedMs,
+      message,
+    });
+  };
+
+  const handleSectionChange = (section: NavItemId) => {
+    if (section !== activeSection) {
+      sectionTimerRef.current = { section, startedAt: performance.now() };
+      setTimingNotice(null);
+      setActiveSection(section);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-coal-50">
-      <Sidebar active={activeSection} onChange={setActiveSection} items={allowedItems} />
+      <Sidebar active={activeSection} onChange={handleSectionChange} items={allowedItems} />
       <main className="lg:pl-72">
-        <TopBar user={currentUser} onLogout={onLogout} />
+        <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />
         {showGlobalFilters && (
           <GlobalFilters
             filters={filters}
@@ -92,25 +139,39 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
         )}
         <div className="px-4 py-4 lg:px-6">
           <div className="mb-4">
-            <MobileNav active={activeSection} onChange={setActiveSection} items={allowedItems} />
+            <MobileNav active={activeSection} onChange={handleSectionChange} items={allowedItems} />
           </div>
           {data.error ? (
             <Panel title="Unable to load dashboard">
               <p className="text-sm text-red-700">{data.error}</p>
             </Panel>
           ) : (
-            renderSection(activeSection, data, filters)
+            renderSection(activeSection, data, filters, showTimingNotice)
           )}
         </div>
       </main>
+      {timingNotice && (
+        <TimingToast
+          key={timingNotice.id}
+          elapsedMs={timingNotice.elapsedMs}
+          message={timingNotice.message}
+          onClose={() => setTimingNotice(null)}
+        />
+      )}
     </div>
   );
+}
+
+function initialSectionFromUrl(): NavItemId {
+  const section = new URLSearchParams(window.location.search).get("section");
+  return NAV_ITEMS.some((item) => item.id === section) ? section as NavItemId : "management";
 }
 
 function renderSection(
   activeSection: NavItemId,
   data: ReturnType<typeof useDashboardData>,
   filters: ReturnType<typeof useFleetFilters>["filters"],
+  onTimingComplete: (message: string, elapsedMs: number) => void,
 ) {
   switch (activeSection) {
     case "management":
@@ -124,7 +185,18 @@ function renderSection(
     case "alerts":
       return <AlertsDashboard alerts={data.alerts} fleetRows={data.fleetRows} loading={data.loading} />;
     case "reports":
-      return <ReportsDashboard reports={data.reports} filters={filters} loading={data.loading} />;
+      return (
+        <ReportsDashboard
+          reports={data.reports}
+          filters={filters}
+          loading={data.loading}
+          onTimingComplete={onTimingComplete}
+        />
+      );
+    case "notifications":
+      return <NotificationCenterDashboard />;
+    case "admin-notifications":
+      return <AdminNotificationsDashboard />;
     case "integrations":
       return <IntegrationsDashboard integrations={data.integrations} loading={data.loading} />;
     case "whatsapp":

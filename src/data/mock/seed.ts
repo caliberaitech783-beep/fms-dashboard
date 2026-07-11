@@ -43,6 +43,16 @@ const truckTypes: AssetType[] = ["Tipper", "Truck", "Haul Pack"];
 const hemmTypes: AssetType[] = ["Excavator", "Loader", "Grader", "Crane", "Other"];
 const statuses: VehicleStatus[] = ["running", "idle", "stopped", "offline", "maintenance"];
 const trackerProviders = ["Wialon", "Teltonika", "Trimble", "OEM Cloud", "MineTrack"];
+const drivers = [
+  { id: "driver-001", name: "Amit Sharma", mobile: "7709972657" },
+  { id: "driver-002", name: "Chandan Tiwari", mobile: "6306416709" },
+  { id: "driver-003", name: "Rohit Singh Parihar", mobile: "9977327762" },
+  { id: "driver-004", name: "Kishor Dhandre", mobile: "9423604667" },
+  { id: "driver-005", name: "Ashish Thakur", mobile: "9850396090" },
+  { id: "driver-006", name: "Gulnawaz", mobile: "7587552827" },
+  { id: "driver-007", name: "Farukh Khan", mobile: "9753109222" },
+  { id: "driver-008", name: "Vivek Khadilkar", mobile: "7875447101" },
+];
 
 const companyModels: Record<Company, { truck: string[]; hemm: string[] }> = {
   Volvo: { truck: ["FMX 440", "FMX 480", "FMX 520"], hemm: ["EC750D", "L350H", "G946C"] },
@@ -150,6 +160,7 @@ function createTelemetry(vehicleList: Vehicle[]): FleetTelemetryRecord[] {
         const nominalFuelLevel = (vehicle.fuelTankCapacityLitres ?? 300) * (0.35 + random() * 0.5);
         const fuelLevelLitres = round1(suddenFuelDrop ? (vehicle.fuelTankCapacityLitres ?? 300) * 0.08 : nominalFuelLevel);
         const timestamp = shiftTimestamp(currentDate, shift);
+        const driver = pick(drivers, vehicleIndex + dayOffset + shiftIndex);
         const status: VehicleStatus = forcedOffline
           ? "offline"
           : vehicle.status === "maintenance"
@@ -165,6 +176,9 @@ function createTelemetry(vehicleList: Vehicle[]): FleetTelemetryRecord[] {
           source: "DUMMY_SAMPLE",
           vehicleId: vehicle.id,
           vehicleNumber: vehicle.vehicleNumber,
+          driverId: driver.id,
+          driverName: driver.name,
+          driverMobile: driver.mobile,
           trackerId: vehicle.trackerId,
           timestamp,
           date: timestamp.slice(0, 10),

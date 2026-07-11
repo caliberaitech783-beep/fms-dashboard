@@ -16,6 +16,8 @@ export type Permission =
   | "alerts:read"
   | "reports:read"
   | "reports:export"
+  | "notifications:read"
+  | "notifications:manage"
   | "integrations:manage"
   | "whatsapp:manage"
   | "master-data:manage"

@@ -14,9 +14,10 @@ interface ReportsDashboardProps {
   reports: Report[];
   filters: DashboardFilters;
   loading: boolean;
+  onTimingComplete?: (message: string, elapsedMs: number) => void;
 }
 
-export function ReportsDashboard({ reports, filters, loading }: ReportsDashboardProps) {
+export function ReportsDashboard({ reports, filters, loading, onTimingComplete }: ReportsDashboardProps) {
   const [selectedReport, setSelectedReport] = useState<ReportType>("Daily Fuel Consumption Report");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -84,26 +85,25 @@ export function ReportsDashboard({ reports, filters, loading }: ReportsDashboard
   const closeDownloadDialog = () => setDownloadState(null);
 
   const handleDownload = async (format: "CSV" | "PDF" | "Excel") => {
-    if (!preview && format === "CSV") {
+    if (!preview) {
       return;
     }
 
     const startedAt = performance.now();
+    const csvFileName = makeCsvFileName(selectedReport, filters.siteId, filters.shift, filters.dateTo);
     setDownloadState({ open: true, status: "running", format, startedAt, elapsedMs: 0 });
 
-    if (format === "CSV" && preview) {
-      reportService.exportCsv(
-        preview,
-        makeCsvFileName(selectedReport, filters.siteId, filters.shift, filters.dateTo),
-      );
+    if (format === "CSV") {
+      reportService.exportCsv(preview, csvFileName);
     } else if (format === "PDF") {
-      await reportService.exportPdf();
+      await reportService.exportPdf(preview, csvFileName.replace(/\.csv$/, ".pdf"));
     } else {
-      await reportService.exportExcel();
+      await reportService.exportExcel(preview, csvFileName.replace(/\.csv$/, ".xlsx"));
     }
 
     const elapsedMs = performance.now() - startedAt;
-    setDownloadState({ open: true, status: "done", format, startedAt, elapsedMs });
+    setDownloadState(null);
+    onTimingComplete?.("Report downloaded", elapsedMs);
   };
 
   return (
@@ -146,8 +146,20 @@ export function ReportsDashboard({ reports, filters, loading }: ReportsDashboard
             >
               CSV
             </Button>
-            <Button icon={<FileText className="h-4 w-4" />} onClick={() => handleDownload("PDF")}>PDF</Button>
-            <Button icon={<FileSpreadsheet className="h-4 w-4" />} onClick={() => handleDownload("Excel")}>Excel</Button>
+            <Button
+              icon={<FileText className="h-4 w-4" />}
+              disabled={!preview}
+              onClick={() => handleDownload("PDF")}
+            >
+              PDF
+            </Button>
+            <Button
+              icon={<FileSpreadsheet className="h-4 w-4" />}
+              disabled={!preview}
+              onClick={() => handleDownload("Excel")}
+            >
+              Excel
+            </Button>
           </div>
         }
       >

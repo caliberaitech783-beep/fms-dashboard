@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CMLL FMS",
+  "version": "0.1.0",
+  "identifier": "in.cmll.fms",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CMLL FMS",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1024,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' https://cmll-fms-api.azurewebsites.net https://fms.cmll.in; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "app"],
+    "publisher": "CMLL",
+    "category": "Business",
+    "shortDescription": "Fleet fuel monitoring portal",
+    "longDescription": "Unified Mining Fleet Fuel Monitoring Portal for fleet fuel, reports, notifications, and operations.",
+    "icon": ["icons/icon.png"],
+    "createUpdaterArtifacts": true
+  }
+}
+

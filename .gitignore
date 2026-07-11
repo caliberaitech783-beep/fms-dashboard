@@ -8,3 +8,10 @@ vite.config.d.ts
 .env
 .env.local
 .DS_Store
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.tauri/
+*.p12
+*.pfx
+*.cer
+*.mobileprovision
