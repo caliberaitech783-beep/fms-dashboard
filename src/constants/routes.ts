@@ -18,6 +18,7 @@ export const NAV_ITEMS = [
   { id: "management", label: "Management Dashboard", icon: BarChart3 },
   { id: "fleet", label: "Fleet", icon: Truck },
   { id: "fuel", label: "Fuel", icon: Fuel },
+  { id: "diesel", label: "Diesel Dashboard", icon: Fuel },
   { id: "production", label: "Production", icon: Gauge },
   { id: "alerts", label: "Alerts", icon: AlertTriangle },
   { id: "reports", label: "Reports", icon: ClipboardList },

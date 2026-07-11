@@ -14,6 +14,7 @@ import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
 import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
 import { FuelDashboard } from "../components/dashboard/FuelDashboard";
+import { DieselDashboard } from "../components/dashboard/DieselDashboard";
 import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
 import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
 import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
@@ -69,7 +70,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
-  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
+  const showGlobalFilters = !["users", "notifications", "admin-notifications", "diesel"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -180,6 +181,8 @@ function renderSection(
       return <FleetDashboard rows={data.fleetRows} alerts={data.alerts} loading={data.loading} />;
     case "fuel":
       return <FuelDashboard summary={data.fuelSummary} loading={data.loading} />;
+    case "diesel":
+      return <DieselDashboard />;
     case "production":
       return <ProductionDashboard summary={data.productionSummary} loading={data.loading} />;
     case "alerts":
