@@ -18,6 +18,11 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `USERS_TABLE_NAME`
 - `AUDIT_TABLE_NAME`
 - `PASSWORD_HISTORY_TABLE_NAME`
+- `AUTO_SEED_USERS`: set to `true` for the idempotent legacy-credential security migration
+- `SECURITY_MIGRATION_BACKUP_TABLE_NAME`: private Table Storage snapshot created before the migration
+- `SECURITY_RECOVERY_ADMIN_USER_ID`: one Super Admin user ID used only during the legacy-password migration
+- `SECURITY_RECOVERY_ADMIN_NAME`: optional display name used only when bootstrapping an empty user table
+- `SECURITY_RECOVERY_TEMP_PASSWORD`: random 16+ character one-time password used only for that migration; remove it immediately after migration succeeds
 - `TRACKING_API_BASE_URL`
 - `TRACKING_API_USERNAME`
 - `TRACKING_API_PASSWORD`

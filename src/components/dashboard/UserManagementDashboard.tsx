@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { UserPlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Copy, KeyRound, UserPlus } from "lucide-react";
 import type { AppUser, AuditLog, UserRole } from "../../types/auth";
 import { useAuth } from "../../auth/AuthContext";
 import { formatDateTime } from "../../utils/formatters";
@@ -20,6 +20,13 @@ const initialCreateForm = {
   isActive: true,
 };
 
+interface TemporaryCredentialView {
+  name: string;
+  userId: string;
+  temporaryPassword: string;
+  expiresAt: string;
+}
+
 export function UserManagementDashboard() {
   const { currentUser, users, auditLogs, createUser, resetPassword, updateUserActive, updateUserRole } = useAuth();
   const [search, setSearch] = useState("");
@@ -31,8 +38,14 @@ export function UserManagementDashboard() {
   const [createForm, setCreateForm] = useState(initialCreateForm);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [temporaryCredential, setTemporaryCredential] = useState<TemporaryCredentialView | null>(null);
+  const credentialDialogRef = useRef<HTMLDivElement>(null);
+  const copyCredentialButtonRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const isSuperAdmin = currentUser?.role === "Super Admin";
+  const activeSuperAdminCount = users.filter((user) => user.role === "Super Admin" && user.isActive).length;
   const todayKey = new Date().toDateString();
 
   const isLocked = (user: AppUser) => Boolean(user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now());
@@ -106,30 +119,61 @@ export function UserManagementDashboard() {
     { header: "Role", render: (row) => <Badge tone={row.role === "Super Admin" ? "good" : "info"}>{row.role}</Badge> },
     { header: "Status", render: (row) => <StatusBadge status={row.isActive ? "active" : "inactive"} /> },
     { header: "Password", render: (row) => <StatusBadge status={row.mustChangePassword ? "pending" : "ready"} /> },
-    { header: "Login", render: (row) => <StatusBadge status={row.lockedUntil ? "locked" : "ready"} /> },
+    { header: "Login", render: (row) => <StatusBadge status={isLocked(row) ? "locked" : "ready"} /> },
     { header: "Last Login", render: (row) => formatDateTime(row.lastLoginAt) },
     {
       header: "Role Edit",
-      render: (row) => isSuperAdmin ? (
-        <select
-          value={row.role}
-          onChange={(event) => updateUserRole(row.userId, event.target.value as UserRole)}
-          className="h-9 rounded-md border border-coal-200 bg-white px-2 text-sm"
-        >
-          {roles.map((role) => <option key={role} value={role}>{role}</option>)}
-        </select>
-      ) : "-",
+      render: (row) => {
+        if (!isSuperAdmin) return "-";
+        const isSelf = row.userId === currentUser?.userId;
+        const isLastActiveAdmin = row.role === "Super Admin" && row.isActive && activeSuperAdminCount <= 1;
+        return (
+          <select
+            value={row.role}
+            disabled={isSelf || isLastActiveAdmin}
+            aria-label={`Role for ${row.name}`}
+            title={isSelf ? "You cannot change your own role." : isLastActiveAdmin ? "Add another active Super Admin first." : undefined}
+            onChange={async (event) => {
+              try {
+                await updateUserRole(row.userId, event.target.value as UserRole);
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "Could not update the role.");
+              }
+            }}
+            className="h-9 rounded-md border border-coal-200 bg-white px-2 text-sm disabled:bg-coal-100"
+          >
+            {roles.map((role) => <option key={role} value={role}>{role}</option>)}
+          </select>
+        );
+      },
     },
     {
       header: "Actions",
-      render: (row) => isSuperAdmin ? (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setResetTarget(row)}>Reset</Button>
-          <Button size="sm" variant={row.isActive ? "danger" : "secondary"} onClick={() => updateUserActive(row.userId, !row.isActive)}>
-            {row.isActive ? "Deactivate" : "Activate"}
-          </Button>
-        </div>
-      ) : "-",
+      render: (row) => {
+        if (!isSuperAdmin) return "-";
+        const isSelf = row.userId === currentUser?.userId;
+        const isLastActiveAdmin = row.role === "Super Admin" && row.isActive && activeSuperAdminCount <= 1;
+        return (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={isSelf} title={isSelf ? "Use Change Password for your own account." : undefined} onClick={() => setResetTarget(row)}>Reset</Button>
+            <Button
+              size="sm"
+              disabled={isSelf || (row.isActive && isLastActiveAdmin)}
+              title={isSelf ? "You cannot deactivate your own account." : isLastActiveAdmin ? "Add another active Super Admin first." : undefined}
+              variant={row.isActive ? "danger" : "secondary"}
+              onClick={async () => {
+                try {
+                  await updateUserActive(row.userId, !row.isActive);
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "Could not update the account.");
+                }
+              }}
+            >
+              {row.isActive ? "Deactivate" : "Activate"}
+            </Button>
+          </div>
+        );
+      },
       className: "min-w-48",
     },
   ];
@@ -142,10 +186,45 @@ export function UserManagementDashboard() {
   ];
 
   const confirmReset = async () => {
-    if (!resetTarget) return;
-    await resetPassword(resetTarget.userId);
-    setResetTarget(null);
-    setMessage("Password reset successfully. User must login with mobile number / user ID and change password immediately.");
+    if (!resetTarget || resetting || resetTarget.userId === currentUser?.userId) return;
+    setResetting(true);
+    try {
+      const result = await resetPassword(resetTarget.userId);
+      setTemporaryCredential({
+        name: resetTarget.name,
+        userId: resetTarget.userId,
+        temporaryPassword: result.temporaryPassword,
+        expiresAt: result.expiresAt,
+      });
+      setResetTarget(null);
+      setMessage("Password reset. Copy the one-time password now; it is not stored or shown again.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not reset the password.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!temporaryCredential) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    window.setTimeout(() => copyCredentialButtonRef.current?.focus(), 0);
+    return () => previousFocusRef.current?.focus();
+  }, [temporaryCredential]);
+
+  const trapCredentialDialogFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab" || !credentialDialogRef.current) return;
+    const focusable = Array.from(credentialDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   const openCreateForm = () => {
@@ -160,14 +239,30 @@ export function UserManagementDashboard() {
     setCreating(true);
 
     try {
-      await createUser(createForm);
-      setMessage(`User ${createForm.name.trim()} added. Initial password is the mobile number / user ID, and password change is required on first login.`);
+      const result = await createUser(createForm);
+      setTemporaryCredential({
+        name: result.user.name,
+        userId: result.user.userId,
+        temporaryPassword: result.temporaryPassword,
+        expiresAt: result.expiresAt,
+      });
+      setMessage(`User ${createForm.name.trim()} added. Copy the one-time password now; it is not stored or shown again.`);
       setCreateForm(initialCreateForm);
       setShowCreateForm(false);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Could not add user.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!temporaryCredential) return;
+    try {
+      await navigator.clipboard.writeText(temporaryCredential.temporaryPassword);
+      setMessage("One-time password copied. Share it through an approved private channel.");
+    } catch {
+      setMessage("Copy was blocked by the browser. Select the one-time password and copy it manually.");
     }
   };
 
@@ -240,7 +335,7 @@ export function UserManagementDashboard() {
               <div>
                 <h3 className="text-lg font-semibold text-coal-950">Add user</h3>
                 <p className="mt-1 text-sm text-coal-600">
-                  Initial password will be the mobile number / user ID. The user must change it on first login.
+                  A random one-time password will be generated. It expires after 24 hours and must be changed at first login.
                 </p>
               </div>
               <Button type="button" variant="ghost" onClick={() => setShowCreateForm(false)}>Close</Button>
@@ -322,11 +417,52 @@ export function UserManagementDashboard() {
           <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-command">
             <h3 className="text-lg font-semibold text-coal-950">Reset password</h3>
             <p className="mt-2 text-sm text-coal-600">
-              Reset password for {resetTarget.name}? The password will be set back to the mobile number and the user must change it at next login.
+              Reset password for {resetTarget.name}? A new random one-time password will be generated and the existing sessions will be revoked.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <Button onClick={() => setResetTarget(null)}>Cancel</Button>
-              <Button variant="danger" onClick={confirmReset}>Reset Password</Button>
+              <Button variant="danger" disabled={resetting} onClick={confirmReset}>{resetting ? "Resetting..." : "Reset Password"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {temporaryCredential && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-coal-950/60 p-4">
+          <div ref={credentialDialogRef} onKeyDown={trapCredentialDialogFocus} className="w-full max-w-lg rounded-lg bg-white p-5 shadow-command" role="dialog" aria-modal="true" aria-labelledby="temporary-password-title" aria-describedby="temporary-password-description">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-ore-100 text-ore-700">
+                <KeyRound size={20} />
+              </div>
+              <div>
+                <h3 id="temporary-password-title" className="text-lg font-semibold text-coal-950">One-time login password</h3>
+                <p id="temporary-password-description" className="mt-1 text-sm text-coal-600">
+                  This password is displayed once for {temporaryCredential.name}. Close this window after copying it.
+                </p>
+              </div>
+            </div>
+
+            <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
+              <dt className="font-semibold text-coal-500">User ID</dt>
+              <dd className="font-mono text-coal-950">{temporaryCredential.userId}</dd>
+              <dt className="font-semibold text-coal-500">Expires</dt>
+              <dd className="text-coal-950">{formatDateTime(temporaryCredential.expiresAt)}</dd>
+            </dl>
+
+            <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Temporary password</p>
+              <code className="mt-2 block select-all break-all text-base font-semibold text-coal-950">
+                {temporaryCredential.temporaryPassword}
+              </code>
+            </div>
+
+            <p className="mt-3 text-xs text-coal-500">
+              The user must change this password before any dashboard or operational API can be used.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button type="button" onClick={() => setTemporaryCredential(null)}>Close</Button>
+              <Button ref={copyCredentialButtonRef} type="button" variant="primary" icon={<Copy size={16} />} onClick={copyTemporaryPassword}>Copy password</Button>
             </div>
           </div>
         </div>

@@ -1,0 +1,56 @@
+name: Deploy Hostinger Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      VITE_PUBLIC_SITE_URL: https://fms.cmll.in
+      VITE_AUTH_API_BASE_URL: https://cmll-fms-api.azurewebsites.net/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run validate:pwa
+      - run: npm run build
+
+      - name: Retain production rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostinger-dist-${{ github.sha }}
+          path: dist
+          retention-days: 30
+
+      - name: Publish immutable production files
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git init
+          git config user.name "CMLL FMS Deployment"
+          git config user.email "fms-deploy@users.noreply.github.com"
+          git checkout -b hostinger-deploy
+          git add -A
+          git commit -m "Deploy ${SOURCE_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
+          git push --force origin hostinger-deploy

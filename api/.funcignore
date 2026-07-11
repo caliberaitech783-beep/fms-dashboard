@@ -1,0 +1,8 @@
+public/
+test/
+local.settings.json
+local.settings.*.json
+*.zip
+tracking-sync-output*.xlsx
+.git/
+.gitignore

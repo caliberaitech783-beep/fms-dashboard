@@ -6,6 +6,7 @@ import {
   changeUserPassword,
   createUser as createUserRecord,
   type CreateUserInput,
+  type TemporaryCredentialResult,
   getUserById,
   getUsers,
   initializeUserStore,
@@ -20,11 +21,9 @@ import {
   clearAuthSession,
   consumeUpdateMessage,
   getAuthSession,
-  getRememberedCredentials,
   getRememberedUserId,
   purgeLocalAuthArtifactsForCleanSlate,
   setAuthSession,
-  setRememberedCredentials,
   setRememberedUserId,
   setUpdateMessage,
 } from "./sessionService";
@@ -35,13 +34,12 @@ interface AuthContextValue {
   auditLogs: AuditLog[];
   loading: boolean;
   rememberedUserId: string;
-  rememberedPassword: string;
   updateMessage: string | null;
   login: (userId: string, password: string, remember: boolean) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
-  createUser: (input: CreateUserInput) => Promise<void>;
-  resetPassword: (targetUserId: string) => Promise<void>;
+  createUser: (input: CreateUserInput) => Promise<TemporaryCredentialResult>;
+  resetPassword: (targetUserId: string) => Promise<TemporaryCredentialResult>;
   updateUserActive: (targetUserId: string, isActive: boolean) => Promise<void>;
   updateUserRole: (targetUserId: string, role: UserRole) => Promise<void>;
   refreshUsers: () => Promise<void>;
@@ -57,6 +55,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [updateMessage, setUpdateMessageState] = useState<string | null>(null);
 
   const refreshUsers = async () => {
+    if (getAuthSession()?.mustChangePassword) {
+      setUsers([]);
+      setAuditLogs([]);
+      return;
+    }
+
     const [latestUsers, latestAuditLogs] = await Promise.all([
       getUsers(),
       getAuditLogs(),
@@ -150,9 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
     });
     if (remember) {
-      setRememberedCredentials(user.userId, password);
+      setRememberedUserId(user.userId);
     } else {
-      setRememberedCredentials(null, null);
       setRememberedUserId(null);
     }
     setCurrentUser(user);
@@ -175,18 +178,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("No active session.");
     }
 
-    const updatedUser = await changeUserPassword(currentUser.userId, currentPassword, newPassword, confirmPassword);
+    const { user: updatedUser, token } = await changeUserPassword(currentUser.userId, currentPassword, newPassword, confirmPassword);
     setAuthSession({
       userId: updatedUser.userId,
       role: updatedUser.role,
       mustChangePassword: updatedUser.mustChangePassword,
       appVersion: APP_VERSION,
       loginAt: new Date().toISOString(),
-      token: getAuthSession()?.token ?? null,
+      token: token ?? getAuthSession()?.token ?? null,
     });
-    if (getRememberedCredentials().userId === updatedUser.userId) {
-      setRememberedCredentials(updatedUser.userId, newPassword);
-    }
     setCurrentUser(updatedUser);
     await refreshUsers();
   };
@@ -195,19 +195,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!currentUser) {
       throw new Error("No active session.");
     }
-    await createUserRecord(currentUser, input);
-    refreshUsers();
+    const result = await createUserRecord(currentUser, input);
+    await refreshUsers();
+    return result;
   };
 
   const resetPassword = async (targetUserId: string) => {
     if (!currentUser) {
       throw new Error("No active session.");
     }
-    const updated = await resetUserPassword(currentUser, targetUserId);
-    if (updated.userId === currentUser.userId) {
-      setCurrentUser(updated);
+    const result = await resetUserPassword(currentUser, targetUserId);
+    if (result.user.userId === currentUser.userId) {
+      clearAuthSession();
+      setCurrentUser(null);
     }
     await refreshUsers();
+    return result;
   };
 
   const updateUserActive = async (targetUserId: string, isActive: boolean) => {
@@ -228,7 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const updated = await setUserRole(currentUser, targetUserId, role);
     if (updated.userId === currentUser.userId) {
-      setCurrentUser(updated);
+      clearAuthSession();
+      setCurrentUser(null);
     }
     await refreshUsers();
   };
@@ -239,7 +243,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     auditLogs,
     loading,
     rememberedUserId: getRememberedUserId(),
-    rememberedPassword: getRememberedCredentials().password,
     updateMessage,
     login,
     logout,

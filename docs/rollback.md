@@ -2,15 +2,15 @@
 
 ## PWA / Hostinger
 
-Keep the previous `dist` zip before upload. To roll back, delete current `public_html` frontend files and extract the previous known-good zip. Verify `/`, `/manifest.webmanifest`, and login.
+Each production workflow stores `dist` as a 30-day GitHub Actions artifact. Roll back only to a post-security artifact, purge Hostinger CDN/cache, and verify `/`, `/manifest.webmanifest`, the service-worker version, login, and that retired hashed assets return 404.
 
 ## Azure Backend
 
-Keep the previous API zip artifact before deploying new Functions code. If health checks fail, redeploy the previous zip and verify `/api/health`.
+Never redeploy an API package containing `src/functions/frontend.js`, `public/`, employee seed files, or user-ID-derived passwords. If a release fails, redeploy the most recent sanitized API package, keep the credential migration in place, and verify `/api/health`, `/api/app` is retired, login lockout, and one-time-password flows.
 
 ## Notification Tables
 
-The initial implementation creates additive Azure Tables only. Rollback can leave these tables in place because they are not referenced by the previous API package.
+The credential migration creates a private `FmsSecurityMigrationBackup` snapshot before changing user/password-history rows. Keep the snapshot access-restricted. Do not restore known default-password hashes; use the recovery account and normal one-time reset flow instead. Notification tables are additive and may remain in place.
 
 ## Desktop Release
 
@@ -19,4 +19,3 @@ If a desktop release is bad, mark the GitHub release as withdrawn, remove update
 ## WhatsApp
 
 Disable WhatsApp sends by removing or disabling `WHATSAPP_ACCESS_TOKEN` in Azure and disabling templates/rules in admin configuration.
-

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cmll-fms-v1";
+const CACHE_VERSION = "cmll-fms-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 const STATIC_ASSETS = [
@@ -20,7 +20,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => !key.startsWith(CACHE_VERSION)).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key !== STATIC_CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
@@ -92,4 +92,3 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
-

@@ -1,6 +1,12 @@
 const crypto = require("node:crypto");
 const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
-const seedUsers = require("../seedUsers.json");
+const {
+  assertTokenForUser,
+  bumpTokenVersion,
+  generateTemporaryPassword,
+  registerFailedLogin,
+  temporaryPasswordExpiresAt,
+} = require("./authSecurity");
 
 const USER_PARTITION = "USER";
 const AUDIT_PARTITION = "AUDIT";
@@ -18,9 +24,11 @@ const ROLE_PERMISSIONS = {
 };
 
 let setupPromise = null;
+let seedUsersPromise = null;
 let usersTable = null;
 let auditTable = null;
 let historyTable = null;
+let securityBackupTable = null;
 
 function now() {
   return new Date().toISOString();
@@ -97,13 +105,6 @@ function verifyPassword(password, storedHash) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function normalizeNullable(value) {
-  if (!value || value === "None") {
-    return null;
-  }
-  return value;
-}
-
 function normalizeRole(role) {
   if (!ROLE_PERMISSIONS[role]) {
     throw Object.assign(new Error("Invalid role."), { statusCode: 400 });
@@ -140,6 +141,8 @@ function userToEntity(user) {
     lastPasswordResetAt: user.lastPasswordResetAt || "",
     lastPasswordResetBy: user.lastPasswordResetBy || "",
     appVersionAtLogin: user.appVersionAtLogin || "",
+    tokenVersion: Math.max(0, Number(user.tokenVersion || 0)),
+    temporaryPasswordExpiresAt: user.temporaryPasswordExpiresAt || "",
   };
 }
 
@@ -174,12 +177,16 @@ function entityToUser(entity) {
     lastPasswordResetAt: entity.lastPasswordResetAt || null,
     lastPasswordResetBy: entity.lastPasswordResetBy || null,
     appVersionAtLogin: entity.appVersionAtLogin || null,
+    tokenVersion: Math.max(0, Number(entity.tokenVersion || 0)),
+    temporaryPasswordExpiresAt: entity.temporaryPasswordExpiresAt || null,
+    _etag: entity.etag || null,
   };
 }
 
 function safeUser(user) {
+  const { _etag, ...publicUser } = user;
   return {
-    ...user,
+    ...publicUser,
     passwordHash: "",
   };
 }
@@ -190,6 +197,7 @@ async function setupTables() {
       usersTable = getTableClient(tableName("USERS_TABLE_NAME", "FmsUsers"));
       auditTable = getTableClient(tableName("AUDIT_TABLE_NAME", "FmsAuditLogs"));
       historyTable = getTableClient(tableName("PASSWORD_HISTORY_TABLE_NAME", "FmsPasswordHistory"));
+      securityBackupTable = getTableClient(tableName("SECURITY_MIGRATION_BACKUP_TABLE_NAME", "FmsSecurityMigrationBackup"));
       await Promise.all([
         usersTable.createTable().catch((error) => {
           if (error.statusCode !== 409) throw error;
@@ -198,6 +206,9 @@ async function setupTables() {
           if (error.statusCode !== 409) throw error;
         }),
         historyTable.createTable().catch((error) => {
+          if (error.statusCode !== 409) throw error;
+        }),
+        securityBackupTable.createTable().catch((error) => {
           if (error.statusCode !== 409) throw error;
         }),
       ]);
@@ -237,6 +248,30 @@ async function saveUser(user) {
   await setupTables();
   await usersTable.upsertEntity(userToEntity(user), "Replace");
   return user;
+}
+
+async function registerFailedLoginAtomic(userId) {
+  await setupTables();
+
+  for (let retry = 0; retry < 12; retry += 1) {
+    const user = await getUser(userId);
+    if (!user) return null;
+    if (!user._etag) {
+      throw Object.assign(new Error("Login protection state is unavailable."), { statusCode: 503 });
+    }
+
+    registerFailedLogin(user);
+    user.updatedAt = now();
+
+    try {
+      await usersTable.updateEntity(userToEntity(user), "Replace", { etag: user._etag });
+      return user;
+    } catch (error) {
+      if (error.statusCode !== 412) throw error;
+    }
+  }
+
+  throw Object.assign(new Error("Login protection is busy. Please try again."), { statusCode: 503 });
 }
 
 async function getUser(userId) {
@@ -316,47 +351,172 @@ async function listAuditLogs() {
   return logs.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 100);
 }
 
-async function ensureSeedUsers() {
+async function backupSecurityMigrationState(records) {
+  await setupTables();
+  const snapshot = "legacy-default-v1";
+  const backedUpAt = now();
+
+  for (const user of records) {
+    const original = userToEntity(user);
+    const { partitionKey, rowKey, ...properties } = original;
+    await securityBackupTable.createEntity({
+      partitionKey: `USERS-${snapshot}`,
+      rowKey,
+      originalPartitionKey: partitionKey,
+      originalRowKey: rowKey,
+      backedUpAt,
+      ...properties,
+    }).catch((error) => {
+      if (error.statusCode !== 409) throw error;
+    });
+  }
+
+  for await (const entity of historyTable.listEntities()) {
+    const { partitionKey, rowKey, etag, timestamp, ...properties } = entity;
+    await securityBackupTable.createEntity({
+      partitionKey: `HISTORY-${snapshot}`,
+      rowKey: rowKeyFor(`${partitionKey}:${rowKey}`),
+      originalPartitionKey: partitionKey,
+      originalRowKey: rowKey,
+      backedUpAt,
+      ...properties,
+    }).catch((error) => {
+      if (error.statusCode !== 409) throw error;
+    });
+  }
+}
+
+async function runSeedUserMigration() {
   await setupTables();
 
-  for (const seed of seedUsers) {
-    const userId = seed.mobile;
-    const existing = await getUser(userId);
-    if (!existing) {
-      const passwordHash = hashPassword(userId);
-      const createdAt = now();
-      const user = {
-        id: `user-${userId}`,
-        name: seed.name,
-        mobile: userId,
-        userId,
-        passwordHash,
-        role: normalizeRole(seed.mappedMiningRole),
-        sourceTransactionPower: normalizeNullable(seed.sourceTransactionPower),
-        sourceSoftwarePower: normalizeNullable(seed.sourceSoftwarePower),
-        siteAccess: [],
-        department: null,
-        isActive: true,
-        isPending: false,
-        mustChangePassword: false,
-        passwordChangedAt: null,
-        lastLoginAt: null,
-        lastLogoutAt: null,
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        createdAt,
-        updatedAt: createdAt,
-        createdBy: "seed",
-        updatedBy: "seed",
-        lastPasswordResetAt: null,
-        lastPasswordResetBy: null,
-        appVersionAtLogin: null,
-      };
-      await saveUser(user);
-      await savePasswordHistory(user.userId, passwordHash, createdAt);
-      await addAuditLog({ actor: null, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "seed" } });
-    }
+  const recoveryUserId = String(process.env.SECURITY_RECOVERY_ADMIN_USER_ID || "").trim();
+  const recoveryTemporaryPassword = String(process.env.SECURITY_RECOVERY_TEMP_PASSWORD || "");
+  const recoveryConfigured = recoveryUserId.length > 0 && recoveryTemporaryPassword.length >= 16;
+  const records = [];
+  for await (const entity of usersTable.listEntities({ queryOptions: { filter: `PartitionKey eq '${USER_PARTITION}'` } })) {
+    records.push(entityToUser(entity));
   }
+
+  if (records.length === 0 && recoveryConfigured) {
+    const createdAt = now();
+    const passwordHash = hashPassword(recoveryTemporaryPassword);
+    const recoveryAdmin = {
+      id: `user-${recoveryUserId}`,
+      name: String(process.env.SECURITY_RECOVERY_ADMIN_NAME || "Recovery Administrator").trim(),
+      mobile: recoveryUserId,
+      userId: recoveryUserId,
+      passwordHash,
+      role: "Super Admin",
+      sourceTransactionPower: null,
+      sourceSoftwarePower: null,
+      siteAccess: [],
+      department: "Administration",
+      isActive: true,
+      isPending: true,
+      mustChangePassword: true,
+      passwordChangedAt: null,
+      lastLoginAt: null,
+      lastLogoutAt: null,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      createdAt,
+      updatedAt: createdAt,
+      createdBy: "secure_bootstrap",
+      updatedBy: "secure_bootstrap",
+      lastPasswordResetAt: createdAt,
+      lastPasswordResetBy: "secure_bootstrap",
+      appVersionAtLogin: null,
+      tokenVersion: 0,
+      temporaryPasswordExpiresAt: temporaryPasswordExpiresAt(),
+    };
+    await saveUser(recoveryAdmin);
+    await savePasswordHistory(recoveryAdmin.userId, passwordHash, createdAt);
+    await addAuditLog({ actor: null, action: "RECOVERY_ADMIN_CREATED", targetType: "User", targetId: recoveryAdmin.userId, metadata: { source: "secure_environment_bootstrap" } });
+    return;
+  }
+
+  const configuredRecoveryAdmin = records.find((existing) => (
+    recoveryConfigured
+    && existing.userId === recoveryUserId
+    && existing.isActive
+    && existing.role === "Super Admin"
+  ));
+  const isManagedPendingRecovery = configuredRecoveryAdmin
+    && configuredRecoveryAdmin.mustChangePassword
+    && ["secure_bootstrap", "security_migration"].includes(configuredRecoveryAdmin.updatedBy)
+    && configuredRecoveryAdmin.temporaryPasswordExpiresAt
+    && Date.parse(configuredRecoveryAdmin.temporaryPasswordExpiresAt) <= Date.now();
+
+  if (isManagedPendingRecovery) {
+    await backupSecurityMigrationState(records);
+    const replacementHash = hashPassword(recoveryTemporaryPassword);
+    configuredRecoveryAdmin.passwordHash = replacementHash;
+    configuredRecoveryAdmin.temporaryPasswordExpiresAt = temporaryPasswordExpiresAt();
+    configuredRecoveryAdmin.failedLoginAttempts = 0;
+    configuredRecoveryAdmin.lockedUntil = null;
+    configuredRecoveryAdmin.updatedAt = now();
+    configuredRecoveryAdmin.updatedBy = "security_migration";
+    bumpTokenVersion(configuredRecoveryAdmin);
+    await saveUser(configuredRecoveryAdmin);
+    await savePasswordHistory(configuredRecoveryAdmin.userId, replacementHash);
+    await addAuditLog({ actor: null, action: "RECOVERY_CREDENTIAL_REISSUED", targetType: "User", targetId: configuredRecoveryAdmin.userId, metadata: { source: "secure_environment_migration" } });
+    return;
+  }
+
+  const legacyDefaultUsers = records.filter((existing) => (
+    !existing.passwordChangedAt && verifyPassword(existing.userId, existing.passwordHash)
+  ));
+  if (!legacyDefaultUsers.length) return;
+
+  const recoveryAdmin = legacyDefaultUsers.find((existing) => (
+    recoveryConfigured
+    && existing.userId === recoveryUserId
+    && existing.isActive
+    && existing.role === "Super Admin"
+  ));
+  if (!recoveryAdmin) {
+    throw Object.assign(new Error("Legacy credential migration requires a configured active Super Admin recovery account."), { statusCode: 503 });
+  }
+
+  await backupSecurityMigrationState(records);
+
+  for (const existing of legacyDefaultUsers) {
+      if (existing.userId === recoveryAdmin.userId) {
+        const replacementHash = hashPassword(recoveryTemporaryPassword);
+        existing.passwordHash = replacementHash;
+        existing.mustChangePassword = true;
+        existing.isPending = true;
+        existing.temporaryPasswordExpiresAt = temporaryPasswordExpiresAt();
+        existing.updatedAt = now();
+        existing.updatedBy = "security_migration";
+        bumpTokenVersion(existing);
+        await saveUser(existing);
+        await savePasswordHistory(existing.userId, replacementHash);
+        await addAuditLog({ actor: null, action: "RECOVERY_CREDENTIAL_ISSUED", targetType: "User", targetId: existing.userId, metadata: { source: "secure_environment_migration" } });
+      } else {
+        const replacementHash = hashPassword(generateTemporaryPassword());
+        existing.passwordHash = replacementHash;
+        existing.mustChangePassword = true;
+        existing.isPending = true;
+        existing.temporaryPasswordExpiresAt = null;
+        existing.updatedAt = now();
+        existing.updatedBy = "security_migration";
+        bumpTokenVersion(existing);
+        await saveUser(existing);
+        await savePasswordHistory(existing.userId, replacementHash);
+        await addAuditLog({ actor: null, action: "DEFAULT_CREDENTIAL_REVOKED", targetType: "User", targetId: existing.userId, metadata: { source: "seed_migration" } });
+      }
+  }
+}
+
+async function ensureSeedUsers() {
+  if (!seedUsersPromise) {
+    seedUsersPromise = runSeedUserMigration().catch((error) => {
+      seedUsersPromise = null;
+      throw error;
+    });
+  }
+  return seedUsersPromise;
 }
 
 function validateNewPassword(user, currentPassword, newPassword, confirmPassword, history) {
@@ -387,6 +547,9 @@ function signToken(user) {
   const payload = base64Url(JSON.stringify({
     sub: user.userId,
     role: user.role,
+    ver: Math.max(0, Number(user.tokenVersion || 0)),
+    iat: Math.floor(Date.now() / 1000),
+    jti: crypto.randomUUID(),
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
   }));
   const signature = crypto.createHmac("sha256", secret).update(`${header}.${payload}`).digest("base64url");
@@ -411,7 +574,16 @@ function verifyToken(token) {
     throw Object.assign(new Error("Invalid session token."), { statusCode: 401 });
   }
 
-  const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  let decoded;
+  try {
+    const decodedHeader = JSON.parse(Buffer.from(header, "base64url").toString("utf8"));
+    if (decodedHeader.alg !== "HS256" || decodedHeader.typ !== "JWT") {
+      throw new Error("Unsupported token header.");
+    }
+    decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    throw Object.assign(new Error("Invalid session token."), { statusCode: 401 });
+  }
   if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) {
     throw Object.assign(new Error("Session expired."), { statusCode: 401 });
   }
@@ -421,6 +593,8 @@ function verifyToken(token) {
 
 module.exports = {
   addAuditLog,
+  assertTokenForUser,
+  bumpTokenVersion,
   ensureSeedUsers,
   getPasswordHistory,
   getUser,
@@ -428,6 +602,7 @@ module.exports = {
   listAuditLogs,
   listUsers,
   normalizeRole,
+  registerFailedLoginAtomic,
   safeUser,
   savePasswordHistory,
   saveUser,

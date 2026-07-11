@@ -239,10 +239,10 @@ async function revokeDevice(userId, deviceId) {
   return deviceFromEntity(entity);
 }
 
-async function revokeDeviceByEndpoint(endpoint) {
+async function revokeDeviceByEndpoint(userId, endpoint) {
   await setupTables();
   let revoked = 0;
-  for await (const entity of devicesTable.listEntities()) {
+  for await (const entity of devicesTable.listEntities({ queryOptions: { filter: `PartitionKey eq '${rowKeyFor(userId)}'` } })) {
     const subscription = parseJson(entity.pushSubscriptionJson, null);
     if (pushEndpointFromSubscription(subscription) === endpoint && entity.isActive !== false) {
       entity.isActive = false;
@@ -457,7 +457,7 @@ async function sendPushForNotification(user, notification) {
       permanentFailure: pushResult.permanentFailure === true,
     });
     if (pushResult.permanentFailure && device.pushSubscription?.endpoint) {
-      await revokeDeviceByEndpoint(device.pushSubscription.endpoint);
+      await revokeDeviceByEndpoint(user.userId, device.pushSubscription.endpoint);
     }
     deliveries.push({ userId: user.userId, deviceId: device.deviceId, channel: "push", status: pushResult.status });
   }

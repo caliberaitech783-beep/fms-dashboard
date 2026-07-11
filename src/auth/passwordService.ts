@@ -3,6 +3,12 @@ const HASH_VERSION = "v1";
 const ITERATIONS = 120_000;
 const KEY_LENGTH_BITS = 256;
 
+export function generateTemporaryPassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  const random = bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return `Tmp-${random}-9`;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   bytes.forEach((byte) => {
