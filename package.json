@@ -6,7 +6,7 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "test": "node --check src/functions/authApi.js && node --check src/functions/frontend.js && node --check src/functions/notificationApi.js && node --check src/functions/trackingSync.js && node --check src/lib/authStore.js && node --test \"test/**/*.test.js\"",
+    "test": "node --check src/functions/authApi.js && node --check src/functions/notificationApi.js && node --check src/functions/trackingSync.js && node --check src/lib/authStore.js && node --check src/lib/authSecurity.js && node --test \"test/**/*.test.js\"",
     "tracking:sync": "node scripts/sync-tracking-sheet.js"
   },
   "dependencies": {
