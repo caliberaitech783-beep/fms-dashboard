@@ -18,7 +18,7 @@ jobs:
       - run: npm run validate:pwa
       - run: npm run build
       - run: zip -r cmll-fms-pwa.zip dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cmll-fms-pwa
           path: cmll-fms-pwa.zip
@@ -35,7 +35,7 @@ jobs:
       - run: npm ci
       - run: npm run validate:pwa
       - run: npm run desktop:build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cmll-fms-windows
           path: src-tauri/target/release/bundle/**
@@ -52,7 +52,7 @@ jobs:
       - run: npm ci
       - run: npm run validate:pwa
       - run: npm run desktop:build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cmll-fms-macos
           path: src-tauri/target/release/bundle/**
