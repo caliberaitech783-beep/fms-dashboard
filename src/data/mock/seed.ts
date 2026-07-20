@@ -230,7 +230,7 @@ export const integrationSources: IntegrationSource[] = companies.map((company, i
   id: `dummy-integration-${company.toLowerCase().replace(/\s/g, "-")}`,
   company,
   sourceType: index === 3 ? "SFTP" : index === 5 ? "CSV" : "API",
-  status: index === 1 ? "delayed" : index === 4 ? "failed" : index === 6 ? "not_configured" : "connected",
+  status: index === 1 ? "delayed" : index === 4 ? "failed" : index === 6 ? "not_configured" : "sample_data",
   lastSyncAt: index === 6 ? null : new Date(`2026-07-08T${String(7 + index).padStart(2, "0")}:15:00`).toISOString(),
   nextSyncAt: index === 6 ? null : new Date(`2026-07-08T${String(10 + index).padStart(2, "0")}:30:00`).toISOString(),
   recordsSyncedToday: index === 6 ? 0 : 2200 + index * 375,

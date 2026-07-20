@@ -16,7 +16,7 @@ export type ReportType =
   | "Utilization Report"
   | "Fuel Consumption Report"
   | "Site-wise Asset / Vehicle Count Report"
-  | "Driver wise Report"
+  | "Driverwise Standstill Tracking"
   | "WhatsApp PDF Delivery Log";
 
 export const reportTypes: ReportType[] = [
@@ -37,7 +37,7 @@ export const reportTypes: ReportType[] = [
   "Utilization Report",
   "Fuel Consumption Report",
   "Site-wise Asset / Vehicle Count Report",
-  "Driver wise Report",
+  "Driverwise Standstill Tracking",
   "WhatsApp PDF Delivery Log",
 ];
 
@@ -46,4 +46,16 @@ export interface ReportPreview {
   generatedAt: string;
   rows: Record<string, string | number | null>[];
   columns: string[];
+  live?: boolean;
+  notice?: string | null;
+  period?: {
+    date: string;
+    requestedDate?: string;
+    fallbackApplied?: boolean;
+    shift: string;
+    site?: string;
+    start: string;
+    end: string;
+    timezone: string;
+  };
 }

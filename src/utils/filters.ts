@@ -36,9 +36,10 @@ export function filterTelemetryRecords(
 
   return records.filter((record) => {
     const timestamp = new Date(record.timestamp);
+    const isLiveVolvo = record.source === "VOLVO_RFMS_LIVE";
 
     if (!vehicleIds.has(record.vehicleId)) return false;
-    if (timestamp < from || timestamp > to) return false;
+    if (!isLiveVolvo && (timestamp < from || timestamp > to)) return false;
     if (!isAll(filters.shift) && record.shift !== filters.shift) return false;
     if (!isAll(filters.lead) && Number(record.leadKm) !== Number(filters.lead)) return false;
 

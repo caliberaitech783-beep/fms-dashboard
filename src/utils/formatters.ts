@@ -78,6 +78,20 @@ export function formatDateTime(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
+export function formatElapsedSeconds(milliseconds: number): string {
+  const seconds = Math.max(0, milliseconds) / 1000;
+
+  if (seconds < 1) {
+    return "0 sec";
+  }
+
+  if (seconds < 10) {
+    return `${seconds.toFixed(1).replace(/\.0$/, "")} sec`;
+  }
+
+  return `${Math.round(seconds)} sec`;
+}
+
 export function titleCase(value: string): string {
   return value
     .split("_")

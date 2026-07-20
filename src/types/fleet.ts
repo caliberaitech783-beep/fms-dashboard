@@ -34,7 +34,7 @@ export type VehicleStatus =
 
 export type ShiftCode = "A" | "B" | "C" | "UNKNOWN" | "ALL_DAY";
 
-export type DataSource = "DUMMY_SAMPLE";
+export type DataSource = "DUMMY_SAMPLE" | "VOLVO_RFMS_LIVE";
 
 export interface Site {
   id: string;
@@ -116,6 +116,7 @@ export type IntegrationSourceType = "API" | "CSV" | "Excel" | "SFTP" | "Manual";
 
 export type IntegrationStatus =
   | "connected"
+  | "sample_data"
   | "delayed"
   | "failed"
   | "not_configured";
@@ -146,6 +147,12 @@ export type AlertType =
   | "LOW_PRODUCTION"
   | "HIGH_FUEL_PER_M3"
   | "OFFLINE_VEHICLE"
+  | "WITHOUT_ADBLUE"
+  | "LOW_ADBLUE"
+  | "LOW_FUEL"
+  | "STALE_VEHICLE_DATA"
+  | "VOLVO_SYNC_FAILED"
+  | "VOLVO_AUTH_FAILURE"
   | "DATA_MISMATCH"
   | "DATA_MAPPING_WARNING";
 

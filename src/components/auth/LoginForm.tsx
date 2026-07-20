@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../ui/Button";
 
@@ -7,6 +7,7 @@ export function LoginForm() {
   const { login, rememberedUserId, rememberedPassword, updateMessage } = useAuth();
   const [userId, setUserId] = useState(rememberedUserId);
   const [password, setPassword] = useState(rememberedPassword);
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(Boolean(rememberedUserId || rememberedPassword));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,14 +80,25 @@ export function LoginForm() {
 
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-coal-500">Password</span>
-              <input
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                className="h-11 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  className="h-11 w-full rounded-md border border-coal-200 px-3 pr-11 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-coal-500 hover:bg-coal-100 hover:text-coal-800 focus:outline-none focus:ring-2 focus:ring-ore-100"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </label>
 
             <label className="flex items-center gap-2 text-sm text-coal-700">

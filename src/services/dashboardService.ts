@@ -35,7 +35,7 @@ export const dashboardService = {
     }));
 
     return {
-      kpis: buildKpis(kpiValues, alerts.length),
+      kpis: buildKpis(kpiValues, alerts.length, filters.company === "Volvo"),
       productionFuelTrend: aggregateTrendByDate(filteredRecords),
       shiftComparison: aggregateByShift(filteredRecords).map((metric) => ({
         ...metric,
@@ -74,19 +74,24 @@ export const dashboardService = {
   },
 };
 
-function buildKpis(values: ReturnType<typeof aggregateDashboardKpis>, alertsCount: number): KpiMetric[] {
+function buildKpis(
+  values: ReturnType<typeof aggregateDashboardKpis>,
+  alertsCount: number,
+  liveVolvoOnly = false,
+): KpiMetric[] {
+  const cumulativeLabel = liveVolvoOnly ? "Latest cumulative Volvo counters" : "Selected period";
   return [
     { label: "Total Vehicles", value: formatNumber(values.totalVehicles), subLabel: "Filtered fleet", tone: "neutral" },
     { label: "Running Vehicles", value: formatNumber(values.runningVehicles), subLabel: "Live operating", tone: "good" },
     { label: "Idle Vehicles", value: formatNumber(values.idleVehicles), subLabel: "Needs attention", tone: "warning" },
     { label: "Offline Vehicles", value: formatNumber(values.offlineVehicles), subLabel: "Tracker gaps", tone: "danger" },
-    { label: "Total Fuel Consumed", value: formatLitres(values.totalFuelConsumed), subLabel: "Selected period", tone: "info" },
-    { label: "Avg Truck Efficiency", value: formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: "Truck category only", tone: "good" },
+    { label: "Total Fuel Consumed", value: formatLitres(values.totalFuelConsumed), subLabel: cumulativeLabel, tone: "info" },
+    { label: "Avg Truck Efficiency", value: formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: liveVolvoOnly ? "Cumulative Volvo efficiency" : "Truck category only", tone: "good" },
     { label: "Avg HEMM Fuel Rate", value: formatEfficiency(values.averageHemmFuelRate, "L/hr"), subLabel: "HEMM category only", tone: "info" },
-    { label: "Total Trips", value: formatNumber(values.totalTrips), subLabel: "All completed trips", tone: "neutral" },
-    { label: "Total Production", value: formatM3(values.totalProduction), subLabel: "Trips x capacity", tone: "good" },
-    { label: "Fuel per m³", value: `${formatNumber(values.fuelPerM3, 3)} L/m³`, subLabel: "Fuel intensity", tone: "warning" },
-    { label: "Total Idle Hours", value: formatHours(values.totalIdleHours), subLabel: "Engine idle", tone: "warning" },
+    { label: "Total Trips", value: formatNumber(values.totalTrips), subLabel: liveVolvoOnly ? "Not supplied by Volvo RFMS" : "All completed trips", tone: "neutral" },
+    { label: "Total Production", value: formatM3(values.totalProduction), subLabel: liveVolvoOnly ? "Not supplied by Volvo RFMS" : "Trips x capacity", tone: "good" },
+    { label: "Fuel per m³", value: `${formatNumber(values.fuelPerM3, 3)} L/m³`, subLabel: liveVolvoOnly ? "Requires production data" : "Fuel intensity", tone: "warning" },
+    { label: "Total Idle Hours", value: formatHours(values.totalIdleHours), subLabel: liveVolvoOnly ? cumulativeLabel : "Engine idle", tone: "warning" },
     { label: "Alerts Count", value: formatNumber(alertsCount), subLabel: "Open exceptions", tone: alertsCount ? "danger" : "good" },
   ];
 }

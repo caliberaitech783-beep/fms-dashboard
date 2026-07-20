@@ -6,8 +6,9 @@
   "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
-    "test": "node --check src/functions/authApi.js && node --check src/functions/frontend.js && node --check src/functions/notificationApi.js && node --check src/functions/trackingSync.js && node --check src/lib/authStore.js && node --test \"test/**/*.test.js\"",
-    "tracking:sync": "node scripts/sync-tracking-sheet.js"
+    "test": "node --check src/functions/authApi.js && node --check src/functions/frontend.js && node --check src/functions/notificationApi.js && node --check src/functions/trackingSync.js && node --check src/functions/volvoApi.js && node --check src/lib/authStore.js && node --check src/lib/vehicles/vehicleExcelImporter.js && node --check src/lib/vehicles/vehicleMasterIntegration.js && node --check src/lib/vehicles/vehicleStore.js && node --check src/lib/volvo/volvoRfmsClient.js && node --check src/lib/volvo/volvoGroupClient.js && node --check src/lib/volvo/volvoDriverClient.js && node --check src/lib/volvo/volvoDriverService.js && node --check src/lib/volvo/volvoScoresClient.js && node --check src/lib/volvo/volvoScoresService.js && node --check src/lib/volvo/volvoScoresStore.js && node --check src/lib/volvo/vehicleStatusNormalizer.js && node --check src/lib/volvo/volvoStateStore.js && node --check src/lib/volvo/volvoSyncService.js && node --test \"test/**/*.test.js\"",
+    "tracking:sync": "node scripts/sync-tracking-sheet.js",
+    "vehicles:import": "node scripts/import-vehicle-list.js"
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",

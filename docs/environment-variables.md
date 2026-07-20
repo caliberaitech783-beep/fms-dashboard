@@ -40,6 +40,59 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
 - `WHATSAPP_APP_SECRET`
 - `WHATSAPP_GRAPH_API_VERSION`
+- `VOLVO_TOKEN_URL`
+- `VOLVO_CLIENT_ID`
+- `VOLVO_CLIENT_SECRET`
+- `VOLVO_SCOPE`
+- `VOLVO_TOKEN_AUTH_METHOD`
+- `VOLVO_VEHICLES_URL`
+- `VOLVO_POSITIONS_URL`
+- `VOLVO_STATUSES_URL`
+- `VOLVO_ACCEPT_VEHICLES`
+- `VOLVO_ACCEPT_POSITIONS`
+- `VOLVO_ACCEPT_STATUSES`
+- `VOLVO_API_KEY` (optional)
+- `VOLVO_API_KEY_HEADER` (required only when an API key is used)
+- `VOLVO_DRIVER_API_BASE_URL` (defaults to `https://api.volvotrucks.com/driver`)
+- `VOLVO_DRIVERS_URL` (defaults to the Group Driver API `/drivers` endpoint)
+- `VOLVO_DRIVER_TIMES_URL` (defaults to the Group Driver API `/drivertimes` endpoint)
+- `VOLVO_DRIVER_API_USERNAME` and `VOLVO_DRIVER_API_PASSWORD` (optional dedicated credentials; the backend falls back to the existing Volvo API credentials)
+- `VOLVO_DRIVER_ID_TYPE` (defaults to `Tacho`)
+- `VOLVO_ACCEPT_DRIVERS` (defaults to Volvo drivers v1.0)
+- `VOLVO_ACCEPT_DRIVER_TIMES` (defaults to Volvo driver-times v1.1)
+- `VOLVO_DRIVER_CACHE_MS` (optional, defaults to `300000`)
+- `VOLVO_DRIVER_REQUEST_TIMEOUT_MS` (optional, defaults to `30000`)
+- `VOLVO_DRIVER_REQUEST_RETRIES` (optional, defaults to `2`)
+- `VOLVO_SCORES_URL` (defaults to `https://api.volvotrucks.com/score/scores`)
+- `VOLVO_SCORES_API_USERNAME` and `VOLVO_SCORES_API_PASSWORD` (optional dedicated credentials; the backend falls back to the existing Volvo credentials)
+- `VOLVO_SCORES_DRIVER_ID_TYPE` (defaults to `pin`)
+- `VOLVO_ACCEPT_SCORES` (defaults to Volvo Scores v2.0)
+- `VOLVO_SCORES_CACHE_MS` (optional, defaults to `300000`)
+- `VOLVO_SCORES_REQUEST_TIMEOUT_MS` (optional, defaults to `30000`)
+- `VOLVO_SCORES_REQUEST_RETRIES` (optional, defaults to `2`)
+- `VOLVO_SCORES_MAX_PAGES` (optional, defaults to `100`)
+- `VOLVO_SCORES_PERSIST` (optional, defaults to `true`)
+- `VOLVO_SCORES_TABLE_NAME` (optional, defaults to `VolvoDriverScores`)
+- `VOLVO_POSITION_POLL_MS`
+- `VOLVO_STATUS_POLL_MS`
+- `VOLVO_VEHICLE_POLL_MS`
+- `VOLVO_ACCUMULATED_POLL_MS`
+- `VOLVO_REQUEST_TIMEOUT_MS`
+- `VOLVO_CACHE_SECONDS`
+- `VOLVO_FRONTEND_REFRESH_SECONDS`
+- `VOLVO_FRESH_AFTER_MINUTES`
+- `VOLVO_STALE_AFTER_MINUTES`
+- `VOLVO_STANDSTILL_SPEED_KPH`
+- `VOLVO_SYNC_SECRET`
+- `USE_MOCK_VOLVO_DATA`
+- `VOLVO_EVENTS_TABLE_NAME`
+- `VOLVO_STATE_TABLE_NAME`
+- `VOLVO_CURSOR_TABLE_NAME`
+- `VOLVO_BOOTSTRAP_HISTORY_MINUTES`
+- `VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY` (optional, defaults to `1`; limits concurrent per-vehicle historical requests for driver reports)
+- `VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS` (optional, defaults to `750`; spaces historical requests to respect Volvo throttling)
+
+See `docs/volvo-live-vehicle-status.md` for synchronization and rotation procedures. Volvo credentials are Azure-only and must never use a `VITE_` prefix.
 
 ## GitHub Secrets
 

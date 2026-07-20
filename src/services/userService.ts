@@ -195,7 +195,7 @@ export async function authenticateUser(userId: string, password: string): Promis
   if (remoteAuthEnabled()) {
     return remoteRequest<AuthenticatedUser>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ userId, password }),
+      body: JSON.stringify({ userId, password, appVersion: APP_VERSION }),
     });
   }
 

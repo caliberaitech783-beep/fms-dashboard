@@ -59,7 +59,11 @@ export async function getFilteredPortalData(filters: DashboardFilters) {
 
   return {
     ...data,
-    filteredVehicles: filteredVehicles.filter((vehicle) => filteredVehicleIds.has(vehicle.id) || filteredRecords.length === 0),
+    filteredVehicles: filteredVehicles.filter((vehicle) => (
+      filteredVehicleIds.has(vehicle.id)
+      || vehicle.source === "VOLVO_RFMS_LIVE"
+      || filteredRecords.length === 0
+    )),
     filteredRecords,
   };
 }

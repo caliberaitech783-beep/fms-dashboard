@@ -298,6 +298,25 @@ export function generateAlerts(
     const idlePercentage = latest?.idlePercentage ?? calculateIdlePercentage(row.idleHours, latest?.engineHours ?? row.runningHours + row.idleHours);
     const variance = calculateVarianceFromNorm(row.efficiency, vehicle.standardFuelNorm, vehicle.fuelMeasurementUnit);
     const lPer100Km = typeof latest?.rawMetrics?.lPer100Km === "number" ? latest.rawMetrics.lPer100Km : null;
+    const isLiveVolvo = vehicle.source === "VOLVO_RFMS_LIVE";
+    const eventType = typeof latest?.rawMetrics?.eventType === "string" ? latest.rawMetrics.eventType : null;
+    const adBluePercent = typeof latest?.rawMetrics?.adBluePercent === "number" ? latest.rawMetrics.adBluePercent : null;
+    const fuelPercent = typeof latest?.rawMetrics?.fuelPercent === "number" ? latest.rawMetrics.fuelPercent : null;
+    const isStale = latest?.rawMetrics?.isStale === true;
+
+    if (isLiveVolvo && eventType === "WITHOUT_ADBLUE") {
+      alerts.push(makeAlert("WITHOUT_ADBLUE", "critical", vehicle, latest, `${vehicle.vehicleNumber} reported operation without AdBlue.`));
+    } else if (isLiveVolvo && adBluePercent !== null && adBluePercent <= 10) {
+      alerts.push(makeAlert("LOW_ADBLUE", "warning", vehicle, latest, `${vehicle.vehicleNumber} AdBlue level is ${adBluePercent}%.`));
+    }
+
+    if (isLiveVolvo && fuelPercent !== null && fuelPercent <= 10) {
+      alerts.push(makeAlert("LOW_FUEL", "warning", vehicle, latest, `${vehicle.vehicleNumber} fuel level is ${fuelPercent}%.`));
+    }
+
+    if (isLiveVolvo && isStale) {
+      alerts.push(makeAlert("STALE_VEHICLE_DATA", "warning", vehicle, latest, `${vehicle.vehicleNumber} Volvo status data is stale.`));
+    }
 
     if (row.fuelConsumedLitres > thresholds.highFuelConsumptionLitresPerPeriod) {
       alerts.push(makeAlert("HIGH_FUEL_CONSUMPTION", "warning", vehicle, latest, `${vehicle.vehicleNumber} consumed high fuel in the selected period.`));
@@ -319,7 +338,7 @@ export function generateAlerts(
       alerts.push(makeAlert("EXCESSIVE_IDLE", "warning", vehicle, latest, `${vehicle.vehicleNumber} idle time is ${idlePercentage}% of engine hours.`));
     }
 
-    if (latest && (latest.distanceKm === null || latest.fuelConsumedLitres === null || latest.engineHours === null)) {
+    if (!isLiveVolvo && latest && (latest.distanceKm === null || latest.fuelConsumedLitres === null || latest.engineHours === null)) {
       alerts.push(makeAlert("DATA_MAPPING_WARNING", "info", vehicle, latest, `${vehicle.vehicleNumber} has missing mapped source fields.`));
     }
   });

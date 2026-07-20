@@ -19,10 +19,12 @@
 3. Verify `https://cmll-fms-api.azurewebsites.net/api/health`.
 4. Verify authenticated notification endpoints using a Super Admin token in staging first.
 5. Confirm logs do not contain secrets.
+6. Configure the Volvo settings documented in `docs/volvo-live-vehicle-status.md`.
+7. Confirm the `volvoScheduledSync` timer is registered and the three Volvo Azure Tables are created.
+8. Verify authenticated `GET /api/vehicles/live` and authorized `POST /api/integrations/volvo/refresh` responses.
 
 The previous Azure production API package should be kept as the rollback artifact until the notification package is verified in staging.
 
 ## GitHub
 
 Pull requests run web build and API tests. Release tags prepare PWA and desktop artifacts. Signed desktop releases require external signing secrets.
-
