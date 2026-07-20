@@ -1,0 +1,26 @@
+{
+  "vehicleStatusResponse": {
+    "vehicleStatuses": [
+      {
+        "vin": "TESTVIN0000000001",
+        "triggerType": {
+          "triggerType": "TIMER",
+          "context": "SANITIZED_TEST"
+        },
+        "createdDateTime": "2026-07-17T05:00:00.000Z",
+        "receivedDateTime": "2026-07-17T05:00:05.000Z",
+        "hrTotalVehicleDistance": 125000,
+        "totalEngineHours": 50.5,
+        "engineTotalFuelUsed": 45000,
+        "accumulatedData": {
+          "durationWheelbaseSpeedOverZero": 7200,
+          "durationWheelbaseSpeedZero": 1800,
+          "fuelWheelbaseSpeedOverZero": 40000,
+          "fuelWheelbaseSpeedZero": 5000
+        }
+      }
+    ]
+  },
+  "moreDataAvailable": false,
+  "requestServerDateTime": "2026-07-17T05:01:00.000Z"
+}

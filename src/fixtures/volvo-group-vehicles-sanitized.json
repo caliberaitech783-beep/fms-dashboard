@@ -1,0 +1,17 @@
+{
+  "vehicleResponse": {
+    "vehicles": [
+      {
+        "vin": "TESTVIN0000000001",
+        "customerVehicleName": "TEST-101",
+        "brand": "VOLVO TRUCKS",
+        "productionDate": { "day": 1, "month": 1, "year": 2025 },
+        "type": "TRUCK",
+        "model": "TEST MODEL",
+        "possibleFuelType": ["DIESEL"],
+        "emissionLevel": "TEST"
+      }
+    ]
+  },
+  "moreDataAvailable": false
+}

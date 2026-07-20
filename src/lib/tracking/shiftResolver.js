@@ -39,7 +39,9 @@ function normalizeSiteName(siteName) {
 
 function findSiteGroup(siteName) {
   const normalized = normalizeSiteName(siteName);
-  return SITE_GROUPS.find((group) => group.sites.includes(normalized)) || null;
+  return SITE_GROUPS.find((group) => group.sites.some((site) => (
+    normalized === site || normalized.includes(site)
+  ))) || null;
 }
 
 function parseDateTime(value) {
@@ -179,7 +181,35 @@ function resolveShift(siteName, dateTimeValue) {
   };
 }
 
+function getShiftWindow(siteName, shiftDate, shiftName) {
+  const siteGroup = findSiteGroup(siteName);
+  const normalizedDate = String(shiftDate || "").trim();
+  const normalizedShift = String(shiftName || "").trim().toUpperCase();
+  const shift = siteGroup?.shifts.find((candidate) => candidate.name === normalizedShift);
+
+  if (!siteGroup || !shift || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    return {
+      active: false,
+      siteGroup: siteGroup?.name || null,
+      shiftName: null,
+      shiftStart: null,
+      shiftEnd: null,
+      shiftDate: null,
+      timezone: TIME_ZONE,
+    };
+  }
+
+  return {
+    active: true,
+    siteGroup: siteGroup.name,
+    shiftName: shift.name,
+    ...shiftWindow(normalizedDate, shift.startMinute, shift),
+    timezone: TIME_ZONE,
+  };
+}
+
 module.exports = {
+  getShiftWindow,
   resolveShift,
   TIME_ZONE,
 };
