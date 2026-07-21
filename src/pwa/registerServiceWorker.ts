@@ -6,7 +6,14 @@ export function registerServiceWorker(onUpdate?: ServiceWorkerUpdateCallback) {
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").then((registration) => {
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.register("/service-worker.js?v=3").then((registration) => {
       registration.addEventListener("updatefound", () => {
         const installing = registration.installing;
         if (!installing) return;
@@ -28,4 +35,3 @@ export async function activateWaitingServiceWorker() {
   registration?.waiting?.postMessage({ type: "SKIP_WAITING" });
   window.location.reload();
 }
-
