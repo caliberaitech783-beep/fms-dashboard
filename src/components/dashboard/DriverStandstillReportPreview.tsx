@@ -20,11 +20,6 @@ const ABOVE_ECONOMY = "Above economy % time of Total time (%)";
 const ENGINE_LOAD = "Engine load % time of Total time (%)";
 const COASTING = "Coasting (%)";
 const AVERAGE_DIESEL = "Avg diesel (l/h)";
-const VOLVO_TOTAL_SCORE = "Volvo total score";
-const ENGINE_GEAR_SCORE = "Engine and gear utilization score";
-const ABOVE_ECONOMY_SCORE = "Above economy score";
-const ENGINE_LOAD_SCORE = "Engine load score";
-const COASTING_SCORE = "Coasting score";
 
 export type StandstillSort = "desc" | "asc";
 
@@ -42,11 +37,6 @@ const DISPLAY_COLUMNS = [
   ENGINE_LOAD,
   COASTING,
   AVERAGE_DIESEL,
-  VOLVO_TOTAL_SCORE,
-  ENGINE_GEAR_SCORE,
-  ABOVE_ECONOMY_SCORE,
-  ENGINE_LOAD_SCORE,
-  COASTING_SCORE,
 ];
 
 const HEADERS: Record<string, string> = {
@@ -63,11 +53,6 @@ const HEADERS: Record<string, string> = {
   [ENGINE_LOAD]: "Engine load (%)",
   [COASTING]: "Coasting (%)",
   [AVERAGE_DIESEL]: "Avg diesel (l/h)",
-  [VOLVO_TOTAL_SCORE]: "Volvo total score",
-  [ENGINE_GEAR_SCORE]: "Engine and gear score",
-  [ABOVE_ECONOMY_SCORE]: "Above economy score",
-  [ENGINE_LOAD_SCORE]: "Engine load score",
-  [COASTING_SCORE]: "Coasting score",
 };
 
 export function DriverStandstillReportPreview({ preview, standstillSort }: DriverStandstillReportPreviewProps) {
@@ -173,11 +158,6 @@ function buildSummary(rows: ReportPreview["rows"]): Record<string, string | numb
     ENGINE_LOAD,
     COASTING,
     AVERAGE_DIESEL,
-    VOLVO_TOTAL_SCORE,
-    ENGINE_GEAR_SCORE,
-    ABOVE_ECONOMY_SCORE,
-    ENGINE_LOAD_SCORE,
-    COASTING_SCORE,
   ]
     .forEach((column) => {
       summary[column] = average(rows, column);
