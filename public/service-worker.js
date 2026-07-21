@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cmll-fms-v1";
+const CACHE_VERSION = "cmll-fms-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 const STATIC_ASSETS = [
@@ -92,4 +92,3 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
-
