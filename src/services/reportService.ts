@@ -127,6 +127,12 @@ export const reportService = {
     };
   },
 
+  async prefetchReportPreview(reportType: ReportType, filters: DashboardFilters) {
+    if (reportType === "Driverwise Standstill Tracking") {
+      await fetchVolvoDriverStandstillReport(filters);
+    }
+  },
+
   exportCsv(preview: ReportPreview, fileName: string) {
     const visiblePreview = removeHiddenReportColumns(preview);
     const csv = rowsToCsv(visiblePreview.rows, visiblePreview.columns);

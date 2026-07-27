@@ -45,20 +45,33 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     elapsedMs: number;
   } | null>(null);
   const closeDownloadRef = useRef<HTMLButtonElement | null>(null);
+  const timingCompleteRef = useRef(onTimingComplete);
+
+  useEffect(() => {
+    timingCompleteRef.current = onTimingComplete;
+  }, [onTimingComplete]);
 
   useEffect(() => {
     let mounted = true;
+    const startedAt = performance.now();
     setPreviewLoading(true);
     reportService.getReportPreview(selectedReport, filters).then((result) => {
       if (mounted) {
         setPreview(result);
         setPreviewLoading(false);
+        timingCompleteRef.current?.("Report loaded", performance.now() - startedAt);
       }
     });
 
     return () => {
       mounted = false;
     };
+  }, [filters, selectedReport]);
+
+  useEffect(() => {
+    if (selectedReport !== "Driverwise Standstill Tracking") {
+      void reportService.prefetchReportPreview("Driverwise Standstill Tracking", filters);
+    }
   }, [filters, selectedReport]);
 
   useEffect(() => {
