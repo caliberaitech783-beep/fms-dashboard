@@ -9,6 +9,7 @@ import type {
   WhatsAppDeliveryLog,
   WhatsAppReportSchedule,
 } from "../types/fleet";
+import { getWorkbookMakeName, getWorkbookModelName } from "../constants/modelMake";
 import { filterTelemetryRecords, filterVehicles } from "../utils/filters";
 
 export interface PortalData {
@@ -19,6 +20,16 @@ export interface PortalData {
   reports: Report[];
   whatsAppSchedules: WhatsAppReportSchedule[];
   whatsAppDeliveryLogs: WhatsAppDeliveryLog[];
+}
+
+function normalizeVehicleModel(vehicle: Vehicle): Vehicle {
+  const company = getWorkbookMakeName(vehicle.assetType, vehicle.company);
+  const modelNumber = getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber);
+  return {
+    ...vehicle,
+    company: company as Vehicle["company"],
+    modelNumber,
+  };
 }
 
 export async function getPortalData(): Promise<PortalData> {
@@ -39,11 +50,22 @@ export async function getPortalData(): Promise<PortalData> {
     apiClient.fleet.fetchWhatsAppSchedules(),
     apiClient.fleet.fetchWhatsAppDeliveryLogs(),
   ]);
+  const normalizedVehicles = vehicles.map(normalizeVehicleModel);
+  const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const normalizedRecords = records.map((record) => {
+    const vehicle = normalizedVehicleById.get(record.vehicleId);
+    if (!vehicle) return record;
+    return {
+      ...record,
+      company: vehicle.company,
+      modelNumber: vehicle.modelNumber,
+    };
+  });
 
   return {
     sites,
-    vehicles,
-    records,
+    vehicles: normalizedVehicles,
+    records: normalizedRecords,
     integrations,
     reports,
     whatsAppSchedules,

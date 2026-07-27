@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardFilters, Site, Vehicle } from "../types/fleet";
 import { MOCK_DATE_FROM, MOCK_DATE_TO } from "../constants/dateRange";
-import { getConfiguredMakes } from "../constants/modelMake";
+import { getConfiguredMakes, getConfiguredModels } from "../constants/modelMake";
 import { getPortalData } from "../services/dataAccess";
 import { uniqueSorted } from "../utils/filters";
 
@@ -72,6 +72,9 @@ export function useFleetFilters() {
     const configuredMakes = filters.assetType === "All"
       ? null
       : getConfiguredMakes(filters.assetType);
+    const configuredModels = filters.assetType === "All"
+      ? null
+      : getConfiguredModels(filters.assetType, filters.company);
     const availableCompanies = configuredMakes ?? uniqueSorted(
       typeVehicles.map((vehicle) => vehicle.company),
     );
@@ -82,7 +85,7 @@ export function useFleetFilters() {
       categories: uniqueSorted(contractVehicles.map((vehicle) => vehicle.assetCategory)),
       assetTypes: uniqueSorted(categoryVehicles.map((vehicle) => vehicle.assetType)),
       companies: uniqueSorted(availableCompanies),
-      models: uniqueSorted(companyVehicles.map((vehicle) => vehicle.modelNumber)),
+      models: configuredModels ?? uniqueSorted(companyVehicles.map((vehicle) => vehicle.modelNumber)),
       statuses: uniqueSorted(companyVehicles.map((vehicle) => vehicle.status)),
     };
   }, [
