@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardFilters, Site, Vehicle } from "../types/fleet";
 import { MOCK_DATE_FROM, MOCK_DATE_TO } from "../constants/dateRange";
-import { getConfiguredMakes, getConfiguredModels } from "../constants/modelMake";
+import {
+  getConfiguredMakes,
+  getConfiguredModels,
+  getWorkbookMakeName,
+  getWorkbookModelName,
+} from "../constants/modelMake";
+import { sites as seedSites, vehicles as seedVehicles } from "../data/mock/seed";
 import { getPortalData } from "../services/dataAccess";
 import { uniqueSorted } from "../utils/filters";
 
@@ -30,10 +36,19 @@ export interface FilterOptions {
   statuses: string[];
 }
 
+const initialFilterVehicles = seedVehicles.map((vehicle) => {
+  const company = getWorkbookMakeName(vehicle.assetType, vehicle.company);
+  return {
+    ...vehicle,
+    company: company as Vehicle["company"],
+    modelNumber: getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber),
+  };
+});
+
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
-  const [sites, setSites] = useState<Site[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [sites, setSites] = useState<Site[]>(seedSites);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(initialFilterVehicles);
 
   useEffect(() => {
     let mounted = true;
