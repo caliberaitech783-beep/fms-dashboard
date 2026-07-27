@@ -4,6 +4,7 @@ import type { DashboardFilters, Report } from "../../types/fleet";
 import type { ReportPreview, ReportType } from "../../types/reports";
 import { reportService } from "../../services/reportService";
 import { formatDateTime, makeCsvFileName, titleCase } from "../../utils/formatters";
+import { visibleReportColumns } from "../../utils/reportColumns";
 import { Button } from "../ui/Button";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
 import { LoadingState } from "../ui/LoadingState";
@@ -82,7 +83,9 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
   ];
 
-  const previewColumns: DataTableColumn<Record<string, string | number | null>>[] = (preview?.columns ?? []).map((column) => ({
+  const previewColumns: DataTableColumn<Record<string, string | number | null>>[] = visibleReportColumns(
+    preview?.columns ?? [],
+  ).map((column) => ({
     header: titleCase(column),
     render: (row) => String(row[column] ?? "-"),
   }));

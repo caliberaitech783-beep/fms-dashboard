@@ -15,8 +15,6 @@ const ENGINE_ON = "Diesel engine on (%)";
 const EFFICIENCY = "Avg diesel engine on (km/l)";
 const STANDSTILL = "Standstill (%)";
 const STANDSTILL_TIME = "Standstill (hh:mm)";
-const ISHIFT = "I-Shift Performance Time % time of Total time (%)";
-const ABOVE_ECONOMY = "Above economy % time of Total time (%)";
 const ENGINE_LOAD = "Engine load % time of Total time (%)";
 const COASTING = "Coasting (%)";
 const AVERAGE_DIESEL = "Avg diesel (l/h)";
@@ -32,8 +30,6 @@ const DISPLAY_COLUMNS = [
   EFFICIENCY,
   STANDSTILL,
   STANDSTILL_TIME,
-  ISHIFT,
-  ABOVE_ECONOMY,
   ENGINE_LOAD,
   COASTING,
   AVERAGE_DIESEL,
@@ -48,8 +44,6 @@ const HEADERS: Record<string, string> = {
   [EFFICIENCY]: "Avg diesel engine on (km/l)",
   [STANDSTILL]: "Standstill (%)",
   [STANDSTILL_TIME]: "Standstill (hh:mm)",
-  [ISHIFT]: "I-Shift performance (%)",
-  [ABOVE_ECONOMY]: "Above economy (%)",
   [ENGINE_LOAD]: "Engine load (%)",
   [COASTING]: "Coasting (%)",
   [AVERAGE_DIESEL]: "Avg diesel (l/h)",
@@ -90,7 +84,7 @@ export function DriverStandstillReportPreview({ preview, standstillSort }: Drive
       ) : (
         <div>
           <div className="max-h-[560px] overflow-auto border border-coal-200">
-            <table className="min-w-[1480px] border-collapse text-xs">
+            <table className="min-w-[1240px] border-collapse text-xs">
             <thead className="sticky top-0 z-20 bg-[#213d68] text-white">
               <tr>
                 {DISPLAY_COLUMNS.map((column) => (
@@ -153,8 +147,6 @@ function buildSummary(rows: ReportPreview["rows"]): Record<string, string | numb
     ENGINE_ON,
     EFFICIENCY,
     STANDSTILL,
-    ISHIFT,
-    ABOVE_ECONOMY,
     ENGINE_LOAD,
     COASTING,
     AVERAGE_DIESEL,
@@ -185,7 +177,6 @@ function metricCellClass(column: string, value: string | number | null): string 
   if (typeof value !== "number") return "";
   if (column === STANDSTILL && value > 27) return "bg-red-600 text-white";
   if (column === EFFICIENCY && value < 0.65) return "bg-orange-200";
-  if (column === ABOVE_ECONOMY && value >= 10) return "bg-amber-200";
   if (column === ENGINE_LOAD && value >= 5) return "bg-orange-200";
   if (column === COASTING && value >= 2) return "bg-rose-200";
   if (column === AVERAGE_DIESEL && value >= 18) return "bg-rose-200";

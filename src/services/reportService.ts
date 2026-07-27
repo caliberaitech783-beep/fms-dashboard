@@ -17,6 +17,7 @@ import {
 } from "../utils/calculations";
 import { getFilteredPortalData, getPortalData } from "./dataAccess";
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
+import { removeHiddenReportColumns } from "../utils/reportColumns";
 
 export const reportService = {
   async getReports() {
@@ -26,7 +27,7 @@ export const reportService = {
 
   async getReportPreview(reportType: ReportType, filters: DashboardFilters): Promise<ReportPreview> {
     if (reportType === "Driverwise Standstill Tracking") {
-      return fetchVolvoDriverStandstillReport(filters);
+      return removeHiddenReportColumns(await fetchVolvoDriverStandstillReport(filters));
     }
 
     const { sites, vehicles, filteredVehicles, filteredRecords, whatsAppDeliveryLogs } = await getFilteredPortalData(filters);
@@ -127,18 +128,19 @@ export const reportService = {
   },
 
   exportCsv(preview: ReportPreview, fileName: string) {
-    const csv = rowsToCsv(preview.rows, preview.columns);
+    const visiblePreview = removeHiddenReportColumns(preview);
+    const csv = rowsToCsv(visiblePreview.rows, visiblePreview.columns);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, fileName);
   },
 
   exportPdf(preview: ReportPreview, fileName: string) {
-    const blob = new Blob([buildPdf(preview)], { type: "application/pdf" });
+    const blob = new Blob([buildPdf(removeHiddenReportColumns(preview))], { type: "application/pdf" });
     downloadBlob(blob, fileName);
   },
 
   exportExcel(preview: ReportPreview, fileName: string) {
-    const blob = new Blob([buildXlsxWorkbook(preview)], {
+    const blob = new Blob([buildXlsxWorkbook(removeHiddenReportColumns(preview))], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     downloadBlob(blob, fileName);
