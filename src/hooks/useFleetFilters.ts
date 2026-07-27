@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DashboardFilters } from "../types/fleet";
+import type { DashboardFilters, Site, Vehicle } from "../types/fleet";
 import { MOCK_DATE_FROM, MOCK_DATE_TO } from "../constants/dateRange";
+import { getConfiguredMakes } from "../constants/modelMake";
 import { getPortalData } from "../services/dataAccess";
 import { uniqueSorted } from "../utils/filters";
 
@@ -31,15 +32,8 @@ export interface FilterOptions {
 
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
-  const [options, setOptions] = useState<FilterOptions>({
-    sites: [],
-    contracts: [],
-    categories: [],
-    assetTypes: [],
-    companies: [],
-    models: [],
-    statuses: [],
-  });
+  const [sites, setSites] = useState<Site[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -49,15 +43,8 @@ export function useFleetFilters() {
         return;
       }
 
-      setOptions({
-        sites: data.sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
-        contracts: uniqueSorted(data.sites.map((site) => site.contractType)),
-        categories: uniqueSorted(data.vehicles.map((vehicle) => vehicle.assetCategory)),
-        assetTypes: uniqueSorted(data.vehicles.map((vehicle) => vehicle.assetType)),
-        companies: uniqueSorted(data.vehicles.map((vehicle) => vehicle.company)),
-        models: uniqueSorted(data.vehicles.map((vehicle) => vehicle.modelNumber)),
-        statuses: uniqueSorted(data.vehicles.map((vehicle) => vehicle.status)),
-      });
+      setSites(data.sites);
+      setVehicles(data.vehicles);
     });
 
     return () => {
@@ -65,9 +52,78 @@ export function useFleetFilters() {
     };
   }, []);
 
+  const options = useMemo<FilterOptions>(() => {
+    const siteVehicles = vehicles.filter((vehicle) => (
+      filters.siteId === "All" || vehicle.siteId === filters.siteId
+    ));
+    const contractVehicles = siteVehicles.filter((vehicle) => (
+      filters.contractType === "All" || vehicle.contractType === filters.contractType
+    ));
+    const categoryVehicles = contractVehicles.filter((vehicle) => (
+      filters.assetCategory === "All" || vehicle.assetCategory === filters.assetCategory
+    ));
+    const typeVehicles = categoryVehicles.filter((vehicle) => (
+      filters.assetType === "All" || vehicle.assetType === filters.assetType
+    ));
+    const companyVehicles = typeVehicles.filter((vehicle) => (
+      filters.company === "All" || vehicle.company === filters.company
+    ));
+
+    const configuredMakes = filters.assetType === "All"
+      ? null
+      : getConfiguredMakes(filters.assetType);
+    const availableCompanies = configuredMakes ?? uniqueSorted(
+      typeVehicles.map((vehicle) => vehicle.company),
+    );
+
+    return {
+      sites: sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
+      contracts: uniqueSorted(sites.map((site) => site.contractType)),
+      categories: uniqueSorted(contractVehicles.map((vehicle) => vehicle.assetCategory)),
+      assetTypes: uniqueSorted(categoryVehicles.map((vehicle) => vehicle.assetType)),
+      companies: uniqueSorted(availableCompanies),
+      models: uniqueSorted(companyVehicles.map((vehicle) => vehicle.modelNumber)),
+      statuses: uniqueSorted(companyVehicles.map((vehicle) => vehicle.status)),
+    };
+  }, [
+    filters.assetCategory,
+    filters.assetType,
+    filters.company,
+    filters.contractType,
+    filters.siteId,
+    sites,
+    vehicles,
+  ]);
+
   const setFilter = useCallback(
     <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
-      setFilters((current) => ({ ...current, [key]: value }));
+      setFilters((current) => {
+        const next = { ...current, [key]: value };
+
+        if (key === "siteId") {
+          next.contractType = "All";
+          next.assetCategory = "All";
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "contractType") {
+          next.assetCategory = "All";
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "assetCategory") {
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "assetType") {
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "company") {
+          next.modelNumber = "All";
+        }
+
+        return next;
+      });
     },
     [],
   );
