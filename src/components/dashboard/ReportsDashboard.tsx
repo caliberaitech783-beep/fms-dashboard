@@ -87,10 +87,10 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
   }, [downloadState?.status]);
 
   const explorerColumns = useMemo(() => (
-    selectedReport === "Driverwise Standstill Tracking"
+    selectedReport === "Driverwise Standstill Tracking" && preview?.period
       ? driverStandstillDisplayColumns.filter((column) => preview?.columns.includes(column))
       : visibleReportColumns(preview?.columns ?? [])
-  ), [preview?.columns, selectedReport]);
+  ), [preview?.columns, preview?.period, selectedReport]);
   const exploredRows = useMemo(
     () => sortReportRows(preview?.rows ?? [], explorerState),
     [explorerState, preview?.rows],
