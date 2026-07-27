@@ -106,7 +106,7 @@ export function DriverStandstillReportPreview({
               </tr>
             </thead>
             <tbody>
-              <tr className="sticky top-[57px] z-10 bg-white font-semibold text-[#213d68]">
+              <tr className="bg-white font-semibold text-[#213d68]">
                 {driverStandstillDisplayColumns.map((column) => (
                   <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
                     {formatCell(summary[column])}
