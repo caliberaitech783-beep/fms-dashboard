@@ -7,6 +7,7 @@ import { formatDateTime, makeCsvFileName, titleCase } from "../../utils/formatte
 import { visibleReportColumns } from "../../utils/reportColumns";
 import {
   emptyReportExplorerState,
+  normalizeReportExplorerState,
   sortReportRows,
   type ReportExplorerState,
   type ReportRow,
@@ -91,9 +92,13 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
       ? driverStandstillDisplayColumns.filter((column) => preview?.columns.includes(column))
       : visibleReportColumns(preview?.columns ?? [])
   ), [preview?.columns, preview?.period, selectedReport]);
+  const activeExplorerState = useMemo(
+    () => normalizeReportExplorerState(explorerState, explorerColumns),
+    [explorerColumns, explorerState],
+  );
   const exploredRows = useMemo(
-    () => sortReportRows(preview?.rows ?? [], explorerState),
-    [explorerState, preview?.rows],
+    () => sortReportRows(preview?.rows ?? [], activeExplorerState),
+    [activeExplorerState, preview?.rows],
   );
 
   if (loading) {
@@ -168,10 +173,10 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
         subtitle={preview ? `Preview generated ${formatDateTime(preview.generatedAt)}` : "Generating preview"}
         actions={
           <div className="flex flex-wrap items-end gap-2">
-            {preview && explorerColumns.length > 0 && (
+            {preview && !previewLoading && explorerColumns.length > 0 && (
               <ReportExplorerControls
                 columns={explorerColumns}
-                state={explorerState}
+                state={activeExplorerState}
                 onChange={setExplorerState}
               />
             )}
@@ -206,16 +211,16 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
           <DriverStandstillReportPreview
             preview={preview}
             rows={exploredRows}
-            drilldownColumn={explorerState.drilldownColumn}
-            subDrilldownColumn={explorerState.subDrilldownColumn}
+            drilldownColumn={activeExplorerState.drilldownColumn}
+            subDrilldownColumn={activeExplorerState.subDrilldownColumn}
           />
         ) : (
           <ReportPreviewTable
             reportType={selectedReport}
             columns={explorerColumns}
             rows={exploredRows}
-            drilldownColumn={explorerState.drilldownColumn}
-            subDrilldownColumn={explorerState.subDrilldownColumn}
+            drilldownColumn={activeExplorerState.drilldownColumn}
+            subDrilldownColumn={activeExplorerState.subDrilldownColumn}
           />
         )}
       </Panel>

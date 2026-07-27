@@ -53,6 +53,31 @@ export function sortReportRows(rows: ReportRow[], state: ReportExplorerState): R
     .map(({ row }) => row);
 }
 
+export function normalizeReportExplorerState(
+  state: ReportExplorerState,
+  columns: string[],
+): ReportExplorerState {
+  const hasColumn = (column: string) => Boolean(column) && columns.includes(column);
+  const drilldownColumn = hasColumn(state.drilldownColumn) ? state.drilldownColumn : "";
+  const sortColumn = hasColumn(state.sortColumn) ? state.sortColumn : "";
+
+  return {
+    ...state,
+    drilldownColumn,
+    subDrilldownColumn: drilldownColumn
+      && hasColumn(state.subDrilldownColumn)
+      && state.subDrilldownColumn !== drilldownColumn
+      ? state.subDrilldownColumn
+      : "",
+    sortColumn,
+    thenSortColumn: sortColumn
+      && hasColumn(state.thenSortColumn)
+      && state.thenSortColumn !== sortColumn
+      ? state.thenSortColumn
+      : "",
+  };
+}
+
 export function groupReportRows(
   rows: ReportRow[],
   drilldownColumn: string,
