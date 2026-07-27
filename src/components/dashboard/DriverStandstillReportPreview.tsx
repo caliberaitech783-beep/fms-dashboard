@@ -1,10 +1,13 @@
-import { useMemo } from "react";
 import type { ReportPreview } from "../../types/reports";
+import type { ReportRow } from "../../utils/reportExplorer";
 import { cx } from "../ui/cx";
+import { ReportDrilldownRows } from "./ReportDrilldownRows";
 
 interface DriverStandstillReportPreviewProps {
   preview: ReportPreview;
-  standstillSort: StandstillSort;
+  rows: ReportRow[];
+  drilldownColumn: string;
+  subDrilldownColumn: string;
 }
 
 const VEHICLE = "Vehicles";
@@ -19,9 +22,7 @@ const ENGINE_LOAD = "Engine load % time of Total time (%)";
 const COASTING = "Coasting (%)";
 const AVERAGE_DIESEL = "Avg diesel (l/h)";
 
-export type StandstillSort = "desc" | "asc";
-
-const DISPLAY_COLUMNS = [
+export const driverStandstillDisplayColumns = [
   VEHICLE,
   DRIVER,
   TOTAL_TIME,
@@ -49,11 +50,14 @@ const HEADERS: Record<string, string> = {
   [AVERAGE_DIESEL]: "Avg diesel (l/h)",
 };
 
-export function DriverStandstillReportPreview({ preview, standstillSort }: DriverStandstillReportPreviewProps) {
+export function DriverStandstillReportPreview({
+  preview,
+  rows,
+  drilldownColumn,
+  subDrilldownColumn,
+}: DriverStandstillReportPreviewProps) {
   const period = preview.period;
-  const rows = preview.rows;
-  const summary = buildSummary(rows);
-  const sortedRows = useMemo(() => sortByStandstill(rows, standstillSort), [rows, standstillSort]);
+  const summary = buildSummary(preview.rows);
 
   return (
     <div className="space-y-4">
@@ -87,7 +91,7 @@ export function DriverStandstillReportPreview({ preview, standstillSort }: Drive
             <table className="min-w-[1240px] border-collapse text-xs">
             <thead className="sticky top-0 z-20 bg-[#213d68] text-white">
               <tr>
-                {DISPLAY_COLUMNS.map((column) => (
+                {driverStandstillDisplayColumns.map((column) => (
                   <th
                     key={column}
                     className={cx(
@@ -103,28 +107,34 @@ export function DriverStandstillReportPreview({ preview, standstillSort }: Drive
             </thead>
             <tbody>
               <tr className="sticky top-[57px] z-10 bg-white font-semibold text-[#213d68]">
-                {DISPLAY_COLUMNS.map((column) => (
+                {driverStandstillDisplayColumns.map((column) => (
                   <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
                     {formatCell(summary[column])}
                   </td>
                 ))}
               </tr>
-              {sortedRows.map((row, rowIndex) => (
-                <tr key={`${row[VEHICLE] ?? "vehicle"}-${rowIndex}`} className={rowIndex % 2 ? "bg-coal-50" : "bg-white"}>
-                  {DISPLAY_COLUMNS.map((column) => (
-                    <td
-                      key={column}
-                      className={cx(
-                        "border border-coal-200 px-2 py-2 text-center tabular-nums text-coal-900",
-                        (column === VEHICLE || column === DRIVER) && "text-left",
-                        metricCellClass(column, row[column]),
-                      )}
-                    >
-                      {formatCell(row[column])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              <ReportDrilldownRows
+                rows={rows}
+                drilldownColumn={drilldownColumn}
+                subDrilldownColumn={subDrilldownColumn}
+                columnCount={driverStandstillDisplayColumns.length}
+                renderRow={(row, rowIndex) => (
+                  <tr key={`${row[VEHICLE] ?? "vehicle"}-${rowIndex}`} className={rowIndex % 2 ? "bg-coal-50" : "bg-white"}>
+                    {driverStandstillDisplayColumns.map((column) => (
+                      <td
+                        key={column}
+                        className={cx(
+                          "border border-coal-200 px-2 py-2 text-center tabular-nums text-coal-900",
+                          (column === VEHICLE || column === DRIVER) && "text-left",
+                          metricCellClass(column, row[column]),
+                        )}
+                      >
+                        {formatCell(row[column])}
+                      </td>
+                    ))}
+                  </tr>
+                )}
+              />
             </tbody>
             </table>
           </div>
@@ -181,23 +191,6 @@ function metricCellClass(column: string, value: string | number | null): string 
   if (column === COASTING && value >= 2) return "bg-rose-200";
   if (column === AVERAGE_DIESEL && value >= 18) return "bg-rose-200";
   return "";
-}
-
-function sortByStandstill(rows: ReportPreview["rows"], direction: StandstillSort): ReportPreview["rows"] {
-  return [...rows].sort((left, right) => {
-    const leftValue = numericValue(left[STANDSTILL]);
-    const rightValue = numericValue(right[STANDSTILL]);
-    if (leftValue === null) return rightValue === null ? 0 : 1;
-    if (rightValue === null) return -1;
-    return direction === "asc" ? leftValue - rightValue : rightValue - leftValue;
-  });
-}
-
-function numericValue(value: string | number | null | undefined): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function formatCell(value: string | number | null | undefined): string {

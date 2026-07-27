@@ -1,19 +1,28 @@
 import { Clock, Download, FileSpreadsheet, FileText, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardFilters, Report } from "../../types/fleet";
 import type { ReportPreview, ReportType } from "../../types/reports";
 import { reportService } from "../../services/reportService";
 import { formatDateTime, makeCsvFileName, titleCase } from "../../utils/formatters";
 import { visibleReportColumns } from "../../utils/reportColumns";
+import {
+  emptyReportExplorerState,
+  sortReportRows,
+  type ReportExplorerState,
+  type ReportRow,
+} from "../../utils/reportExplorer";
 import { Button } from "../ui/Button";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
+import { EmptyState } from "../ui/EmptyState";
 import { LoadingState } from "../ui/LoadingState";
 import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
   DriverStandstillReportPreview,
-  type StandstillSort,
+  driverStandstillDisplayColumns,
 } from "./DriverStandstillReportPreview";
+import { ReportDrilldownRows } from "./ReportDrilldownRows";
+import { ReportExplorerControls } from "./ReportExplorerControls";
 
 interface ReportsDashboardProps {
   reports: Report[];
@@ -26,7 +35,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
   const [selectedReport, setSelectedReport] = useState<ReportType>("Daily Fuel Consumption Report");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [standstillSort, setStandstillSort] = useState<StandstillSort>(() => "desc");
+  const [explorerState, setExplorerState] = useState<ReportExplorerState>(emptyReportExplorerState);
   const [downloadState, setDownloadState] = useState<{
     open: boolean;
     status: "running" | "done";
@@ -52,6 +61,12 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
   }, [filters, selectedReport]);
 
   useEffect(() => {
+    setExplorerState(selectedReport === "Driverwise Standstill Tracking"
+      ? { ...emptyReportExplorerState, sortColumn: "Standstill (%)", sortDirection: "desc" }
+      : emptyReportExplorerState);
+  }, [selectedReport]);
+
+  useEffect(() => {
     if (!downloadState?.open || downloadState.status !== "running") {
       return;
     }
@@ -71,6 +86,16 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     }
   }, [downloadState?.status]);
 
+  const explorerColumns = useMemo(() => (
+    selectedReport === "Driverwise Standstill Tracking"
+      ? driverStandstillDisplayColumns.filter((column) => preview?.columns.includes(column))
+      : visibleReportColumns(preview?.columns ?? [])
+  ), [preview?.columns, selectedReport]);
+  const exploredRows = useMemo(
+    () => sortReportRows(preview?.rows ?? [], explorerState),
+    [explorerState, preview?.rows],
+  );
+
   if (loading) {
     return <LoadingState />;
   }
@@ -83,13 +108,6 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
   ];
 
-  const previewColumns: DataTableColumn<Record<string, string | number | null>>[] = visibleReportColumns(
-    preview?.columns ?? [],
-  ).map((column) => ({
-    header: titleCase(column),
-    render: (row) => String(row[column] ?? "-"),
-  }));
-
   const closeDownloadDialog = () => setDownloadState(null);
 
   const handleDownload = async (format: "CSV" | "PDF" | "Excel") => {
@@ -98,15 +116,20 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     }
 
     const startedAt = performance.now();
+    const exploredPreview: ReportPreview = {
+      ...preview,
+      columns: explorerColumns,
+      rows: exploredRows,
+    };
     const csvFileName = makeCsvFileName(selectedReport, filters.siteId, filters.shift, filters.dateTo);
     setDownloadState({ open: true, status: "running", format, startedAt, elapsedMs: 0 });
 
     if (format === "CSV") {
-      reportService.exportCsv(preview, csvFileName);
+      reportService.exportCsv(exploredPreview, csvFileName);
     } else if (format === "PDF") {
-      await reportService.exportPdf(preview, csvFileName.replace(/\.csv$/, ".pdf"));
+      await reportService.exportPdf(exploredPreview, csvFileName.replace(/\.csv$/, ".pdf"));
     } else {
-      await reportService.exportExcel(preview, csvFileName.replace(/\.csv$/, ".xlsx"));
+      await reportService.exportExcel(exploredPreview, csvFileName.replace(/\.csv$/, ".xlsx"));
     }
 
     const elapsedMs = performance.now() - startedAt;
@@ -145,19 +168,12 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
         subtitle={preview ? `Preview generated ${formatDateTime(preview.generatedAt)}` : "Generating preview"}
         actions={
           <div className="flex flex-wrap items-end gap-2">
-            {selectedReport === "Driverwise Standstill Tracking" && (
-              <label className="flex flex-col gap-1 text-xs font-medium text-coal-600">
-                Sort Standstill %
-                <select
-                  aria-label="Sort Standstill percentage"
-                  className="h-10 rounded-md border border-coal-200 bg-white px-3 text-sm text-coal-800 outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
-                  value={standstillSort}
-                  onChange={(event) => setStandstillSort(event.target.value as StandstillSort)}
-                >
-                  <option value="desc">High to low</option>
-                  <option value="asc">Low to high</option>
-                </select>
-              </label>
+            {preview && explorerColumns.length > 0 && (
+              <ReportExplorerControls
+                columns={explorerColumns}
+                state={explorerState}
+                onChange={setExplorerState}
+              />
             )}
             <Button
               icon={<Download className="h-4 w-4" />}
@@ -187,9 +203,20 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
         {previewLoading || !preview ? (
           <LoadingState />
         ) : selectedReport === "Driverwise Standstill Tracking" && preview.period ? (
-          <DriverStandstillReportPreview preview={preview} standstillSort={standstillSort} />
+          <DriverStandstillReportPreview
+            preview={preview}
+            rows={exploredRows}
+            drilldownColumn={explorerState.drilldownColumn}
+            subDrilldownColumn={explorerState.subDrilldownColumn}
+          />
         ) : (
-          <DataTable columns={previewColumns} rows={preview.rows} getRowKey={(_, index) => `${selectedReport}-${index}`} maxHeight="max-h-[560px]" />
+          <ReportPreviewTable
+            reportType={selectedReport}
+            columns={explorerColumns}
+            rows={exploredRows}
+            drilldownColumn={explorerState.drilldownColumn}
+            subDrilldownColumn={explorerState.subDrilldownColumn}
+          />
         )}
       </Panel>
 
@@ -261,6 +288,62 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface ReportPreviewTableProps {
+  reportType: ReportType;
+  columns: string[];
+  rows: ReportRow[];
+  drilldownColumn: string;
+  subDrilldownColumn: string;
+}
+
+function ReportPreviewTable({
+  reportType,
+  columns,
+  rows,
+  drilldownColumn,
+  subDrilldownColumn,
+}: ReportPreviewTableProps) {
+  if (!rows.length) {
+    return <EmptyState title="No data available" message="Try changing the selected filters." />;
+  }
+
+  return (
+    <div className="max-h-[560px] overflow-auto">
+      <table className="min-w-full border-separate border-spacing-0 text-left text-sm">
+        <thead className="sticky top-0 z-10 bg-coal-50">
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="whitespace-nowrap border-b border-coal-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-coal-500"
+              >
+                {titleCase(column)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <ReportDrilldownRows
+            rows={rows}
+            drilldownColumn={drilldownColumn}
+            subDrilldownColumn={subDrilldownColumn}
+            columnCount={columns.length}
+            renderRow={(row, index) => (
+              <tr key={`${reportType}-${String(row[columns[0]] ?? "row")}-${index}`}>
+                {columns.map((column) => (
+                  <td key={column} className="border-b border-coal-100 px-3 py-2 text-coal-700">
+                    {String(row[column] ?? "-")}
+                  </td>
+                ))}
+              </tr>
+            )}
+          />
+        </tbody>
+      </table>
     </div>
   );
 }
