@@ -40,21 +40,25 @@ export function ReportExplorerControls({
 
   return (
     <div className="flex flex-wrap items-end gap-2" aria-label="Report sorting and drill-down controls">
-      <ExplorerSelect
-        label="Drill down"
-        ariaLabel="Primary drill-down column"
-        value={state.drilldownColumn}
-        columns={columns}
-        onChange={(value) => update({ drilldownColumn: value })}
-      />
-      <ExplorerSelect
-        label="Sub drill down"
-        ariaLabel="Secondary drill-down column"
-        value={state.subDrilldownColumn}
-        columns={columns.filter((column) => column !== state.drilldownColumn)}
-        disabled={!state.drilldownColumn}
-        onChange={(value) => update({ subDrilldownColumn: value })}
-      />
+      {!singleSort && (
+        <>
+          <ExplorerSelect
+            label="Drill down"
+            ariaLabel="Primary drill-down column"
+            value={state.drilldownColumn}
+            columns={columns}
+            onChange={(value) => update({ drilldownColumn: value })}
+          />
+          <ExplorerSelect
+            label="Sub drill down"
+            ariaLabel="Secondary drill-down column"
+            value={state.subDrilldownColumn}
+            columns={columns.filter((column) => column !== state.drilldownColumn)}
+            disabled={!state.drilldownColumn}
+            onChange={(value) => update({ subDrilldownColumn: value })}
+          />
+        </>
+      )}
       <SortControl
         label="Sort by"
         ariaLabel={singleSort ? "Sort report by parameter" : "Primary sort column"}
