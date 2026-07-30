@@ -191,6 +191,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
                 columns={explorerColumns}
                 state={activeExplorerState}
                 onChange={setExplorerState}
+                singleSort={selectedReport === "Driverwise Standstill Tracking"}
               />
             )}
             <Button

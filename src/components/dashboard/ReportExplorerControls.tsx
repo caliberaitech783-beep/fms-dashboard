@@ -7,9 +7,15 @@ interface ReportExplorerControlsProps {
   columns: string[];
   state: ReportExplorerState;
   onChange: (state: ReportExplorerState) => void;
+  singleSort?: boolean;
 }
 
-export function ReportExplorerControls({ columns, state, onChange }: ReportExplorerControlsProps) {
+export function ReportExplorerControls({
+  columns,
+  state,
+  onChange,
+  singleSort = false,
+}: ReportExplorerControlsProps) {
   const hasExploration = Object.entries(state).some(([key, value]) => (
     key.endsWith("Column") ? Boolean(value) : value !== "asc"
   ));
@@ -23,7 +29,7 @@ export function ReportExplorerControls({ columns, state, onChange }: ReportExplo
       next.subDrilldownColumn = "";
     }
 
-    if (!next.sortColumn) {
+    if (singleSort || !next.sortColumn) {
       next.thenSortColumn = "";
     } else if (next.thenSortColumn === next.sortColumn) {
       next.thenSortColumn = "";
@@ -51,23 +57,26 @@ export function ReportExplorerControls({ columns, state, onChange }: ReportExplo
       />
       <SortControl
         label="Sort by"
-        ariaLabel="Primary sort column"
+        ariaLabel={singleSort ? "Sort report by parameter" : "Primary sort column"}
         value={state.sortColumn}
         direction={state.sortDirection}
         columns={columns}
+        explicitDirections={singleSort}
         onColumnChange={(value) => update({ sortColumn: value })}
         onDirectionChange={(direction) => update({ sortDirection: direction })}
       />
-      <SortControl
-        label="Then by"
-        ariaLabel="Secondary sort column"
-        value={state.thenSortColumn}
-        direction={state.thenSortDirection}
-        columns={columns.filter((column) => column !== state.sortColumn)}
-        disabled={!state.sortColumn}
-        onColumnChange={(value) => update({ thenSortColumn: value })}
-        onDirectionChange={(direction) => update({ thenSortDirection: direction })}
-      />
+      {!singleSort && (
+        <SortControl
+          label="Then by"
+          ariaLabel="Secondary sort column"
+          value={state.thenSortColumn}
+          direction={state.thenSortDirection}
+          columns={columns.filter((column) => column !== state.sortColumn)}
+          disabled={!state.sortColumn}
+          onColumnChange={(value) => update({ thenSortColumn: value })}
+          onDirectionChange={(direction) => update({ thenSortDirection: direction })}
+        />
+      )}
       {hasExploration && (
         <button
           type="button"
@@ -128,6 +137,7 @@ function ExplorerSelect({
 
 interface SortControlProps extends Omit<ExplorerSelectProps, "onChange"> {
   direction: ReportSortDirection;
+  explicitDirections?: boolean;
   onColumnChange: (value: string) => void;
   onDirectionChange: (direction: ReportSortDirection) => void;
 }
@@ -139,6 +149,7 @@ function SortControl({
   direction,
   columns,
   disabled = false,
+  explicitDirections = false,
   onColumnChange,
   onDirectionChange,
 }: SortControlProps) {
@@ -154,19 +165,75 @@ function SortControl({
         disabled={disabled}
         onChange={onColumnChange}
       />
-      <button
-        type="button"
-        className={cx(
-          "flex h-10 w-10 items-center justify-center rounded-md border border-coal-200 bg-white text-coal-600",
-          "hover:border-ore-300 hover:text-ore-700 disabled:bg-coal-100 disabled:text-coal-300",
-        )}
-        title={direction === "asc" ? "Ascending order" : "Descending order"}
-        aria-label={`Change ${label.toLowerCase()} to ${nextDirection === "asc" ? "ascending" : "descending"} order`}
-        disabled={disabled || !value}
-        onClick={() => onDirectionChange(nextDirection)}
-      >
-        {direction === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-      </button>
+      {explicitDirections ? (
+        <>
+          <SortDirectionButton
+            label="High to Low"
+            direction="desc"
+            selectedDirection={direction}
+            disabled={disabled || !value}
+            onChange={onDirectionChange}
+          />
+          <SortDirectionButton
+            label="Low to High"
+            direction="asc"
+            selectedDirection={direction}
+            disabled={disabled || !value}
+            onChange={onDirectionChange}
+          />
+        </>
+      ) : (
+        <button
+          type="button"
+          className={cx(
+            "flex h-10 w-10 items-center justify-center rounded-md border border-coal-200 bg-white text-coal-600",
+            "hover:border-ore-300 hover:text-ore-700 disabled:bg-coal-100 disabled:text-coal-300",
+          )}
+          title={direction === "asc" ? "Ascending order" : "Descending order"}
+          aria-label={`Change ${label.toLowerCase()} to ${nextDirection === "asc" ? "ascending" : "descending"} order`}
+          disabled={disabled || !value}
+          onClick={() => onDirectionChange(nextDirection)}
+        >
+          {direction === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+        </button>
+      )}
     </div>
+  );
+}
+
+interface SortDirectionButtonProps {
+  label: string;
+  direction: ReportSortDirection;
+  selectedDirection: ReportSortDirection;
+  disabled: boolean;
+  onChange: (direction: ReportSortDirection) => void;
+}
+
+function SortDirectionButton({
+  label,
+  direction,
+  selectedDirection,
+  disabled,
+  onChange,
+}: SortDirectionButtonProps) {
+  const selected = direction === selectedDirection;
+
+  return (
+    <button
+      type="button"
+      className={cx(
+        "h-10 whitespace-nowrap rounded-md border px-3 text-xs font-semibold",
+        selected
+          ? "border-ore-600 bg-ore-50 text-ore-700"
+          : "border-coal-200 bg-white text-coal-600 hover:border-ore-300 hover:text-ore-700",
+        "disabled:bg-coal-100 disabled:text-coal-300",
+      )}
+      aria-label={`Sort ${label.toLowerCase()}`}
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={() => onChange(direction)}
+    >
+      {label}
+    </button>
   );
 }
