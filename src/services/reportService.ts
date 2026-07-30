@@ -18,6 +18,11 @@ import {
 import { getFilteredPortalData, getPortalData } from "./dataAccess";
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
+import {
+  buildDriverwiseStandstillPdf,
+  isDriverwiseStandstillReport,
+  type DriverwisePdfContext,
+} from "../utils/driverwisePdf";
 
 export const reportService = {
   async getReports() {
@@ -140,8 +145,12 @@ export const reportService = {
     downloadBlob(blob, fileName);
   },
 
-  exportPdf(preview: ReportPreview, fileName: string) {
-    const blob = new Blob([buildPdf(removeHiddenReportColumns(preview))], { type: "application/pdf" });
+  exportPdf(preview: ReportPreview, fileName: string, context?: DriverwisePdfContext) {
+    const visiblePreview = removeHiddenReportColumns(preview);
+    const pdf = isDriverwiseStandstillReport(visiblePreview.reportType)
+      ? buildDriverwiseStandstillPdf(visiblePreview, context)
+      : buildPdf(visiblePreview);
+    const blob = new Blob([pdf], { type: "application/pdf" });
     downloadBlob(blob, fileName);
   },
 

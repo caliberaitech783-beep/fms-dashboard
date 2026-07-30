@@ -136,6 +136,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     const startedAt = performance.now();
     const exploredPreview: ReportPreview = {
       ...preview,
+      oem: filters.company,
       columns: explorerColumns,
       rows: exploredRows,
     };
@@ -145,7 +146,11 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     if (format === "CSV") {
       reportService.exportCsv(exploredPreview, csvFileName);
     } else if (format === "PDF") {
-      await reportService.exportPdf(exploredPreview, csvFileName.replace(/\.csv$/, ".pdf"));
+      await reportService.exportPdf(
+        exploredPreview,
+        csvFileName.replace(/\.csv$/, ".pdf"),
+        { company: filters.company, shift: filters.shift },
+      );
     } else {
       await reportService.exportExcel(exploredPreview, csvFileName.replace(/\.csv$/, ".xlsx"));
     }

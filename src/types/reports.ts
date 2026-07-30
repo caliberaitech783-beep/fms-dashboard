@@ -46,6 +46,7 @@ export interface ReportPreview {
   generatedAt: string;
   rows: Record<string, string | number | null>[];
   columns: string[];
+  oem?: string;
   live?: boolean;
   notice?: string | null;
   period?: {
