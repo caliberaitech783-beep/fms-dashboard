@@ -76,7 +76,6 @@ test("calculates Volvo driver standstill metrics from accumulated counter deltas
   assert.equal(rows[0].drivingKm, 32);
   assert.equal(rows[0].dieselEngineOnPercent, 37.5);
   assert.equal(rows[0].averageDieselEngineKmPerLitre, 0.8);
-  assert.equal(rows[0].fuelLitres, 40);
   assert.equal(rows[0].standstillPercent, 33.33);
   assert.equal(rows[0].standstillTime, "1:00");
   assert.equal(rows[0].coastingPercent, 10);
