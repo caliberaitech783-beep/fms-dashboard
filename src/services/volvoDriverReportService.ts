@@ -31,27 +31,6 @@ function isReportPreview(value: unknown): value is ReportPreview {
     && Array.isArray(report.rows);
 }
 
-function isScaniaReportRow(row: ReportPreview["rows"][number]) {
-  const registration = String(
-    row["Vehicles"]
-    ?? row["Registration number"]
-    ?? row.vehicle
-    ?? "",
-  ).trim();
-  const rowCompany = String(
-    row.company
-    ?? row.oem
-    ?? row.OEM
-    ?? row.Company
-    ?? "",
-  ).trim().toLowerCase();
-
-  if (rowCompany) {
-    return rowCompany.includes("scania") && !rowCompany.includes("volvo");
-  }
-  return /^s(?:cania)?[\s_-]*\d+$/i.test(registration);
-}
-
 export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters): Promise<ReportPreview> {
   const session = getAuthSession();
   const company = selectedCompany(filters);
@@ -97,16 +76,7 @@ export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters
         return errorPreview(`${company} RFMS returned an invalid shift report.`, company);
       }
 
-      const scaniaSelected = company.trim().toLowerCase() === "scania";
-      const rows = scaniaSelected ? payload.rows.filter(isScaniaReportRow) : payload.rows;
-      const preview = {
-        ...payload,
-        rows,
-        oem: company,
-        notice: scaniaSelected && rows.length === 0
-          ? "No Scania historical shift intervals were returned for the selected site and shift. Volvo and other OEM rows are excluded."
-          : payload.notice,
-      };
+      const preview = { ...payload, oem: company };
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,
         preview,
