@@ -1,0 +1,9 @@
+.env
+.env.*
+local.settings.json
+local.settings.*.json
+test/
+scripts/
+coverage/
+.git/
+.github/
