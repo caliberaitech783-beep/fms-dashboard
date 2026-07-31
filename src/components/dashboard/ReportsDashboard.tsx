@@ -20,7 +20,7 @@ import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
   DriverStandstillReportPreview,
-  driverStandstillDisplayColumns,
+  driverStandstillColumns,
 } from "./DriverStandstillReportPreview";
 import { ReportDrilldownRows } from "./ReportDrilldownRows";
 import { ReportExplorerControls } from "./ReportExplorerControls";
@@ -29,10 +29,17 @@ interface ReportsDashboardProps {
   reports: Report[];
   filters: DashboardFilters;
   loading: boolean;
+  refreshKey: number;
   onTimingComplete?: (message: string, elapsedMs: number) => void;
 }
 
-export function ReportsDashboard({ reports, filters, loading, onTimingComplete }: ReportsDashboardProps) {
+export function ReportsDashboard({
+  reports,
+  filters,
+  loading,
+  refreshKey,
+  onTimingComplete,
+}: ReportsDashboardProps) {
   const [selectedReport, setSelectedReport] = useState<ReportType>("Daily Fuel Consumption Report");
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -55,18 +62,25 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
     let mounted = true;
     const startedAt = performance.now();
     setPreviewLoading(true);
-    reportService.getReportPreview(selectedReport, filters).then((result) => {
-      if (mounted) {
-        setPreview(result);
-        setPreviewLoading(false);
-        timingCompleteRef.current?.("Report loaded", performance.now() - startedAt);
-      }
-    });
+    reportService.getReportPreview(selectedReport, filters, { forceRefresh: true })
+      .then((result) => {
+        if (mounted) {
+          setPreview(result);
+          setPreviewLoading(false);
+          timingCompleteRef.current?.("Report loaded", performance.now() - startedAt);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPreview(null);
+          setPreviewLoading(false);
+        }
+      });
 
     return () => {
       mounted = false;
     };
-  }, [filters, selectedReport]);
+  }, [filters, refreshKey, selectedReport]);
 
   useEffect(() => {
     if (selectedReport !== "Driverwise Standstill Tracking") {
@@ -76,9 +90,15 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
 
   useEffect(() => {
     setExplorerState(selectedReport === "Driverwise Standstill Tracking"
-      ? { ...emptyReportExplorerState, sortColumn: "Standstill (%)", sortDirection: "desc" }
+      ? {
+        ...emptyReportExplorerState,
+        sortColumn: filters.company === "Scania"
+          ? "Idling (% of engine running time)"
+          : "Standstill (%)",
+        sortDirection: "desc",
+      }
       : emptyReportExplorerState);
-  }, [selectedReport]);
+  }, [filters.company, selectedReport]);
 
   useEffect(() => {
     if (!downloadState?.open || downloadState.status !== "running") {
@@ -102,7 +122,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
 
   const explorerColumns = useMemo(() => (
     selectedReport === "Driverwise Standstill Tracking" && preview?.period
-      ? driverStandstillDisplayColumns.filter((column) => preview?.columns.includes(column))
+      ? driverStandstillColumns(preview).filter((column) => preview?.columns.includes(column))
       : visibleReportColumns(preview?.columns ?? [])
   ), [preview?.columns, preview?.period, selectedReport]);
   const activeExplorerState = useMemo(
@@ -112,6 +132,13 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
   const exploredRows = useMemo(
     () => sortReportRows(preview?.rows ?? [], activeExplorerState),
     [activeExplorerState, preview?.rows],
+  );
+  const canExport = Boolean(
+    preview
+    && !previewLoading
+    && !preview.error
+    && exploredRows.length > 0
+    && (filters.company !== "Scania" || preview.live === true),
   );
 
   if (loading) {
@@ -129,7 +156,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
   const closeDownloadDialog = () => setDownloadState(null);
 
   const handleDownload = async (format: "CSV" | "PDF" | "Excel") => {
-    if (!preview) {
+    if (!preview || !canExport) {
       return;
     }
 
@@ -162,7 +189,7 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
 
   return (
     <div className="space-y-6">
-      <Panel title="Report Catalog" subtitle="Phase 1 report previews are generated from normalized mock records.">
+      <Panel title="Report Catalog" subtitle="Report previews use each OEM's configured live service when available.">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {reports.map((report) => (
             <button
@@ -202,21 +229,21 @@ export function ReportsDashboard({ reports, filters, loading, onTimingComplete }
             <Button
               icon={<Download className="h-4 w-4" />}
               variant="primary"
-              disabled={!preview}
+              disabled={!canExport}
               onClick={() => handleDownload("CSV")}
             >
               CSV
             </Button>
             <Button
               icon={<FileText className="h-4 w-4" />}
-              disabled={!preview}
+              disabled={!canExport}
               onClick={() => handleDownload("PDF")}
             >
               PDF
             </Button>
             <Button
               icon={<FileSpreadsheet className="h-4 w-4" />}
-              disabled={!preview}
+              disabled={!canExport}
               onClick={() => handleDownload("Excel")}
             >
               Excel

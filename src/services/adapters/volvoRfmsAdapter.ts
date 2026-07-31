@@ -1,6 +1,7 @@
 import { getAuthSession } from "../../auth/sessionService";
 import type { FleetTelemetryRecord, IntegrationSource, Vehicle, VehicleStatus } from "../../types/fleet";
 import type { FleetDataAdapter } from "../../types/integrations";
+import { fetchScaniaIntegrationStatus } from "../scaniaReportService";
 import { mockAdapter } from "./mockAdapter";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
@@ -317,7 +318,9 @@ export async function refreshVolvoLiveData(): Promise<void> {
 
 async function mockVehicleContext() {
   const vehicles = await mockAdapter.fetchVehicles();
-  const nonVolvoVehicles = vehicles.filter((vehicle) => vehicle.company !== "Volvo");
+  const nonVolvoVehicles = vehicles.filter((vehicle) => (
+    vehicle.company !== "Volvo" && vehicle.company !== "Scania"
+  ));
   return {
     nonVolvoVehicles,
     nonVolvoIds: new Set(nonVolvoVehicles.map((vehicle) => vehicle.id)),
@@ -350,9 +353,16 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
     return (await liveAwareTelemetry()).filter((record) => record.trips !== null);
   },
   async fetchIntegrations() {
-    const [snapshot, integrations] = await Promise.all([fetchLiveSnapshot(), mockAdapter.fetchIntegrations()]);
-    if (!snapshot) return integrations;
-    return integrations.map((integration) => integration.company === "Volvo" ? snapshot.integration : integration);
+    const [snapshot, scaniaIntegration, integrations] = await Promise.all([
+      fetchLiveSnapshot(),
+      fetchScaniaIntegrationStatus(),
+      mockAdapter.fetchIntegrations(),
+    ]);
+    return integrations.map((integration) => {
+      if (integration.company === "Volvo" && snapshot) return snapshot.integration;
+      if (integration.company === "Scania") return scaniaIntegration;
+      return integration;
+    });
   },
   fetchReports: () => mockAdapter.fetchReports(),
   fetchWhatsAppSchedules: () => mockAdapter.fetchWhatsAppSchedules(),

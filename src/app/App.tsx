@@ -159,6 +159,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               activeSection,
               data,
               filters,
+              refreshKey,
               showTimingNotice,
               reloadDashboard,
               ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshVolvo : undefined,
@@ -187,6 +188,7 @@ function renderSection(
   activeSection: NavItemId,
   data: ReturnType<typeof useDashboardData>,
   filters: ReturnType<typeof useFleetFilters>["filters"],
+  refreshKey: number,
   onTimingComplete: (message: string, elapsedMs: number) => void,
   onFleetReload: () => void,
   onFleetRefresh?: () => Promise<void>,
@@ -208,6 +210,7 @@ function renderSection(
           reports={data.reports}
           filters={filters}
           loading={data.loading}
+          refreshKey={refreshKey}
           onTimingComplete={onTimingComplete}
         />
       );

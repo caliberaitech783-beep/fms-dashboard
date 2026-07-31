@@ -4,7 +4,7 @@ const SITE_DEFINITIONS = [
   { id: "site-wcl-lalpeth-ocm", name: "Lalpeth OCM", group: "WCL", contractType: "Coal", matches: ["lalpeth"] },
   { id: "site-wcl-majri-ocm", name: "Majri OCM", group: "WCL", contractType: "Coal", matches: ["majri"] },
   { id: "site-wcl-gauri-pauni", name: "Gauri Pauni OCM", group: "WCL", contractType: "Coal", matches: ["gouri", "gauri"] },
-  { id: "site-ncl-dch-west", name: "DCH West", group: "NCL", contractType: "OB", matches: ["dudhichua west", "dch west"] },
+  { id: "site-ncl-dch-west", name: "DCH West", group: "NCL", contractType: "OB", matches: ["dudhichua west", "dudhichua singrauli", "dch west"] },
   { id: "site-ncl-dch-east", name: "DCH East", group: "NCL", contractType: "OB", matches: ["dudhichua east", "dch east"] },
 ];
 

@@ -22,6 +22,10 @@
 6. Configure the Volvo settings documented in `docs/volvo-live-vehicle-status.md`.
 7. Confirm the `volvoScheduledSync` timer is registered and the three Volvo Azure Tables are created.
 8. Verify authenticated `GET /api/vehicles/live` and authorized `POST /api/integrations/volvo/refresh` responses.
+9. Configure the backend-only Scania settings from `docs/scania-live-integration.md`.
+10. Verify authenticated `GET /api/scania/status` and the DCH West / Shift A, B, and C
+    `POST /api/scania/reports/vehicle-evaluation` acceptance request before
+    enabling Scania exports in production.
 
 The previous Azure production API package should be kept as the rollback artifact until the notification package is verified in staging.
 

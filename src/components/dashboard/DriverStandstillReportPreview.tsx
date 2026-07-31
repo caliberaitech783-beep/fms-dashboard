@@ -36,6 +36,26 @@ export const driverStandstillDisplayColumns = [
   AVERAGE_DIESEL,
 ];
 
+export const scaniaStandstillDisplayColumns = [
+  "Registration number",
+  "Engine running time (h:m)",
+  "Distance driven (km)",
+  "Consumption liquid fuel (km/l)",
+  "Consumption liquid fuel (litres)",
+  "Consumption liquid fuel (litres/h)",
+  "Idling (% of engine running time)",
+  "Idling (h:m)",
+  "Performance mode - Power (km)",
+  "Performance mode - Power (% of distance)",
+  "Powertrain coasting (% of distance)",
+];
+
+export function driverStandstillColumns(preview?: ReportPreview | null) {
+  return isScaniaReport(preview)
+    ? scaniaStandstillDisplayColumns
+    : driverStandstillDisplayColumns;
+}
+
 const HEADERS: Record<string, string> = {
   [VEHICLE]: "Vehicles",
   [DRIVER]: "Drivers",
@@ -48,6 +68,17 @@ const HEADERS: Record<string, string> = {
   [ENGINE_LOAD]: "Engine load (%)",
   [COASTING]: "Coasting (%)",
   [AVERAGE_DIESEL]: "Avg diesel (l/h)",
+  "Registration number": "Registration number",
+  "Engine running time (h:m)": "Engine running time (h:m)",
+  "Distance driven (km)": "Distance driven (km)",
+  "Consumption liquid fuel (km/l)": "Consumption liquid fuel (km/l)",
+  "Consumption liquid fuel (litres)": "Consumption liquid fuel (litres)",
+  "Consumption liquid fuel (litres/h)": "Consumption liquid fuel (litres/h)",
+  "Idling (% of engine running time)": "Idling (% of engine running time)",
+  "Idling (h:m)": "Idling (h:m)",
+  "Performance mode - Power (km)": "Performance mode - Power (km)",
+  "Performance mode - Power (% of distance)": "Performance mode - Power (% of distance)",
+  "Powertrain coasting (% of distance)": "Powertrain coasting (% of distance)",
 };
 
 export function DriverStandstillReportPreview({
@@ -57,14 +88,21 @@ export function DriverStandstillReportPreview({
   subDrilldownColumn,
 }: DriverStandstillReportPreviewProps) {
   const period = preview.period;
+  const scania = isScaniaReport(preview);
+  const displayColumns = driverStandstillColumns(preview);
   const summary = buildSummary(preview.rows);
+  const averages = {
+    fuelEconomy: average(preview.rows, "Consumption liquid fuel (km/l)"),
+    litresPerHour: average(preview.rows, "Consumption liquid fuel (litres/h)"),
+  };
 
   return (
     <div className="space-y-4">
       {period && (
         <div className="border-b-2 border-[#213d68] pb-4">
           <h3 className="text-xl font-semibold text-[#213d68]">
-            Driverwise Standstill Tracking | {period.site ?? "All Sites"} | Shift {period.shift}
+            {scania ? "Scania Vehicle Report" : "Driverwise Standstill Tracking"} |{" "}
+            {period.site ?? "All Sites"} | Shift {period.shift}
           </h3>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-coal-600">
             <span>Date: {formatReportDate(period.date)}</span>
@@ -80,10 +118,21 @@ export function DriverStandstillReportPreview({
         </div>
       )}
 
-      {!rows.length ? (
+      {preview.error ? (
+        <ReportErrorState error={preview.error} />
+      ) : !rows.length ? (
         <div className="rounded-md border border-coal-200 bg-coal-50 px-4 py-8 text-center">
-          <p className="font-semibold text-coal-800">No Volvo status intervals were returned for this shift.</p>
-          <p className="mt-1 text-sm text-coal-500">Select another recent date or shift and refresh the report.</p>
+          <p className="font-semibold text-coal-800">
+            {scania
+              ? "No Scania Vehicle Evaluation rows were returned for this site and shift."
+              : "No Volvo status intervals were returned for this shift."}
+          </p>
+          <p className="mt-1 text-sm text-coal-500">
+            {preview.meta?.emptyReason
+              ?? (scania
+                ? "Confirm the selected Scania site, Shift A/B/C, and date, then refresh."
+                : "Select another recent date or shift and refresh the report.")}
+          </p>
         </div>
       ) : (
         <div>
@@ -91,13 +140,13 @@ export function DriverStandstillReportPreview({
             <table className="min-w-[1240px] border-collapse text-xs">
             <thead className="sticky top-0 z-20 bg-[#213d68] text-white">
               <tr>
-                {driverStandstillDisplayColumns.map((column) => (
+                {displayColumns.map((column) => (
                   <th
                     key={column}
                     className={cx(
                       "border border-white/30 px-2 py-3 text-center font-semibold leading-tight",
                       column === DRIVER ? "min-w-36 text-left" : "min-w-24",
-                      column === VEHICLE && "min-w-24 text-left",
+                      (column === VEHICLE || column === "Registration number") && "min-w-24 text-left",
                     )}
                   >
                     {HEADERS[column]}
@@ -106,27 +155,32 @@ export function DriverStandstillReportPreview({
               </tr>
             </thead>
             <tbody>
-              <tr className="bg-white font-semibold text-[#213d68]">
-                {driverStandstillDisplayColumns.map((column) => (
-                  <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
-                    {formatCell(summary[column])}
-                  </td>
-                ))}
-              </tr>
+              {!scania && (
+                <tr className="bg-white font-semibold text-[#213d68]">
+                  {displayColumns.map((column) => (
+                    <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
+                      {formatCell(summary[column])}
+                    </td>
+                  ))}
+                </tr>
+              )}
               <ReportDrilldownRows
                 rows={rows}
                 drilldownColumn={drilldownColumn}
                 subDrilldownColumn={subDrilldownColumn}
-                columnCount={driverStandstillDisplayColumns.length}
+                columnCount={displayColumns.length}
                 renderRow={(row, rowIndex) => (
-                  <tr key={`${row[VEHICLE] ?? "vehicle"}-${rowIndex}`} className={rowIndex % 2 ? "bg-coal-50" : "bg-white"}>
-                    {driverStandstillDisplayColumns.map((column) => (
+                  <tr
+                    key={`${row[scania ? "Registration number" : VEHICLE] ?? "vehicle"}-${rowIndex}`}
+                    className={rowIndex % 2 ? "bg-coal-50" : "bg-white"}
+                  >
+                    {displayColumns.map((column) => (
                       <td
                         key={column}
                         className={cx(
                           "border border-coal-200 px-2 py-2 text-center tabular-nums text-coal-900",
-                          (column === VEHICLE || column === DRIVER) && "text-left",
-                          metricCellClass(column, row[column]),
+                          (column === VEHICLE || column === DRIVER || column === "Registration number") && "text-left",
+                          metricCellClass(column, row[column], averages),
                         )}
                       >
                         {formatCell(row[column])}
@@ -140,6 +194,35 @@ export function DriverStandstillReportPreview({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function isScaniaReport(preview?: ReportPreview | null) {
+  return preview?.oem === "Scania"
+    || preview?.source?.toLowerCase().includes("vehicle-evaluation")
+    || Boolean(preview?.columns.includes("Registration number"));
+}
+
+function ReportErrorState({ error }: { error: NonNullable<ReportPreview["error"]> }) {
+  const titles: Record<NonNullable<ReportPreview["error"]>["kind"], string> = {
+    authentication: "Scania API authentication failed",
+    permission: "Scania API permission denied",
+    timeout: "Scania report generation timed out",
+    mapping: "Scania site or shift mapping is incomplete",
+    validation: "Scania report request is invalid",
+    configuration: "Scania API is not configured",
+    rate_limit: "Scania API rate limit reached",
+    network: "Scania report service is unreachable",
+    upstream: "Scania live report is unavailable",
+    portal_authentication: "Dashboard authentication is required",
+    portal_permission: "Your role cannot access live Scania data",
+  };
+  return (
+    <div className="rounded-md border border-red-300 bg-red-50 px-4 py-8 text-center">
+      <p className="font-semibold text-red-900">{titles[error.kind]}</p>
+      <p className="mt-1 text-sm text-red-800">{error.message}</p>
+      {error.retryable && <p className="mt-2 text-xs text-red-700">You can retry with the Refresh button.</p>}
     </div>
   );
 }
@@ -183,13 +266,27 @@ function sumDurations(rows: ReportPreview["rows"], column: string): string {
   return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, "0")}`;
 }
 
-function metricCellClass(column: string, value: string | number | null): string {
+function metricCellClass(
+  column: string,
+  value: string | number | null,
+  averages: { fuelEconomy: number | null; litresPerHour: number | null },
+): string {
   if (typeof value !== "number") return "";
   if (column === STANDSTILL && value > 27) return "bg-red-600 text-white";
   if (column === EFFICIENCY && value < 0.65) return "bg-orange-200";
   if (column === ENGINE_LOAD && value >= 5) return "bg-orange-200";
   if (column === COASTING && value >= 2) return "bg-rose-200";
   if (column === AVERAGE_DIESEL && value >= 18) return "bg-rose-200";
+  if (column === "Idling (% of engine running time)" && value > 28) return "bg-red-600 text-white";
+  if (column === "Consumption liquid fuel (km/l)" && averages.fuelEconomy !== null && value < averages.fuelEconomy) {
+    return "bg-rose-200";
+  }
+  if (column === "Consumption liquid fuel (litres/h)" && averages.litresPerHour !== null && value > averages.litresPerHour) {
+    return "bg-rose-200";
+  }
+  if (column === "Performance mode - Power (km)" && value > 30) return "bg-red-600 text-white";
+  if (column === "Performance mode - Power (% of distance)" && value > 1) return "bg-rose-200";
+  if (column === "Powertrain coasting (% of distance)" && value < 20) return "bg-rose-200";
   return "";
 }
 

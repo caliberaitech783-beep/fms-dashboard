@@ -17,6 +17,10 @@ import {
 } from "../utils/calculations";
 import { getFilteredPortalData, getPortalData } from "./dataAccess";
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
+import {
+  fetchScaniaDriverStandstillReport,
+  invalidateScaniaReportCache,
+} from "./scaniaReportService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
 import {
   buildDriverwiseStandstillPdf,
@@ -30,9 +34,16 @@ export const reportService = {
     return data.reports;
   },
 
-  async getReportPreview(reportType: ReportType, filters: DashboardFilters): Promise<ReportPreview> {
+  async getReportPreview(
+    reportType: ReportType,
+    filters: DashboardFilters,
+    options: { forceRefresh?: boolean } = {},
+  ): Promise<ReportPreview> {
     if (reportType === "Driverwise Standstill Tracking") {
-      return removeHiddenReportColumns(await fetchVolvoDriverStandstillReport(filters));
+      const preview = filters.company === "Scania"
+        ? await fetchScaniaDriverStandstillReport(filters, options)
+        : await fetchVolvoDriverStandstillReport(filters, options);
+      return removeHiddenReportColumns(preview);
     }
 
     const { sites, vehicles, filteredVehicles, filteredRecords, whatsAppDeliveryLogs } = await getFilteredPortalData(filters);
@@ -134,8 +145,16 @@ export const reportService = {
 
   async prefetchReportPreview(reportType: ReportType, filters: DashboardFilters) {
     if (reportType === "Driverwise Standstill Tracking") {
-      await fetchVolvoDriverStandstillReport(filters);
+      if (filters.company === "Scania") {
+        await fetchScaniaDriverStandstillReport(filters);
+      } else {
+        await fetchVolvoDriverStandstillReport(filters);
+      }
     }
+  },
+
+  invalidateLiveReportCache() {
+    invalidateScaniaReportCache();
   },
 
   exportCsv(preview: ReportPreview, fileName: string) {

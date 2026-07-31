@@ -91,8 +91,27 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `VOLVO_BOOTSTRAP_HISTORY_MINUTES`
 - `VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY` (optional, defaults to `1`; limits concurrent per-vehicle historical requests for driver reports)
 - `VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS` (optional, defaults to `750`; spaces historical requests to respect Volvo throttling)
+- `SCANIA_CLIENT_ID` and `SCANIA_CLIENT_SECRET` (backend only; the secret is base64url-decoded for Scania challenge-response authentication)
+- `SCANIA_ACCESS_TOKEN` (optional temporary bootstrap token; never expose it to the frontend)
+- `SCANIA_AUTH_BASE_URL`, or explicit `SCANIA_CHALLENGE_URL` and `SCANIA_TOKEN_URL`
+- `SCANIA_RFMS_VEHICLES_URL`
+- `SCANIA_RFMS_VEHICLE_POSITIONS_URL`
+- `SCANIA_RFMS_VEHICLE_STATUSES_URL`
+- `SCANIA_LAST_REPORTED_POSITION_URL` (optional)
+- `SCANIA_EXCEPTION_HISTORY_URL`
+- `SCANIA_VEHICLE_EVALUATION_URL`
+- `SCANIA_VEHICLE_EVALUATION_GAS_URL` (optional when the gas response uses a separate URL)
+- `SCANIA_VEHICLE_EVALUATION_GAS_QUERY_PARAM` (optional; defaults to `includeGasConsumption`)
+- `SCANIA_VEHICLE_EVALUATION_RESULT_URL` (required only when Vehicle Evaluation returns a `SessionId`)
+- `SCANIA_DRIVER_EVALUATION_URL`
+- `SCANIA_DRIVER_EVALUATION_V3_REQUEST_URL` and `SCANIA_DRIVER_EVALUATION_V3_RESPONSE_URL`
+- `SCANIA_HTTP_TIMEOUT_MS`, `SCANIA_HTTP_RETRIES`, and `SCANIA_MAX_PAGES`
+- `SCANIA_TOKEN_TTL_SECONDS`
+- `SCANIA_REPORT_POLL_INTERVAL_MS` and `SCANIA_REPORT_POLL_TIMEOUT_MS`
+- `SCANIA_REPORT_SESSIONS_TABLE_NAME` (optional; defaults to `ScaniaReportSessions`)
 
 See `docs/volvo-live-vehicle-status.md` for synchronization and rotation procedures. Volvo credentials are Azure-only and must never use a `VITE_` prefix.
+See `docs/scania-live-integration.md` for Scania setup, mappings, report behavior, and acceptance testing. Scania credentials are Azure-only and must never use a `VITE_` prefix.
 
 ## GitHub Secrets
 

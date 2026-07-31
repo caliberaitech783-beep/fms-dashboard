@@ -26,7 +26,10 @@ function isReportPreview(value: unknown): value is ReportPreview {
     && Array.isArray(report.rows);
 }
 
-export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters): Promise<ReportPreview> {
+export async function fetchVolvoDriverStandstillReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean } = {},
+): Promise<ReportPreview> {
   const session = getAuthSession();
   if (!session?.token) return errorPreview("Dashboard authentication is required.");
 
@@ -36,8 +39,11 @@ export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters
     site: !filters.siteId || filters.siteId === "All" ? "Gauri" : filters.siteId,
   });
   const cacheKey = query.toString();
+  if (options.forceRefresh) {
+    reportCache.delete(cacheKey);
+  }
   const cached = reportCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.preview;
   }
   if (cached) {
