@@ -458,6 +458,7 @@ function scheduleSiteName(value) {
   if (normalized.includes("sasti")) return "Sasti";
   if (normalized.includes("dhoptala")) return "Dhoptala";
   if (normalized.includes("lalpeth")) return "Sasti";
+  if (normalized.includes("dch") || normalized.includes("dudhichua")) return "Dudhichua";
   if (normalized.includes("gauri") || normalized.includes("gouri")) return "Gauri";
   if (normalized.includes("majri")) return "Majri";
   if (normalized.includes("jayant")) return "Jayant";
