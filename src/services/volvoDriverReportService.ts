@@ -8,12 +8,17 @@ const REPORT_CACHE_MS = 5 * 60_000;
 const reportCache = new Map<string, { expiresAt: number; preview: ReportPreview }>();
 const inFlightReports = new Map<string, Promise<ReportPreview>>();
 
-function errorPreview(message: string): ReportPreview {
+function selectedCompany(filters: DashboardFilters) {
+  return filters.company && filters.company !== "All" ? filters.company : "Volvo";
+}
+
+function errorPreview(message: string, company = "Volvo"): ReportPreview {
   return {
     reportType: "Driverwise Standstill Tracking",
     generatedAt: new Date().toISOString(),
     columns: ["status", "message"],
-    rows: [{ status: "Live Volvo data unavailable", message }],
+    rows: [{ status: `Live ${company} data unavailable`, message }],
+    oem: company,
   };
 }
 
@@ -28,12 +33,14 @@ function isReportPreview(value: unknown): value is ReportPreview {
 
 export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters): Promise<ReportPreview> {
   const session = getAuthSession();
-  if (!session?.token) return errorPreview("Dashboard authentication is required.");
+  const company = selectedCompany(filters);
+  if (!session?.token) return errorPreview("Dashboard authentication is required.", company);
 
   const query = new URLSearchParams({
     date: filters.dateTo,
     shift: ["A", "B", "C"].includes(filters.shift) ? filters.shift : "A",
     site: !filters.siteId || filters.siteId === "All" ? "Gauri" : filters.siteId,
+    company,
   });
   const cacheKey = query.toString();
   const cached = reportCache.get(cacheKey);
@@ -62,20 +69,21 @@ export async function fetchVolvoDriverStandstillReport(filters: DashboardFilters
       if (!response.ok) {
         const message = payload && typeof payload === "object" && "message" in payload
           ? String(payload.message)
-          : "Volvo RFMS did not return the requested shift report.";
-        return errorPreview(message);
+          : `${company} RFMS did not return the requested shift report.`;
+        return errorPreview(message, company);
       }
       if (!isReportPreview(payload)) {
-        return errorPreview("Volvo RFMS returned an invalid shift report.");
+        return errorPreview(`${company} RFMS returned an invalid shift report.`, company);
       }
 
+      const preview = { ...payload, oem: company };
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,
-        preview: payload,
+        preview,
       });
-      return payload;
+      return preview;
     } catch {
-      return errorPreview("The Volvo RFMS shift report service could not be reached.");
+      return errorPreview(`The ${company} RFMS shift report service could not be reached.`, company);
     } finally {
       inFlightReports.delete(cacheKey);
     }

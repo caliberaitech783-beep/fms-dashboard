@@ -188,6 +188,7 @@ function finalizeRow(value, shiftName, shiftDurationHours) {
     drivingKm: round(value.drivingKm),
     dieselEngineOnPercent: round(engineOnPercent),
     averageDieselEngineKmPerLitre: round(efficiency),
+    fuelLitres: round(value.fuelLitres),
     standstillPercent: round(standstillPercent),
     standstillTime: formatHoursMinutes(value.standstillSeconds),
     iShiftPerformanceTimePercent: null,
