@@ -14,12 +14,6 @@ interface GlobalFiltersProps {
   onRefresh: () => void;
 }
 
-const SCANIA_SITE_IDS = new Set([
-  "site-wcl-sasti-ocm",
-  "site-ncl-dch-west",
-  "site-ncl-dch-east",
-]);
-
 export function GlobalFilters({
   filters,
   options,
@@ -27,21 +21,6 @@ export function GlobalFilters({
   resetFilters,
   onRefresh,
 }: GlobalFiltersProps) {
-  const siteOptions = filters.company === "Scania"
-    ? options.sites.filter((site) => SCANIA_SITE_IDS.has(site.value))
-    : options.sites;
-
-  const handleCompanyChange = (company: string) => {
-    setFilter("company", company as DashboardFilters["company"]);
-    if (
-      company === "Scania"
-      && filters.siteId !== "All"
-      && !SCANIA_SITE_IDS.has(filters.siteId)
-    ) {
-      setFilter("siteId", "site-wcl-sasti-ocm");
-    }
-  };
-
   return (
     <div className="sticky top-0 z-20 border-b border-coal-200 bg-coal-50/95 px-4 py-3 backdrop-blur lg:px-6">
       <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -62,11 +41,11 @@ export function GlobalFilters({
         <FilterInput label="From" type="date" value={filters.dateFrom} onChange={(value) => setFilter("dateFrom", value)} />
         <FilterInput label="To" type="date" value={filters.dateTo} onChange={(value) => setFilter("dateTo", value)} />
         <FilterSelect label="Shift" value={filters.shift} options={SHIFT_OPTIONS.map((shift) => ({ value: shift.value, label: shift.label }))} onChange={(value) => setFilter("shift", value as DashboardFilters["shift"])} />
-        <SiteDrilldownSelect value={filters.siteId} options={siteOptions} onChange={(value) => setFilter("siteId", value)} />
+        <SiteDrilldownSelect value={filters.siteId} options={options.sites} onChange={(value) => setFilter("siteId", value)} />
         <FilterSelect label="Types of work" value={filters.contractType} options={withAll(options.contracts, "All Work Types")} onChange={(value) => setFilter("contractType", value as DashboardFilters["contractType"])} />
         <FilterSelect label="Category" value={filters.assetCategory} options={withAll(options.categories)} onChange={(value) => setFilter("assetCategory", value as DashboardFilters["assetCategory"])} />
         <FilterSelect label="Type" value={filters.assetType} options={withAll(options.assetTypes)} onChange={(value) => setFilter("assetType", value as DashboardFilters["assetType"])} />
-        <FilterSelect label="OEM" value={filters.company} options={withAll(options.companies)} onChange={handleCompanyChange} />
+        <FilterSelect label="OEM" value={filters.company} options={withAll(options.companies)} onChange={(value) => setFilter("company", value as DashboardFilters["company"])} />
         <FilterSelect label="Model" value={filters.modelNumber} options={withAll(options.models)} onChange={(value) => setFilter("modelNumber", value)} />
         <FilterInput label="Vehicle" value={filters.vehicleNumber} placeholder="Search vehicle" onChange={(value) => setFilter("vehicleNumber", value)} />
         <FilterSelect label="Status" value={filters.status} options={withAll(options.statuses)} onChange={(value) => setFilter("status", value as DashboardFilters["status"])} />
