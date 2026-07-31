@@ -475,17 +475,10 @@ function matchesSite(vehicle, requestedSite) {
     });
 }
 
-function matchesCompany(vehicle, requestedCompany) {
-  const normalized = String(requestedCompany || "").trim().toLowerCase();
-  if (!normalized || normalized === "all") return true;
-  return String(vehicle?.company || "").trim().toLowerCase() === normalized;
-}
-
 async function loadDriverStandstillReport(request) {
   const requestedDate = String(request.query.get("date") || currentKolkataDate()).trim();
   const shift = String(request.query.get("shift") || "A").trim().toUpperCase();
   const requestedSite = String(request.query.get("site") || "Gauri").trim();
-  const requestedCompany = String(request.query.get("company") || "Volvo").trim();
   const reportSite = requestedSite.toLowerCase() === "all" ? "Gauri" : requestedSite;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || !["A", "B", "C"].includes(shift)) {
     throw Object.assign(new Error("A valid date and Shift A, B, or C are required."), { statusCode: 400 });
@@ -503,7 +496,7 @@ async function loadDriverStandstillReport(request) {
     throw Object.assign(new Error("The selected site does not have a configured shift schedule."), { statusCode: 400 });
   }
 
-  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${requestedCompany.toLowerCase()}`;
+  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}`;
   const cacheMilliseconds = Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000);
   const cached = driverReportCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMilliseconds) {
@@ -511,9 +504,7 @@ async function loadDriverStandstillReport(request) {
   }
 
   const snapshot = await loadSnapshot();
-  const siteVehicles = snapshot.vehicles.filter((vehicle) => (
-    matchesSite(vehicle, reportSite) && matchesCompany(vehicle, requestedCompany)
-  ));
+  const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
   const siteFilterApplied = siteVehicles.length > 0;
   const selectedVehicles = siteVehicles;
   const shiftStart = new Date(window.shiftStart);
@@ -571,7 +562,6 @@ async function loadDriverStandstillReport(request) {
     "Driving (km)": row.drivingKm,
     "Diesel engine on (%)": row.dieselEngineOnPercent,
     "Avg diesel engine on (km/l)": row.averageDieselEngineKmPerLitre,
-    "Fuel consumed (litres)": row.fuelLitres,
     "Standstill (%)": row.standstillPercent,
     "Standstill (hh:mm)": row.standstillTime,
     "Engine load % time of Total time (%)": row.engineLoadPercent,
@@ -583,7 +573,7 @@ async function loadDriverStandstillReport(request) {
     notices.push(`The selected demo date ${requestedDate} is outside Volvo's live history window. Showing ${date} instead.`);
   }
   if (!siteFilterApplied) {
-    notices.push(`No ${requestedCompany || "OEM"} vehicles have a ${scheduleSiteName(reportSite)} site assignment. Configure the VIN-to-site mapping to load this report.`);
+    notices.push(`No Volvo vehicles have a ${scheduleSiteName(reportSite)} site assignment. Configure the Volvo VIN-to-site mapping to load this report.`);
   }
   if (!liveDriverConnected) {
     notices.push("Live Volvo driver details are temporarily unavailable; masked driver identifiers are shown where available.");
@@ -605,7 +595,6 @@ async function loadDriverStandstillReport(request) {
       end: window.shiftEnd,
       timezone: window.timezone,
     },
-    oem: requestedCompany || "Volvo",
     siteFilterApplied,
     driverSource: liveDriverConnected ? "VOLVO_GROUP_DRIVER_API" : "MASKED_IDENTIFIER_FALLBACK",
     driverRecords: driverDirectory.driverCount,
