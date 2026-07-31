@@ -562,6 +562,7 @@ async function loadDriverStandstillReport(request) {
     "Driving (km)": row.drivingKm,
     "Diesel engine on (%)": row.dieselEngineOnPercent,
     "Avg diesel engine on (km/l)": row.averageDieselEngineKmPerLitre,
+    "Fuel consumed (litres)": row.fuelLitres,
     "Standstill (%)": row.standstillPercent,
     "Standstill (hh:mm)": row.standstillTime,
     "Engine load % time of Total time (%)": row.engineLoadPercent,
