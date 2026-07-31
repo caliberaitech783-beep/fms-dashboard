@@ -1,6 +1,7 @@
 import { getAuthSession } from "../../auth/sessionService";
 import type { FleetTelemetryRecord, IntegrationSource, Vehicle, VehicleStatus } from "../../types/fleet";
 import type { FleetDataAdapter } from "../../types/integrations";
+import { resolveOperationalShift } from "../../utils/shiftResolver";
 import { fetchScaniaIntegrationStatus } from "../scaniaReportService";
 import { mockAdapter } from "./mockAdapter";
 
@@ -157,7 +158,7 @@ function toTelemetry(live: LiveVolvoVehicle, vehicle: Vehicle): FleetTelemetryRe
     trackerId: live.vin,
     timestamp: live.eventTime,
     date: live.eventTime.slice(0, 10),
-    shift: "UNKNOWN",
+    shift: resolveOperationalShift(vehicle.siteName, live.eventTime),
     siteId: vehicle.siteId,
     siteName: vehicle.siteName || null,
     assetCategory: vehicle.assetCategory,

@@ -1,4 +1,4 @@
-import type { DashboardFilters } from "../types/fleet";
+import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
 import type { ReportPreview, ReportType } from "../types/reports";
 import { formatDateTime, titleCase } from "../utils/formatters";
 import {
@@ -22,6 +22,7 @@ import {
   invalidateScaniaReportCache,
 } from "./scaniaReportService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
+import { resolveOperationalShift } from "../utils/shiftResolver";
 import {
   buildDriverwiseStandstillPdf,
   isDriverwiseStandstillReport,
@@ -39,6 +40,10 @@ export const reportService = {
     filters: DashboardFilters,
     options: { forceRefresh?: boolean } = {},
   ): Promise<ReportPreview> {
+    if (reportType === "Shift-wise Fuel Report") {
+      return buildShiftWiseFuelReport(filters, options);
+    }
+
     if (reportType === "Driverwise Standstill Tracking") {
       const preview = filters.company === "Scania"
         ? await fetchScaniaDriverStandstillReport(filters, options)
@@ -180,6 +185,268 @@ export const reportService = {
     downloadBlob(blob, fileName);
   },
 };
+
+const SHIFT_REPORT_COLUMNS = [
+  "Shift",
+  "Site",
+  "Vehicles",
+  "Fuel consumed (L)",
+  "Distance (km)",
+  "Running hours",
+  "Idle hours",
+  "Idle (%)",
+  "Efficiency (km/L)",
+  "Trips",
+  "Production (m3)",
+  "Coverage",
+];
+
+async function buildShiftWiseFuelReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  if (filters.company === "Scania") {
+    return buildScaniaShiftWiseFuelReport(filters, options);
+  }
+
+  const data = await getFilteredPortalData({ ...filters, shift: "All" });
+  const vehicleById = new Map(data.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const selectedShift = filters.shift === "All" ? null : filters.shift as ShiftCode;
+  const records = data.filteredRecords
+    .map((record) => {
+      if (record.shift !== "UNKNOWN") return record;
+      const vehicle = vehicleById.get(record.vehicleId);
+      return {
+        ...record,
+        shift: resolveOperationalShift(record.siteName || vehicle?.siteName, record.timestamp),
+      };
+    })
+    .filter((record) => !selectedShift || record.shift === selectedShift);
+
+  if (!records.length) {
+    const oem = filters.company === "All" ? "selected OEM" : filters.company;
+    const shift = selectedShift ? shiftLabel(selectedShift) : "selected shifts";
+    return unavailableShiftReport(
+      `No ${oem} telemetry could be assigned to ${shift}. Check the site mapping and live integration status.`,
+    );
+  }
+
+  const groups = new Map<ShiftCode, FleetTelemetryRecord[]>();
+  records.forEach((record) => {
+    const group = groups.get(record.shift) ?? [];
+    group.push(record);
+    groups.set(record.shift, group);
+  });
+  const shiftOrder: ShiftCode[] = ["A", "B", "C", "ALL_DAY", "UNKNOWN"];
+  const rows = [...groups.entries()]
+    .sort(([left], [right]) => shiftOrder.indexOf(left) - shiftOrder.indexOf(right))
+    .map(([shift, shiftRecords]) => {
+      const latestByVehicle = latestRecordsByVehicle(shiftRecords);
+      const totals = sumRecords(recordsForShiftTotals(shiftRecords));
+      return shiftReportRow({
+        shift: shiftLabel(shift),
+        site: selectedSiteLabel(filters, data.sites),
+        vehicles: latestByVehicle.size,
+        fuel: totals.fuelConsumedLitres,
+        distance: totals.distanceKm,
+        runningHours: totals.runningHours,
+        idleHours: totals.idleHours,
+        engineHours: totals.engineHours,
+        trips: totals.trips,
+        production: totals.productionM3,
+        coverage: shiftCoverage(shiftRecords),
+      });
+    });
+  const live = records.some((record) => record.source !== "DUMMY_SAMPLE");
+
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: SHIFT_REPORT_COLUMNS,
+    rows,
+    live,
+    notice: live
+      ? "Live Volvo rows use each vehicle's latest cumulative RFMS snapshot, assigned by mapped site and Asia/Kolkata event time."
+      : "Generated from normalized period records.",
+  };
+}
+
+async function buildScaniaShiftWiseFuelReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  const siteIds = filters.siteId && filters.siteId !== "All"
+    ? [filters.siteId]
+    : ["site-wcl-sasti-ocm", "site-ncl-dch-west", "site-ncl-dch-east"];
+  const shifts: Extract<ShiftCode, "A" | "B" | "C">[] = (
+    filters.shift === "A" || filters.shift === "B" || filters.shift === "C"
+      ? [filters.shift]
+      : filters.shift === "All" || filters.shift === "ALL_DAY"
+        ? ["A", "B", "C"]
+        : []
+  );
+  if (!shifts.length) {
+    return unavailableShiftReport("Select All Shifts, All Day, Shift A, Shift B, or Shift C for the Scania report.");
+  }
+
+  const scopes = siteIds.flatMap((siteId) => shifts.map((shift) => ({ siteId, shift })));
+  const previews: ReportPreview[] = [];
+  for (let index = 0; index < scopes.length; index += 3) {
+    const batch = scopes.slice(index, index + 3);
+    const batchPreviews = await Promise.all(batch.map((scope) => (
+      fetchScaniaDriverStandstillReport(
+        { ...filters, siteId: scope.siteId, shift: scope.shift },
+        options,
+      )
+    )));
+    previews.push(...batchPreviews);
+  }
+
+  const successful = previews.filter((preview) => preview.live && !preview.error);
+  if (!successful.length) {
+    const firstError = previews.find((preview) => preview.error)?.error;
+    const unavailable = unavailableShiftReport(
+      firstError?.message ?? "Scania returned no live records for the selected sites and shifts.",
+    );
+    return firstError ? { ...unavailable, error: firstError, source: "SCANIA_LIVE_API" } : unavailable;
+  }
+
+  const rows = successful.map((preview) => {
+    const runningHours = sumDurationColumn(preview.rows, "Engine running time (h:m)");
+    const idleHours = sumDurationColumn(preview.rows, "Idling (h:m)");
+    const fuel = sumColumn(preview.rows, "Consumption liquid fuel (litres)");
+    const distance = sumColumn(preview.rows, "Distance driven (km)");
+    return shiftReportRow({
+      shift: shiftLabel(preview.period?.shift as ShiftCode),
+      site: preview.period?.site ?? "Scania site",
+      vehicles: preview.rows.length,
+      fuel,
+      distance,
+      runningHours,
+      idleHours,
+      engineHours: runningHours,
+      trips: 0,
+      production: 0,
+      coverage: "Scania live shift report",
+    });
+  });
+  const failures = previews.length - successful.length;
+
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: SHIFT_REPORT_COLUMNS,
+    rows,
+    oem: "Scania",
+    live: true,
+    source: "SCANIA_LIVE_API",
+    notice: failures
+      ? `${successful.length} Scania site/shift reports loaded; ${failures} could not be loaded. Retry or narrow the filters for details.`
+      : "Generated from Scania live site-wise Vehicle Evaluation data for the selected operational shifts.",
+  };
+}
+
+function unavailableShiftReport(message: string): ReportPreview {
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: ["Status", "Message"],
+    rows: [{ Status: "No shift data", Message: message }],
+    live: false,
+    notice: message,
+  };
+}
+
+function latestRecordsByVehicle(records: FleetTelemetryRecord[]): Map<string, FleetTelemetryRecord> {
+  const latest = new Map<string, FleetTelemetryRecord>();
+  records.forEach((record) => {
+    const current = latest.get(record.vehicleId);
+    if (!current || record.timestamp > current.timestamp) latest.set(record.vehicleId, record);
+  });
+  return latest;
+}
+
+function recordsForShiftTotals(records: FleetTelemetryRecord[]): FleetTelemetryRecord[] {
+  const periodRecords = records.filter((record) => record.source === "DUMMY_SAMPLE");
+  const liveRecords = records.filter((record) => record.source !== "DUMMY_SAMPLE");
+  return [...periodRecords, ...latestRecordsByVehicle(liveRecords).values()];
+}
+
+function shiftReportRow(values: {
+  shift: string;
+  site: string;
+  vehicles: number;
+  fuel: number;
+  distance: number;
+  runningHours: number;
+  idleHours: number;
+  engineHours: number;
+  trips: number;
+  production: number;
+  coverage: string;
+}) {
+  return {
+    Shift: values.shift,
+    Site: values.site,
+    Vehicles: values.vehicles,
+    "Fuel consumed (L)": roundNumber(values.fuel),
+    "Distance (km)": roundNumber(values.distance),
+    "Running hours": roundNumber(values.runningHours),
+    "Idle hours": roundNumber(values.idleHours),
+    "Idle (%)": calculateIdlePercentage(
+      values.idleHours,
+      values.engineHours || values.runningHours + values.idleHours,
+    ),
+    "Efficiency (km/L)": values.fuel > 0 ? roundNumber(values.distance / values.fuel) : null,
+    Trips: roundNumber(values.trips),
+    "Production (m3)": roundNumber(values.production),
+    Coverage: values.coverage,
+  };
+}
+
+function selectedSiteLabel(filters: DashboardFilters, sites: { id: string; name: string }[]) {
+  if (!filters.siteId || filters.siteId === "All") return "All sites";
+  return sites.find((site) => site.id === filters.siteId)?.name ?? filters.siteId;
+}
+
+function shiftLabel(shift: ShiftCode | undefined): string {
+  if (shift === "ALL_DAY") return "All day";
+  if (shift === "UNKNOWN" || !shift) return "Unresolved shift";
+  return `Shift ${shift}`;
+}
+
+function shiftCoverage(records: FleetTelemetryRecord[]): string {
+  const sources = new Set(records.map((record) => record.source));
+  const labels: string[] = [];
+  if (sources.has("VOLVO_RFMS_LIVE")) labels.push("Volvo live cumulative snapshot");
+  if (sources.has("SCANIA_RFMS_LIVE")) labels.push("Scania live cumulative snapshot");
+  if (sources.has("DUMMY_SAMPLE")) labels.push("Sample period data");
+  return labels.join(" + ") || "No source";
+}
+
+function sumColumn(rows: ReportPreview["rows"], column: string): number {
+  return rows.reduce((sum, row) => sum + numericValue(row[column]), 0);
+}
+
+function sumDurationColumn(rows: ReportPreview["rows"], column: string): number {
+  return rows.reduce((sum, row) => sum + durationHours(row[column]), 0);
+}
+
+function numericValue(value: string | number | null | undefined): number {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function durationHours(value: string | number | null | undefined): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const match = String(value || "").match(/^(\d+):(\d{1,2})$/);
+  return match ? Number(match[1]) + Number(match[2]) / 60 : 0;
+}
+
+function roundNumber(value: number, digits = 2): number {
+  const factor = 10 ** digits;
+  return Math.round((Number.isFinite(value) ? value : 0) * factor) / factor;
+}
 
 function rowsToCsv(rows: Record<string, string | number | null>[], columns: string[]) {
   const escapeCell = (value: string | number | null) => {

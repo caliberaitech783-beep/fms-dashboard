@@ -74,6 +74,7 @@ export function ReportsDashboard({
         if (mounted) {
           setPreview(null);
           setPreviewLoading(false);
+          timingCompleteRef.current?.("Report failed", performance.now() - startedAt);
         }
       });
 
@@ -81,12 +82,6 @@ export function ReportsDashboard({
       mounted = false;
     };
   }, [filters, refreshKey, selectedReport]);
-
-  useEffect(() => {
-    if (selectedReport !== "Driverwise Standstill Tracking") {
-      void reportService.prefetchReportPreview("Driverwise Standstill Tracking", filters);
-    }
-  }, [filters, selectedReport]);
 
   useEffect(() => {
     setExplorerState(selectedReport === "Driverwise Standstill Tracking"
@@ -261,13 +256,25 @@ export function ReportsDashboard({
             subDrilldownColumn={activeExplorerState.subDrilldownColumn}
           />
         ) : (
-          <ReportPreviewTable
-            reportType={selectedReport}
-            columns={explorerColumns}
-            rows={exploredRows}
-            drilldownColumn={activeExplorerState.drilldownColumn}
-            subDrilldownColumn={activeExplorerState.subDrilldownColumn}
-          />
+          <div className="space-y-3">
+            {preview.error && (
+              <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {preview.error.message}
+              </div>
+            )}
+            {!preview.error && preview.notice && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {preview.notice}
+              </div>
+            )}
+            <ReportPreviewTable
+              reportType={selectedReport}
+              columns={explorerColumns}
+              rows={exploredRows}
+              drilldownColumn={activeExplorerState.drilldownColumn}
+              subDrilldownColumn={activeExplorerState.subDrilldownColumn}
+            />
+          </div>
         )}
       </Panel>
 
