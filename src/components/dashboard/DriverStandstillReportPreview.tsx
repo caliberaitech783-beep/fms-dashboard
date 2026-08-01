@@ -38,6 +38,7 @@ export const driverStandstillDisplayColumns = [
 
 export const scaniaStandstillDisplayColumns = [
   "Registration number",
+  DRIVER,
   "Engine running time (h:m)",
   "Distance driven (km)",
   "Consumption liquid fuel (km/l)",
@@ -101,7 +102,7 @@ export function DriverStandstillReportPreview({
       {period && (
         <div className="border-b-2 border-[#213d68] pb-4">
           <h3 className="text-xl font-semibold text-[#213d68]">
-            {scania ? "Scania Vehicle Report" : "Driverwise Standstill Tracking"} |{" "}
+            Driverwise Standstill Tracking |{" "}
             {period.site ?? "All Sites"} | Shift {period.shift}
           </h3>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-coal-600">

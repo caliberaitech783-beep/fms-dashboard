@@ -224,6 +224,18 @@ class ScaniaClient {
           options.driverEvaluationResultUrl,
         )
         : null,
+      vehicleDriverEvaluation: options.vehicleDriverEvaluationUrl
+        ? configuredUrl(
+          "SCANIA_VEHICLE_DRIVER_EVALUATION_URL",
+          options.vehicleDriverEvaluationUrl,
+        )
+        : null,
+      trackingHistory: options.trackingHistoryUrl
+        ? configuredUrl("SCANIA_TRACKING_HISTORY_URL", options.trackingHistoryUrl)
+        : null,
+      health: options.healthUrl
+        ? configuredUrl("SCANIA_HEALTH_URL", options.healthUrl)
+        : null,
     };
     this.accept = {
       vehicles: String(options.acceptVehicles || ACCEPT_HEADERS.vehicles).trim(),
@@ -609,6 +621,51 @@ class ScaniaClient {
     });
   }
 
+  async getVehicleDriverEvaluation(query = {}) {
+    if (!this.urls.vehicleDriverEvaluation) {
+      throw new ScaniaApiError("SCANIA_VEHICLE_DRIVER_EVALUATION_URL is not configured.", {
+        kind: "configuration",
+        statusCode: 503,
+      });
+    }
+    return this.requestJson({
+      url: this.urls.vehicleDriverEvaluation,
+      query,
+      accept: ACCEPT_HEADERS.json,
+      operation: "vehicle_driver_evaluation",
+    });
+  }
+
+  async getTrackingHistory(query = {}) {
+    if (!this.urls.trackingHistory) {
+      throw new ScaniaApiError("SCANIA_TRACKING_HISTORY_URL is not configured.", {
+        kind: "configuration",
+        statusCode: 503,
+      });
+    }
+    const result = await this.requestJson({
+      url: this.urls.trackingHistory,
+      query,
+      accept: ACCEPT_HEADERS.json,
+      operation: "tracking_history",
+    });
+    return { ...result, records: positionRows(result.payload) };
+  }
+
+  async getHealth() {
+    if (!this.urls.health) {
+      throw new ScaniaApiError("SCANIA_HEALTH_URL is not configured.", {
+        kind: "configuration",
+        statusCode: 503,
+      });
+    }
+    return this.requestJson({
+      url: this.urls.health,
+      accept: ACCEPT_HEADERS.json,
+      operation: "health",
+    });
+  }
+
   async collectPages(options) {
     const records = [];
     let pageUrl = options.url;
@@ -693,6 +750,9 @@ function createScaniaClientFromEnv(options = {}) {
       || env.SCANIA_DRIVER_EVALUATION_V1_URL,
     driverEvaluationRequestUrl: env.SCANIA_DRIVER_EVALUATION_V3_REQUEST_URL,
     driverEvaluationResultUrl: env.SCANIA_DRIVER_EVALUATION_V3_RESPONSE_URL,
+    vehicleDriverEvaluationUrl: env.SCANIA_VEHICLE_DRIVER_EVALUATION_URL,
+    trackingHistoryUrl: env.SCANIA_TRACKING_HISTORY_URL,
+    healthUrl: env.SCANIA_HEALTH_URL,
     gasQueryParameter: env.SCANIA_VEHICLE_EVALUATION_GAS_QUERY_PARAM,
     timeoutMs: Number(
       env.SCANIA_HTTP_TIMEOUT_MS

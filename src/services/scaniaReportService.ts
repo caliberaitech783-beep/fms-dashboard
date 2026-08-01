@@ -8,6 +8,7 @@ const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE
 const REPORT_CACHE_MS = 5 * 60_000;
 const SCANIA_REPORT_COLUMNS = [
   "Registration number",
+  "Drivers",
   "Engine running time (h:m)",
   "Distance driven (km)",
   "Consumption liquid fuel (km/l)",
@@ -37,6 +38,8 @@ const SCANIA_SHIFT_REPORT_COLUMNS = [
 interface ScaniaReportRow {
   registrationNumber: string;
   vin: string;
+  driverName: string;
+  driverReference: string | null;
   engineRunningTime: string | null;
   distanceDrivenKm: number | null;
   fuelEconomyKmPerLitre: number | null;
@@ -207,6 +210,7 @@ function isScaniaShiftSummaryResponse(value: unknown): value is ScaniaShiftSumma
 function displayRow(row: ScaniaReportRow): ReportPreview["rows"][number] {
   return {
     "Registration number": row.registrationNumber,
+    "Drivers": row.driverName || "Unknown",
     "Engine running time (h:m)": row.engineRunningTime,
     "Distance driven (km)": row.distanceDrivenKm,
     "Consumption liquid fuel (km/l)": row.fuelEconomyKmPerLitre,

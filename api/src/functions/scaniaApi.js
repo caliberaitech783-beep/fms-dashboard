@@ -23,6 +23,8 @@ const {
   getLiveScaniaSnapshot,
   synchronizeScania,
 } = require("../lib/scania/scaniaSyncService");
+const { synchronizeScaniaAnalytics } = require("../lib/scania/scaniaAnalyticsSync");
+const { listSnapshotMetadata } = require("../lib/scania/scaniaAnalyticsStore");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
 let shiftStatusCache = null;
@@ -413,15 +415,26 @@ async function handleSnapshot(request, context) {
 
 async function handleManualRefresh(request, context) {
   return withLiveActor(request, "manual refresh", async () => {
-    const sync = await synchronizeScania({ force: true });
+    const [sync, analytics] = await Promise.all([
+      synchronizeScania({ force: true }),
+      synchronizeScaniaAnalytics(),
+    ]);
     clearScaniaLiveCache();
     shiftStatusCache = null;
     return response(request, 200, {
       ok: true,
       sync,
+      analytics,
       snapshot: await getLiveScaniaSnapshot({ allowBootstrap: false, force: true }),
     });
   }, context);
+}
+
+async function handleAnalyticsStatus(request, context) {
+  return withLiveActor(request, "analytics status", async () => response(request, 200, {
+    tableName: process.env.SCANIA_ANALYTICS_TABLE_NAME || "ScaniaApiSnapshots",
+    resources: await listSnapshotMetadata(),
+  }), context);
 }
 
 async function handleInternalSync(request, context) {
@@ -480,14 +493,28 @@ async function handleVehicleEvaluation(request, context) {
       });
     }
     const logger = createLogger(context);
-    const importedVehicles = await listImportedVehicles();
+    const [importedVehicles, snapshot] = await Promise.all([
+      listImportedVehicles(),
+      getLiveScaniaSnapshot({ allowBootstrap: true }),
+    ]);
+    const scaniaSiteMasters = snapshot.vehicles.map((vehicle) => ({
+      vin: vehicle.trackerId,
+      vehicleNumber: vehicle.vehicleNumber,
+      vehicleModel: vehicle.modelNumber,
+      siteId: vehicle.siteId,
+      siteName: vehicle.siteName,
+      siteGroup: vehicle.siteGroup,
+      contractType: vehicle.contractType,
+      active: vehicle.active,
+    }));
+    const reportVehicles = [...importedVehicles, ...scaniaSiteMasters];
     const evaluationConfigured = Boolean(
       process.env.SCANIA_VEHICLE_EVALUATION_GAS_URL
       || process.env.SCANIA_VEHICLE_EVALUATION_URL,
     );
     const result = evaluationConfigured
-      ? await generateVehicleEvaluationReport(body, { importedVehicles, logger })
-      : await generateScaniaStatusReport(body, { importedVehicles });
+      ? await generateVehicleEvaluationReport(body, { importedVehicles: reportVehicles, logger })
+      : await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
     return response(request, 200, result);
   }, context);
 }
@@ -505,6 +532,7 @@ async function getShiftStatusSnapshot(logger) {
       const result = {
         endpoint: "ScaniaVehicleState",
         status: 200,
+        vehicles: snapshot.vehicles,
         records: snapshot.telemetry
           .map((record) => record.rawMetrics.scaniaStatus)
           .filter(Boolean),
@@ -556,10 +584,22 @@ async function handleShiftSummary(request, context) {
       getShiftStatusSnapshot(logger),
       listImportedVehicles(),
     ]);
+    const scaniaSiteMasters = (statusResult.vehicles || []).map((vehicle) => ({
+      vin: vehicle.trackerId,
+      vehicleNumber: vehicle.vehicleNumber,
+      siteId: vehicle.siteId,
+      siteName: vehicle.siteName,
+      siteGroup: vehicle.siteGroup,
+      contractType: vehicle.contractType,
+      active: vehicle.active,
+    }));
     const report = buildScaniaShiftSummary({
-      vehicles: [],
+      vehicles: scaniaSiteMasters.map((vehicle) => ({
+        vin: vehicle.vin,
+        customerVehicleName: vehicle.vehicleNumber,
+      })),
       statuses: statusResult.records,
-      importedVehicles,
+      importedVehicles: [...importedVehicles, ...scaniaSiteMasters],
       request: requestDetails,
     });
     logger("shift_summary_complete", {
@@ -622,6 +662,13 @@ app.http("scaniaManualRefresh", {
   handler: handleManualRefresh,
 });
 
+app.http("scaniaAnalyticsStatus", {
+  route: "scania/analytics/status",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: handleAnalyticsStatus,
+});
+
 app.http("scaniaInternalSync", {
   route: "internal/scania-sync",
   authLevel: "anonymous",
@@ -654,10 +701,27 @@ app.timer("scaniaScheduledSync", {
   },
 });
 
+app.timer("scaniaAnalyticsScheduledSync", {
+  schedule: "0 */30 * * * *",
+  handler: async (_timer, context) => {
+    const configured = Boolean(
+      process.env.SCANIA_ACCESS_TOKEN
+      || (process.env.SCANIA_CLIENT_ID && (process.env.SCANIA_CLIENT_SECRET || process.env.SCANIA_SECRET_KEY)),
+    );
+    if (!configured) return;
+    try {
+      await synchronizeScaniaAnalytics();
+    } catch (error) {
+      context.error("Scheduled Scania analytics synchronization failed", safeErrorMessage(error, scaniaSecrets()));
+    }
+  },
+});
+
 module.exports = {
   createLogger,
   exceptionItem,
   failureResponse,
+  handleAnalyticsStatus,
   handleExceptions,
   handlePositions,
   handleSnapshot,

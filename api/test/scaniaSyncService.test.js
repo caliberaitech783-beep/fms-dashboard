@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const {
   getLiveScaniaSnapshot,
+  normalizePosition,
   runSynchronization,
 } = require("../src/lib/scania/scaniaSyncService");
 
@@ -110,4 +111,24 @@ test("marks an old persisted Scania snapshot offline without deleting it", async
   });
   assert.equal(snapshot.vehicles[0].status, "offline");
   assert.equal(snapshot.telemetry[0].status, "offline");
+});
+
+test("normalizes the lower-camel Scania RFMS live position envelope", () => {
+  const normalized = normalizePosition({
+    vin: "SCANIA-VIN-LIVE",
+    createdDateTime: "2026-08-01T05:00:00",
+    receivedDateTime: "2026-08-01T05:00:05",
+    gnssPosition: {
+      latitude: 19.805826,
+      longitude: 79.30822,
+      heading: "25",
+      speed: 0,
+    },
+    wheelBasedSpeed: 0,
+  }, "2026-08-01T05:01:00.000Z");
+
+  assert.equal(normalized.latitude, 19.805826);
+  assert.equal(normalized.longitude, 79.30822);
+  assert.equal(normalized.heading, 25);
+  assert.equal(normalized.speedKph, 0);
 });
