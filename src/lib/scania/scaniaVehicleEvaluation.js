@@ -134,6 +134,57 @@ function formatReportQueryTimestamp(value, timezone = "Asia/Kolkata") {
   return `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}`;
 }
 
+function arrayOf(value) {
+  if (Array.isArray(value)) return value;
+  return value && typeof value === "object" ? [value] : [];
+}
+
+function driverAssignmentsFromPayload(payload) {
+  const assignments = new Map();
+  const drivers = arrayOf(
+    payload?.Drivers
+    || payload?.EvaluationDriversWithIdentification?.Drivers?.EvaluationDriverWithIdentification
+    || payload?.EvaluationDriversWithIdentification?.Drivers
+    || payload?.EvaluationDrivers?.Drivers?.EvaluationDriver
+    || payload?.EvaluationDrivers?.Drivers,
+  );
+  for (const driver of drivers) {
+    const name = String(driver?.DriverName || "").trim();
+    const reference = String(
+      driver?.DriverIdentification
+      || driver?.DriverRef
+      || "",
+    ).trim();
+    const maskedReference = reference
+      ? `Driver ****${reference.slice(-4)}`
+      : "Unknown";
+    const assignment = {
+      driverName: name || maskedReference,
+      driverReference: reference || null,
+    };
+    for (const vehicle of arrayOf(driver?.Vehicles)) {
+      const keys = [
+        vehicle?.Vin,
+        vehicle?.LicensePlate,
+        normalizeRegistration(vehicle?.CustomerVehicleName),
+      ].map(normalizeKey).filter(Boolean);
+      for (const key of keys) assignments.set(key, assignment);
+    }
+  }
+  return assignments;
+}
+
+function formatReportQueryDate(value, timezone = "Asia/Kolkata") {
+  const date = localDateInTimezone(value, timezone);
+  if (!date) {
+    throw new ScaniaApiError("Report startTime must be a valid ISO timestamp.", {
+      kind: "validation",
+      statusCode: 400,
+    });
+  }
+  return date;
+}
+
 function localDateInTimezone(value, timezone) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return null;
@@ -235,12 +286,13 @@ function validateReportInput(input) {
 }
 
 function reportRowsFromPayload(payload) {
-  const gas = payload?.EvaluationVehiclesWithGasConsumption
-    ?.VehicleList
-    ?.EvaluationVehicleWithGasConsumption;
-  const standard = payload?.EvaluationVehicles
-    ?.VehicleList
-    ?.EvaluationVehicle;
+  const wrappedGasList = payload?.EvaluationVehiclesWithGasConsumption?.VehicleList;
+  const wrappedStandardList = payload?.EvaluationVehicles?.VehicleList;
+  const gas = wrappedGasList?.EvaluationVehicleWithGasConsumption
+    || (Array.isArray(wrappedGasList) ? wrappedGasList : null);
+  const standard = wrappedStandardList?.EvaluationVehicle
+    || (Array.isArray(wrappedStandardList) ? wrappedStandardList : null)
+    || payload?.VehicleList;
   const rows = Array.isArray(gas)
     ? gas
     : gas && typeof gas === "object"
@@ -255,6 +307,7 @@ function reportRowsFromPayload(payload) {
     source: gas ? "vehicle-evaluation-with-gas-consumption" : standard ? "vehicle-evaluation" : null,
     evaluation: payload?.EvaluationVehiclesWithGasConsumption
       || payload?.EvaluationVehicles
+      || (payload?.VehicleList ? payload : null)
       || null,
   };
 }
@@ -332,7 +385,7 @@ function masterMatchesSite(master, mapping) {
   ));
 }
 
-function normalizeScaniaReportRow(row, master, fallbackStopTime) {
+function normalizeScaniaReportRow(row, master, fallbackStopTime, driverAssignment = null) {
   const registrationNumber = normalizeRegistration(
     master?.vehicleNumber
     || row?.LicensePlate
@@ -343,6 +396,8 @@ function normalizeScaniaReportRow(row, master, fallbackStopTime) {
   return {
     registrationNumber,
     vin,
+    driverName: driverAssignment?.driverName || "Unknown",
+    driverReference: driverAssignment?.driverReference || null,
     engineRunningTime: normalizeDurationHhMm(row?.EngineRunningTime),
     distanceDrivenKm: round(row?.Distance, 2),
     fuelEconomyKmPerLitre:
@@ -358,7 +413,7 @@ function normalizeScaniaReportRow(row, master, fallbackStopTime) {
   };
 }
 
-function filterAndNormalizeRows(rawRows, importedVehicles, request) {
+function filterAndNormalizeRows(rawRows, importedVehicles, request, driverAssignments = new Map()) {
   const lookup = masterLookup(importedVehicles);
   const siteMasters = (importedVehicles || []).filter((master) => (
     masterMatchesSite(master, request.siteMapping)
@@ -394,7 +449,16 @@ function filterAndNormalizeRows(rawRows, importedVehicles, request) {
       filterCounts.engineRunningTimeUnder30Minutes += 1;
       continue;
     }
-    const normalized = normalizeScaniaReportRow(rawRow, master, request.stopTime);
+    const driverAssignment = driverAssignments.get(normalizeKey(rawRow?.Vin))
+      || driverAssignments.get(normalizeKey(rawRow?.LicensePlate))
+      || driverAssignments.get(normalizeKey(normalizeRegistration(rawRow?.CustomerVehicleName)))
+      || null;
+    const normalized = normalizeScaniaReportRow(
+      rawRow,
+      master,
+      request.stopTime,
+      driverAssignment,
+    );
     const vehicleKey = normalizeKey(normalized.vin || normalized.registrationNumber);
     if (!vehicleKey) {
       filterCounts.missingVehicleMaster += 1;
@@ -547,17 +611,23 @@ async function generateVehicleEvaluationReport(input, options = {}) {
   });
 
   const query = {
-    startDate: formatReportQueryTimestamp(
+    startDate: formatReportQueryDate(
       request.startTime,
       request.siteMapping.timezone,
     ),
-    stopDate: formatReportQueryTimestamp(
-      request.stopTime,
-      request.siteMapping.timezone,
-    ),
-    timeZone: request.siteMapping.scaniaTimezone,
   };
-  const initialResult = await client.getVehicleEvaluationWithGasConsumption(query);
+  const [initialResult, driverResult] = await Promise.all([
+    client.getVehicleEvaluationWithGasConsumption(query),
+    typeof client.getDriverEvaluation === "function"
+      ? client.getDriverEvaluation(query).catch((error) => {
+        logger("driver_evaluation_unavailable", {
+          kind: error?.kind || "upstream",
+          httpStatus: error?.httpStatus || null,
+        });
+        return null;
+      })
+      : Promise.resolve(null),
+  ]);
   const completed = await pollCompletedReport(initialResult, request, {
     client,
     logger,
@@ -578,6 +648,7 @@ async function generateVehicleEvaluationReport(input, options = {}) {
     completed.rows,
     importedVehicles,
     request,
+    driverAssignmentsFromPayload(driverResult?.payload),
   );
   for (const [filter, count] of Object.entries(normalized.filterCounts)) {
     logger("records_removed", { filter, count });
@@ -606,6 +677,7 @@ async function generateVehicleEvaluationReport(input, options = {}) {
       httpStatus: completed.status,
       rawRecordCount: completed.rows.length,
       finalFilteredVehicleCount: normalized.rows.length,
+      driverAssignmentCount: normalized.rows.filter((row) => row.driverName !== "Unknown").length,
       filterCounts: normalized.filterCounts,
       siteVehicleMasterCount: normalized.siteMasterCount,
       sessionId: maskSessionId(completed.sessionId),
@@ -626,9 +698,11 @@ module.exports = {
   averageFuelConsumptionLitresPer100KmToKmPerLitre,
   canonicalShiftWindow,
   durationMinutes,
+  driverAssignmentsFromPayload,
   extractPollingStatus,
   extractSessionId,
   filterAndNormalizeRows,
+  formatReportQueryDate,
   formatReportQueryTimestamp,
   generateVehicleEvaluationReport,
   localScaniaDateTimeToIso,

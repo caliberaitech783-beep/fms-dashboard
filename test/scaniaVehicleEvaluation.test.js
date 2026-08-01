@@ -1,10 +1,12 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const {
+  driverAssignmentsFromPayload,
   averageFuelConsumptionLitresPer100KmToKmPerLitre,
   filterAndNormalizeRows,
   generateVehicleEvaluationReport,
   pollCompletedReport,
+  reportRowsFromPayload,
   validateReportInput,
 } = require("../src/lib/scania/scaniaVehicleEvaluation");
 
@@ -141,6 +143,8 @@ test("normalizes live rows and records every site/master/time filter removal", (
   assert.deepEqual(result.rows[0], {
     registrationNumber: "S483",
     vin: "VIN-S483",
+    driverName: "Unknown",
+    driverReference: null,
     engineRunningTime: "1:14",
     distanceDrivenKm: 14.44,
     fuelEconomyKmPerLitre: 1.38,
@@ -228,9 +232,7 @@ test("returns normalized live report metadata without hard-coded vehicle rows", 
     client: {
       async getVehicleEvaluationWithGasConsumption(query) {
         assert.deepEqual(query, {
-          startDate: "202607310500",
-          stopDate: "202607311300",
-          timeZone: "(UTC+05:30) India Standard Time (Kolkata)",
+          startDate: "2026-07-31",
         });
         return {
           payload,
@@ -251,4 +253,29 @@ test("returns normalized live report metadata without hard-coded vehicle rows", 
   assert.equal(result.period.start, "2026-07-31T05:00:00+05:30");
   assert.equal(result.period.end, "2026-07-31T13:00:00+05:30");
   assert.equal(result.period.scaniaSite, "Dudhichua Singrauli");
+});
+
+test("parses the direct Scania Vehicle Evaluation envelope used by the live API", () => {
+  const payload = {
+    EvaluationStart: "20260801",
+    EvaluationEnd: null,
+    VehicleList: [gasRow()],
+  };
+  const parsed = reportRowsFromPayload(payload);
+  assert.equal(parsed.rows.length, 1);
+  assert.equal(parsed.rows[0].Vin, "VIN-S483");
+  assert.equal(parsed.source, "vehicle-evaluation");
+  assert.equal(parsed.evaluation, payload);
+});
+
+test("joins Scania Driver Evaluation identities to their vehicle VINs", () => {
+  const assignments = driverAssignmentsFromPayload({
+    Drivers: [{
+      DriverName: "Test Driver",
+      DriverIdentification: "12345678",
+      Vehicles: [{ Vin: "VIN-S483", CustomerVehicleName: "S483" }],
+    }],
+  });
+  assert.equal(assignments.get("vin s483").driverName, "Test Driver");
+  assert.equal(assignments.get("s483").driverReference, "12345678");
 });

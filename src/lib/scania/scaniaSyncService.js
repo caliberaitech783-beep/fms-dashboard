@@ -3,6 +3,7 @@ const defaultStore = require("./scaniaStateStore");
 const { listVehicles: listImportedVehicles } = require("../vehicles/vehicleStore");
 const { normalizeKey, prepareImportedVehicle } = require("../vehicles/vehicleMasterIntegration");
 const { resolveShift } = require("../tracking/shiftResolver");
+const { resolveScaniaSite } = require("./scaniaSiteResolver");
 
 const SOURCE = "SCANIA_RFMS_LIVE";
 const CURSOR_RESOURCE = "scania-live-snapshot";
@@ -61,7 +62,11 @@ function positionTimestamp(position) {
   const tracks = position?.VehicleTrackingPositions || position?.vehicleTrackingPositions;
   const latest = Array.isArray(tracks) ? tracks.at(-1) : tracks;
   const snapshot = position?.snapshotData || position?.SnapshotData || {};
-  const gnss = snapshot?.gnssPosition || snapshot?.GnssPosition || {};
+  const gnss = position?.gnssPosition
+    || position?.GnssPosition
+    || snapshot?.gnssPosition
+    || snapshot?.GnssPosition
+    || {};
   return normalizeTimestamp(
     latest?.TimePosition,
     latest?.timePosition,
@@ -96,7 +101,51 @@ function normalizeMaster(vehicle) {
     model: firstText(vehicle?.model, vehicle?.Model),
     productionDate: vehicle?.productionDate || vehicle?.ProductionDate || null,
     authorizedPaths: vehicle?.authorizedPaths || vehicle?.AuthorizedPaths || [],
+    siteId: vehicle?.siteId || null,
+    siteName: vehicle?.siteName || null,
+    siteGroup: vehicle?.siteGroup || null,
+    contractType: vehicle?.contractType || null,
+    siteAssignment: vehicle?.siteAssignment || null,
     raw: vehicle,
+  };
+}
+
+function assignMasterSite(master, position, existingMaster, env = process.env) {
+  if (String(existingMaster?.siteAssignment?.method || "").startsWith("connected-fleet-workbook")) {
+    return {
+      ...master,
+      vehicleNumber: existingMaster.vehicleNumber || master.vehicleNumber,
+      siteId: existingMaster.siteId || null,
+      siteName: existingMaster.siteName || null,
+      siteGroup: existingMaster.siteGroup || null,
+      contractType: existingMaster.contractType || null,
+      siteAssignment: existingMaster.siteAssignment,
+      connectedFleet: existingMaster.connectedFleet || null,
+    };
+  }
+  const resolved = resolveScaniaSite(position, env);
+  if (resolved) {
+    return {
+      ...master,
+      siteId: resolved.id,
+      siteName: resolved.name,
+      siteGroup: resolved.group,
+      contractType: resolved.contractType,
+      siteAssignment: {
+        method: resolved.assignedBy,
+        distanceKm: resolved.distanceKm,
+        assignedAt: position?.recordedAt || new Date().toISOString(),
+      },
+    };
+  }
+  if (!existingMaster?.siteId && !existingMaster?.siteName) return master;
+  return {
+    ...master,
+    siteId: existingMaster.siteId || null,
+    siteName: existingMaster.siteName || null,
+    siteGroup: existingMaster.siteGroup || null,
+    contractType: existingMaster.contractType || null,
+    siteAssignment: existingMaster.siteAssignment || null,
   };
 }
 
@@ -107,13 +156,24 @@ function normalizePosition(position, syncedAt) {
   const latest = Array.isArray(tracks) ? tracks.at(-1) : tracks;
   const header = position?.VehiclePositionHeader || position?.vehiclePositionHeader || latest || position;
   const snapshot = position?.snapshotData || position?.SnapshotData || {};
-  const gnss = snapshot?.gnssPosition || snapshot?.GnssPosition || {};
+  const gnss = position?.gnssPosition
+    || position?.GnssPosition
+    || snapshot?.gnssPosition
+    || snapshot?.GnssPosition
+    || {};
   return {
     vin,
     recordedAt: positionTimestamp(position),
     latitude: finiteNumber(header?.Latitude, header?.latitude, gnss?.latitude),
     longitude: finiteNumber(header?.Longitude, header?.longitude, gnss?.longitude),
-    speedKph: finiteNumber(header?.Speed, header?.speed, gnss?.speed, snapshot?.wheelBasedSpeed),
+    speedKph: finiteNumber(
+      header?.Speed,
+      header?.speed,
+      gnss?.speed,
+      position?.wheelBasedSpeed,
+      position?.WheelBasedSpeed,
+      snapshot?.wheelBasedSpeed,
+    ),
     heading: finiteNumber(header?.Heading, header?.heading, gnss?.heading),
     ignition: firstText(header?.Ignition, header?.ignition, snapshot?.ignitionState),
     syncedAt,
@@ -192,6 +252,7 @@ function toPortalSnapshot(input) {
   const knownVins = new Set(mergedMasters.map((master) => master.vin));
   for (const state of input.states) {
     if (!knownVins.has(state.vin)) {
+      const inferredSite = resolveScaniaSite(positionByVin.get(state.vin));
       mergedMasters.push({
         vin: state.vin,
         vehicleNumber: state.vin,
@@ -200,6 +261,14 @@ function toPortalSnapshot(input) {
         model: null,
         productionDate: null,
         authorizedPaths: [],
+        siteId: inferredSite?.id || null,
+        siteName: inferredSite?.name || null,
+        siteGroup: inferredSite?.group || null,
+        contractType: inferredSite?.contractType || null,
+        siteAssignment: inferredSite ? {
+          method: inferredSite.assignedBy,
+          distanceKm: inferredSite.distanceKm,
+        } : null,
         raw: null,
         importedVehicleMaster: null,
       });
@@ -212,6 +281,19 @@ function toPortalSnapshot(input) {
     const state = stateByVin.get(master.vin) || null;
     const position = positionByVin.get(master.vin) || null;
     const imported = master.importedVehicleMaster;
+    const resolvedSite = imported?.siteId || imported?.siteName
+      ? {
+        id: imported.siteId || null,
+        name: imported.siteName || null,
+        group: imported.siteGroup || null,
+        contractType: imported.contractType || null,
+      }
+      : {
+        id: master.siteId || null,
+        name: master.siteName || null,
+        group: master.siteGroup || null,
+        contractType: master.contractType || null,
+      };
     const currentStatus = statusFor(state, position, now);
     const timestamp = state?.recordedAt || position?.recordedAt || input.cursor?.updatedAt || now.toISOString();
     const vehicle = {
@@ -226,9 +308,10 @@ function toPortalSnapshot(input) {
       fuelMeasurementUnit: "km/L",
       trackerProvider: "Scania RFMS",
       trackerId: master.vin,
-      siteId: imported?.siteId || null,
-      siteName: imported?.siteName || null,
-      contractType: imported?.contractType || null,
+      siteId: resolvedSite.id,
+      siteName: resolvedSite.name,
+      siteGroup: resolvedSite.group,
+      contractType: resolvedSite.contractType,
       status: currentStatus.value,
       commissioningDate: null,
       fuelTankCapacityLitres: null,
@@ -345,7 +428,10 @@ async function runSynchronization(options = {}) {
   const client = options.client || createScaniaClientFromEnv();
   const now = options.now instanceof Date ? options.now : new Date(options.now || Date.now());
   const syncedAt = now.toISOString();
-  const previousCursor = await store.getCursor(CURSOR_RESOURCE);
+  const [previousCursor, persistedMasters] = await Promise.all([
+    store.getCursor(CURSOR_RESOURCE),
+    store.loadMasterRecords(),
+  ]);
   const [vehicleResult, statusResult, positionResult] = await Promise.allSettled([
     client.getVehicles(),
     client.getVehicleStatuses(),
@@ -353,9 +439,6 @@ async function runSynchronization(options = {}) {
   ]);
   if (statusResult.status === "rejected") throw statusResult.reason;
 
-  const masters = vehicleResult.status === "fulfilled"
-    ? vehicleResult.value.records.map(normalizeMaster).filter(Boolean)
-    : [];
   const states = [...latestByVin(statusResult.value.records, statusTimestamp).values()]
     .map(({ record }) => normalizeState(record, syncedAt))
     .filter(Boolean);
@@ -363,6 +446,19 @@ async function runSynchronization(options = {}) {
     ? [...latestByVin(positionResult.value.records, positionTimestamp).values()]
       .map(({ record }) => normalizePosition(record, syncedAt))
       .filter(Boolean)
+    : [];
+  const positionByVin = new Map(positions.map((position) => [position.vin, position]));
+  const persistedByVin = new Map(persistedMasters.map((master) => [master.vin, master]));
+  const masters = vehicleResult.status === "fulfilled"
+    ? vehicleResult.value.records
+      .map(normalizeMaster)
+      .filter(Boolean)
+      .map((master) => assignMasterSite(
+        master,
+        positionByVin.get(master.vin),
+        persistedByVin.get(master.vin),
+        options.env || process.env,
+      ))
     : [];
 
   const [masterSave, stateSave, positionSave] = await Promise.all([
@@ -445,6 +541,7 @@ module.exports = {
   getLiveScaniaSnapshot,
   latestByVin,
   mergeApiAndImportedMasters,
+  assignMasterSite,
   normalizeMaster,
   normalizePosition,
   normalizeState,
