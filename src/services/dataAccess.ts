@@ -10,7 +10,7 @@ import type {
   WhatsAppReportSchedule,
 } from "../types/fleet";
 import { getWorkbookMakeName, getWorkbookModelName } from "../constants/modelMake";
-import { filterTelemetryRecords, filterVehicles } from "../utils/filters";
+import { filterTelemetryRecords, filterVehicles, isLiveOemSource } from "../utils/filters";
 
 export interface PortalData {
   sites: Site[];
@@ -83,7 +83,7 @@ export async function getFilteredPortalData(filters: DashboardFilters) {
     ...data,
     filteredVehicles: filteredVehicles.filter((vehicle) => (
       filteredVehicleIds.has(vehicle.id)
-      || vehicle.source === "VOLVO_RFMS_LIVE"
+      || isLiveOemSource(vehicle.source)
       || filteredRecords.length === 0
     )),
     filteredRecords,

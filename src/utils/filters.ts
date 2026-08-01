@@ -8,6 +8,10 @@ function isAll(value: string | undefined): boolean {
   return !value || value === "All";
 }
 
+export function isLiveOemSource(source: string | undefined): boolean {
+  return source === "VOLVO_RFMS_LIVE" || source === "SCANIA_RFMS_LIVE";
+}
+
 export function filterVehicles(vehicles: Vehicle[], filters: DashboardFilters): Vehicle[] {
   const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
 
@@ -36,10 +40,10 @@ export function filterTelemetryRecords(
 
   return records.filter((record) => {
     const timestamp = new Date(record.timestamp);
-    const isLiveVolvo = record.source === "VOLVO_RFMS_LIVE";
+    const isLiveOem = isLiveOemSource(record.source);
 
     if (!vehicleIds.has(record.vehicleId)) return false;
-    if (!isLiveVolvo && (timestamp < from || timestamp > to)) return false;
+    if (!isLiveOem && (timestamp < from || timestamp > to)) return false;
     if (!isAll(filters.shift) && record.shift !== filters.shift) return false;
     if (!isAll(filters.lead) && Number(record.leadKm) !== Number(filters.lead)) return false;
 
