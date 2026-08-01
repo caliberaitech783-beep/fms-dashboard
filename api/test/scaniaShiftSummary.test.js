@@ -88,3 +88,33 @@ test("builds a site and shift filtered cumulative Scania summary without duplica
   assert.equal(report.meta.latestStatusCount, 2);
   assert.equal(report.meta.matchedVehicleCount, 1);
 });
+
+test("builds an all-site Scania shift summary when the API has no site assignments", () => {
+  const report = buildScaniaShiftSummary({
+    request: {
+      site: "All Sites",
+      shift: "A",
+      reportDate: "2026-07-31",
+      startTime: "2026-07-31T05:00:00+05:30",
+      stopTime: "2026-07-31T13:00:00+05:30",
+      siteMapping: {
+        ...siteMapping,
+        fmsSite: "All Scania sites",
+        fmsSiteId: null,
+      },
+    },
+    statuses: [{
+      Vin: "SCANIA-VIN-1",
+      CreatedDateTime: "2026-07-31T01:00:00Z",
+      HrTotalVehicleDistance: 75_000,
+      EngineTotalFuelUsed: 30_000,
+      TotalEngineHours: 9,
+    }],
+    importedVehicles: [],
+  });
+
+  assert.equal(report.rows.length, 1);
+  assert.equal(report.rows[0].site, "All Scania sites");
+  assert.equal(report.rows[0].vehicles, 1);
+  assert.equal(report.rows[0].efficiencyKmPerLitre, 2.5);
+});

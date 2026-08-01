@@ -278,7 +278,7 @@ async function buildScaniaShiftWiseFuelReport(
 ): Promise<ReportPreview> {
   const siteIds = filters.siteId && filters.siteId !== "All"
     ? [filters.siteId]
-    : ["site-wcl-sasti-ocm", "site-ncl-dch-west", "site-ncl-dch-east"];
+    : ["All"];
   const shifts: Extract<ShiftCode, "A" | "B" | "C">[] = (
     filters.shift === "A" || filters.shift === "B" || filters.shift === "C"
       ? [filters.shift]

@@ -125,6 +125,7 @@ function buildVehicleIndexes(vehicles, importedVehicles) {
 }
 
 function matchesSite(vehicle, siteMapping) {
+  if (!siteMapping.fmsSiteId) return true;
   return normalizeKey(vehicle?.siteId) === normalizeKey(siteMapping.fmsSiteId)
     || normalizeKey(vehicle?.siteName) === normalizeKey(siteMapping.fmsSite)
     || normalizeKey(vehicle?.rawSiteName).includes(normalizeKey(siteMapping.fmsSite));
@@ -148,19 +149,22 @@ function buildScaniaShiftSummary(input) {
   const indexes = buildVehicleIndexes(vehicles, importedVehicles);
   const latestStatuses = latestStatusesByVin(statuses);
   const matched = [];
+  const isAllSites = !request.siteMapping.fmsSiteId;
 
   for (const [vin, latest] of latestStatuses) {
     const apiVehicle = indexes.apiByVin.get(vin);
     const registrationNumber = vehicleRegistration(apiVehicle);
     const master = indexes.importedByVin.get(normalizeKey(vin))
       || indexes.importedByNumber.get(normalizeKey(registrationNumber));
-    if (!master || master.active === false || !matchesSite(master, request.siteMapping)) continue;
+    if (!isAllSites && (!master || master.active === false || !matchesSite(master, request.siteMapping))) {
+      continue;
+    }
     const resolved = resolveShift(latest.recordedAt);
     if (resolved.shift !== request.shift) continue;
 
     matched.push({
       vin,
-      vehicleNumber: master.vehicleNumber || registrationNumber || vin,
+      vehicleNumber: master?.vehicleNumber || registrationNumber || vin,
       recordedAt: latest.recordedAt,
       shiftDate: resolved.shiftDate,
       distanceKm: (() => {

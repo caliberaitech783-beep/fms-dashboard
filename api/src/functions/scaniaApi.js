@@ -18,6 +18,8 @@ const {
 const { buildScaniaShiftSummary } = require("../lib/scania/scaniaShiftSummary");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
+let shiftStatusCache = null;
+let pendingShiftStatus = null;
 
 function allowedOrigin(request) {
   const configured = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in")
@@ -438,6 +440,25 @@ async function handleVehicleEvaluation(request, context) {
   }, context);
 }
 
+async function getShiftStatusSnapshot(logger) {
+  const now = Date.now();
+  const ttlMs = Math.max(5, Number(process.env.SCANIA_CACHE_SECONDS || 300)) * 1000;
+  if (shiftStatusCache && shiftStatusCache.expiresAt > now) return shiftStatusCache.result;
+  if (pendingShiftStatus) return pendingShiftStatus;
+
+  pendingShiftStatus = (async () => {
+    const client = createScaniaClientFromEnv({
+      onEvent: (event, details) => logger(event, details),
+    });
+    const result = await client.getVehicleStatuses();
+    shiftStatusCache = { result, expiresAt: Date.now() + ttlMs };
+    return result;
+  })().finally(() => {
+    pendingShiftStatus = null;
+  });
+  return pendingShiftStatus;
+}
+
 async function handleShiftSummary(request, context) {
   return withLiveActor(request, "shift summary report", async () => {
     let body;
@@ -450,26 +471,33 @@ async function handleShiftSummary(request, context) {
       });
     }
 
-    const requestDetails = validateReportInput(body);
-    const logger = createLogger(context);
-    const client = createScaniaClientFromEnv({
-      onEvent: (event, details) => logger(event, details),
+    const allSites = String(body.site || "").trim().toLowerCase() === "all sites";
+    const requestDetails = validateReportInput({
+      ...body,
+      site: allSites ? "Sasti OCM" : body.site,
     });
-    const [vehicleResult, statusResult, importedVehicles] = await Promise.all([
-      client.getVehicles(),
-      client.getVehicleStatuses(),
+    if (allSites) {
+      requestDetails.site = "All Sites";
+      requestDetails.siteMapping = {
+        ...requestDetails.siteMapping,
+        fmsSite: "All Scania sites",
+        fmsSiteId: null,
+        scaniaSite: "All Scania sites",
+      };
+    }
+    const logger = createLogger(context);
+    const [statusResult, importedVehicles] = await Promise.all([
+      getShiftStatusSnapshot(logger),
       listImportedVehicles(),
     ]);
     const report = buildScaniaShiftSummary({
-      vehicles: vehicleResult.records,
+      vehicles: [],
       statuses: statusResult.records,
       importedVehicles,
       request: requestDetails,
     });
     logger("shift_summary_complete", {
-      vehicleEndpoint: vehicleResult.endpoint,
       statusEndpoint: statusResult.endpoint,
-      apiVehicleCount: vehicleResult.records.length,
       apiStatusCount: statusResult.records.length,
       matchedVehicleCount: report.meta.matchedVehicleCount,
       site: requestDetails.siteMapping.fmsSite,

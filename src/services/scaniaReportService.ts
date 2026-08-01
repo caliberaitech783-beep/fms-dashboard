@@ -356,6 +356,46 @@ export async function fetchScaniaDriverStandstillReport(
   return reportRequest;
 }
 
+function scaniaShiftRequest(filters: DashboardFilters): ScaniaRequestResult {
+  const mappedSite = siteName(filters.siteId);
+  const allSites = filters.siteId === "All" || !filters.siteId;
+  if (!mappedSite && !allSites) {
+    return {
+      error: {
+        ...errorPreview(
+          filters,
+          "mapping",
+          "Select All Sites, Sasti OCM, DCH West, or DCH East for the Scania shift report.",
+        ),
+        reportType: "Shift-wise Fuel Report",
+        columns: SCANIA_SHIFT_REPORT_COLUMNS,
+      },
+    };
+  }
+  if (!isScaniaShift(filters.shift)) {
+    return {
+      error: {
+        ...errorPreview(
+          filters,
+          "mapping",
+          "Select Shift A, Shift B, or Shift C for this Scania shift report.",
+        ),
+        reportType: "Shift-wise Fuel Report",
+        columns: SCANIA_SHIFT_REPORT_COLUMNS,
+      },
+    };
+  }
+  const window = scaniaShiftWindow(filters.dateTo, filters.shift);
+  return {
+    body: {
+      site: mappedSite ?? "All Sites",
+      shift: filters.shift,
+      startTime: window.startTime,
+      stopTime: window.stopTime,
+    },
+  };
+}
+
 export async function fetchScaniaShiftSummaryReport(
   filters: DashboardFilters,
   options: { forceRefresh?: boolean } = {},
@@ -369,7 +409,7 @@ export async function fetchScaniaShiftSummaryReport(
     };
   }
 
-  const request = scaniaRequest(filters);
+  const request = scaniaShiftRequest(filters);
   if (request.error) {
     return {
       ...request.error,
