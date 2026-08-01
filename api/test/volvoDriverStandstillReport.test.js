@@ -86,6 +86,51 @@ test("calculates Volvo driver standstill metrics from accumulated counter deltas
   assert.equal(rows[0].aboveEconomyPercent, null);
 });
 
+test("accepts Scania RFMS wheelbased accumulated counter names", () => {
+  const first = status("2026-07-31T23:00:00Z", {
+    distanceMetres: 1_000_000,
+    engineHours: 100,
+    fuelMillilitres: 500_000,
+    runningSeconds: 10_000,
+    standstillSeconds: 4_000,
+    coastingSeconds: 1_000,
+    lowLoadSeconds: 4_000,
+    highLoadSeconds: 1_000,
+  });
+  const second = status("2026-08-01T01:00:00Z", {
+    distanceMetres: 1_020_000,
+    engineHours: 102,
+    fuelMillilitres: 530_000,
+    runningSeconds: 13_600,
+    standstillSeconds: 7_600,
+    coastingSeconds: 1_360,
+    lowLoadSeconds: 4_900,
+    highLoadSeconds: 1_900,
+  });
+  for (const item of [first, second]) {
+    item.AccumulatedData.DurationWheelbasedSpeedOverZero =
+      item.AccumulatedData.DurationWheelbaseSpeedOverZero;
+    item.AccumulatedData.DurationWheelbasedSpeedZero =
+      item.AccumulatedData.DurationWheelbaseSpeedZero;
+    delete item.AccumulatedData.DurationWheelbaseSpeedOverZero;
+    delete item.AccumulatedData.DurationWheelbaseSpeedZero;
+  }
+
+  const rows = buildDriverStandstillRows({
+    vehicles: [{ trackerId: "VIN-1", vehicleNumber: "SCANIA-1" }],
+    statuses: [first, second],
+    shiftStart: "2026-08-01T05:00:00+05:30",
+    shiftEnd: "2026-08-01T13:00:00+05:30",
+    shiftName: "A",
+    driverMap: new Map(),
+    now: new Date("2026-08-01T13:00:00+05:30"),
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].standstillPercent, 50);
+  assert.equal(rows[0].totalTime, "2:00");
+});
+
 test("extracts driver identifiers without exposing credentials", () => {
   assert.equal(driverIdentifier({
     Driver1Id: { OemDriverIdentification: { OemDriverIdentification: "D-9" } },

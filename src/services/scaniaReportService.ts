@@ -57,6 +57,7 @@ interface ScaniaReportResponse {
   rows: ScaniaReportRow[];
   period: NonNullable<ReportPreview["period"]>;
   meta: NonNullable<ReportPreview["meta"]>;
+  notice?: string | null;
 }
 
 interface ScaniaShiftSummaryResponse {
@@ -333,7 +334,7 @@ export async function fetchScaniaDriverStandstillReport(
         source: payload.source,
         period: payload.period,
         meta: payload.meta,
-        notice: payload.meta.emptyReason ?? null,
+        notice: payload.notice ?? payload.meta.emptyReason ?? null,
       };
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,

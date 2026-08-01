@@ -384,6 +384,12 @@ function currentKolkataDate() {
   }).format(new Date());
 }
 
+function subtractCalendarDays(dateText, days) {
+  const date = new Date(`${dateText}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
 function scoreDate(value, name) {
   const normalized = String(value || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
@@ -489,9 +495,9 @@ async function loadDriverStandstillReport(request) {
     currentKolkataDate(),
     Number(process.env.VOLVO_RFMS_REPORT_HISTORY_DAYS || 13),
   );
-  const date = dateResolution.date;
+  let date = dateResolution.date;
 
-  const window = getShiftWindow(scheduleSiteName(reportSite), date, shift);
+  let window = getShiftWindow(scheduleSiteName(reportSite), date, shift);
   if (!window.active) {
     throw Object.assign(new Error("The selected site does not have a configured shift schedule."), { statusCode: 400 });
   }
@@ -507,23 +513,6 @@ async function loadDriverStandstillReport(request) {
   const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
   const siteFilterApplied = siteVehicles.length > 0;
   const selectedVehicles = siteVehicles;
-  const shiftStart = new Date(window.shiftStart);
-  const shiftEnd = new Date(window.shiftEnd);
-  const queryStart = new Date(shiftStart.getTime() - 60 * 60_000);
-  const queryStop = new Date(Math.min(
-    shiftEnd.getTime() + 5 * 60_000,
-    Date.now() + 5 * 60_000,
-  ));
-  const client = createVolvoClientFromEnv();
-  const statuses = queryStop > queryStart && selectedVehicles.length
-    ? await fetchVehicleScopedHistory(client, selectedVehicles, {
-      startTime: queryStart.toISOString(),
-      stopTime: queryStop.toISOString(),
-      maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
-      concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 1),
-      requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 750),
-    })
-    : [];
   const fallbackDriverMap = parseDriverMap(process.env.VOLVO_RFMS_DRIVER_MAP_JSON);
   let driverDirectory = emptyDriverDirectory();
   let liveDriverConnected = false;
@@ -533,15 +522,51 @@ async function loadDriverStandstillReport(request) {
   } catch {
     liveDriverConnected = false;
   }
-  const rows = buildDriverStandstillRows({
+  const buildRows = (statuses, reportWindow) => buildDriverStandstillRows({
     vehicles: selectedVehicles,
     statuses,
-    shiftStart: window.shiftStart,
-    shiftEnd: window.shiftEnd,
+    shiftStart: reportWindow.shiftStart,
+    shiftEnd: reportWindow.shiftEnd,
     shiftName: shift,
     driverMap: new Map([...fallbackDriverMap, ...driverNameMap(driverDirectory)]),
     now: new Date(),
   });
+  let statuses = [];
+  let rows = [];
+  let availabilityFallbackApplied = false;
+  const client = createVolvoClientFromEnv();
+  const fallbackDays = Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
+  const historyOptions = {
+    maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
+    concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
+    requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
+    continueOnError: true,
+  };
+  const selectedShiftEnd = new Date(window.shiftEnd);
+  const selectedQueryStop = new Date(Math.min(
+    selectedShiftEnd.getTime() + 5 * 60_000,
+    Date.now() + 5 * 60_000,
+  ));
+  const earliestDate = subtractCalendarDays(dateResolution.date, fallbackDays);
+  const earliestWindow = getShiftWindow(scheduleSiteName(reportSite), earliestDate, shift);
+  const queryStart = new Date(new Date(earliestWindow.shiftStart).getTime() - 60 * 60_000);
+  if (selectedVehicles.length && selectedQueryStop > queryStart) {
+    statuses = await fetchVehicleScopedHistory(client, selectedVehicles, {
+      ...historyOptions,
+      startTime: queryStart.toISOString(),
+      stopTime: selectedQueryStop.toISOString(),
+    });
+    for (let dayOffset = 0; dayOffset <= fallbackDays; dayOffset += 1) {
+      const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
+      const candidateWindow = getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift);
+      rows = buildRows(statuses, candidateWindow);
+      if (!rows.length) continue;
+      date = candidateDate;
+      window = candidateWindow;
+      availabilityFallbackApplied = dayOffset > 0;
+      break;
+    }
+  }
   const columns = [
     "Vehicles",
     "Drivers",
@@ -573,6 +598,9 @@ async function loadDriverStandstillReport(request) {
   if (dateResolution.fallbackApplied) {
     notices.push(`The selected demo date ${requestedDate} is outside Volvo's live history window. Showing ${date} instead.`);
   }
+  if (availabilityFallbackApplied) {
+    notices.push(`No complete Volvo intervals were available for ${dateResolution.date}. Showing the latest available Shift ${shift} data from ${date}.`);
+  }
   if (!siteFilterApplied) {
     notices.push(`No Volvo vehicles have a ${scheduleSiteName(reportSite)} site assignment. Configure the Volvo VIN-to-site mapping to load this report.`);
   }
@@ -586,10 +614,11 @@ async function loadDriverStandstillReport(request) {
     columns,
     rows: reportRows,
     live: true,
+    source: "VOLVO_RFMS_HISTORY",
     period: {
       date,
       requestedDate,
-      fallbackApplied: dateResolution.fallbackApplied,
+      fallbackApplied: dateResolution.fallbackApplied || availabilityFallbackApplied,
       shift,
       site: scheduleSiteName(reportSite),
       start: window.shiftStart,
@@ -600,6 +629,7 @@ async function loadDriverStandstillReport(request) {
     driverSource: liveDriverConnected ? "VOLVO_GROUP_DRIVER_API" : "MASKED_IDENTIFIER_FALLBACK",
     driverRecords: driverDirectory.driverCount,
     driverTimes: driverDirectory.driverTimeCount,
+    historyRecords: statuses.length,
     notice: notices.length ? notices.join(" ") : null,
     unsupportedMetrics: {
       iShiftPerformanceTimePercent: "Requires a Volvo Connect analytics field or formula; it is not in standard RFMS 2.1 accumulated data.",

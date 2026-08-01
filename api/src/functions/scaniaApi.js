@@ -16,6 +16,7 @@ const {
   generateVehicleEvaluationReport,
   validateReportInput,
 } = require("../lib/scania/scaniaVehicleEvaluation");
+const { generateScaniaStatusReport } = require("../lib/scania/scaniaStatusReport");
 const { buildScaniaShiftSummary } = require("../lib/scania/scaniaShiftSummary");
 const {
   clearScaniaLiveCache,
@@ -480,10 +481,13 @@ async function handleVehicleEvaluation(request, context) {
     }
     const logger = createLogger(context);
     const importedVehicles = await listImportedVehicles();
-    const result = await generateVehicleEvaluationReport(body, {
-      importedVehicles,
-      logger,
-    });
+    const evaluationConfigured = Boolean(
+      process.env.SCANIA_VEHICLE_EVALUATION_GAS_URL
+      || process.env.SCANIA_VEHICLE_EVALUATION_URL,
+    );
+    const result = evaluationConfigured
+      ? await generateVehicleEvaluationReport(body, { importedVehicles, logger })
+      : await generateScaniaStatusReport(body, { importedVehicles });
     return response(request, 200, result);
   }, context);
 }

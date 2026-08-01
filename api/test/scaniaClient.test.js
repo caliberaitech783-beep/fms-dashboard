@@ -5,6 +5,7 @@ const {
   ACCEPT_HEADERS,
   ScaniaClient,
   computeScaniaChallengeResponse,
+  continuationUrl,
   createScaniaClientFromEnv,
 } = require("../src/lib/scania/scaniaClient");
 
@@ -143,6 +144,23 @@ test("parses the supplied Scania Position API VehicleTracksList envelope", async
 
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].Vin, "VIN-TRACK");
+});
+
+test("resolves Scania continuation paths from the API origin without duplicating rfms4", () => {
+  assert.equal(
+    continuationUrl(
+      "rfms4/vehiclestatuses?latestOnly=false",
+      "https://dataaccess.scania.com/rfms4/vehiclestatuses",
+    ),
+    "https://dataaccess.scania.com/rfms4/vehiclestatuses?latestOnly=false",
+  );
+  assert.equal(
+    continuationUrl(
+      "/rfms4/vehicles?page=2",
+      "https://dataaccess.scania.com/rfms4/vehicles",
+    ),
+    "https://dataaccess.scania.com/rfms4/vehicles?page=2",
+  );
 });
 
 test("supports deployed RFMS4 setting names without requiring report-only endpoints", async () => {
