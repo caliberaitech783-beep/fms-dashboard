@@ -45,6 +45,8 @@ const initialFilterVehicles = seedVehicles.map((vehicle) => {
   };
 });
 
+const LIVE_REPORT_OEMS: Vehicle["company"][] = ["Volvo", "Scania"];
+
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
   const [sites, setSites] = useState<Site[]>(seedSites);
@@ -90,9 +92,10 @@ export function useFleetFilters() {
     const configuredModels = filters.assetType === "All"
       ? null
       : getConfiguredModels(filters.assetType, filters.company);
-    const availableCompanies = configuredMakes ?? uniqueSorted(
-      typeVehicles.map((vehicle) => vehicle.company),
-    );
+    const availableCompanies = configuredMakes ?? uniqueSorted([
+      ...typeVehicles.map((vehicle) => vehicle.company),
+      ...LIVE_REPORT_OEMS,
+    ]);
 
     return {
       sites: sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
