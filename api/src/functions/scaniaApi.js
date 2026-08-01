@@ -24,7 +24,11 @@ const {
   synchronizeScania,
 } = require("../lib/scania/scaniaSyncService");
 const { synchronizeScaniaAnalytics } = require("../lib/scania/scaniaAnalyticsSync");
-const { listSnapshotMetadata } = require("../lib/scania/scaniaAnalyticsStore");
+const {
+  listSnapshotMetadata,
+  loadSnapshot,
+  saveSnapshot,
+} = require("../lib/scania/scaniaAnalyticsStore");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
 let shiftStatusCache = null;
@@ -481,6 +485,35 @@ async function handleExceptions(request, context) {
   }, context);
 }
 
+function reportSnapshotResource(body) {
+  const date = String(body?.startTime || "unknown").slice(0, 10);
+  const shift = String(body?.shift || "all").trim().toLowerCase();
+  const site = String(body?.site || "all-sites")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `vehicle-evaluation-report-${date}-${shift}-${site || "all-sites"}`;
+}
+
+function storedReportFallback(snapshot) {
+  const report = snapshot?.payload;
+  if (!report || report.reportType !== "Driverwise Standstill Tracking" || !Array.isArray(report.rows)) {
+    return null;
+  }
+  return {
+    ...report,
+    source: "SCANIA_STORED_REPORT_CACHE",
+    generatedAt: new Date().toISOString(),
+    notice: `Scania live service is temporarily unavailable. Showing the last successful report saved ${snapshot.fetchedAt}.`,
+    meta: {
+      ...(report.meta || {}),
+      cacheFallback: true,
+      cachedAt: snapshot.fetchedAt,
+    },
+  };
+}
+
 async function handleVehicleEvaluation(request, context) {
   return withLiveActor(request, "vehicle evaluation report", async () => {
     let body;
@@ -512,9 +545,33 @@ async function handleVehicleEvaluation(request, context) {
       process.env.SCANIA_VEHICLE_EVALUATION_GAS_URL
       || process.env.SCANIA_VEHICLE_EVALUATION_URL,
     );
-    const result = evaluationConfigured
-      ? await generateVehicleEvaluationReport(body, { importedVehicles: reportVehicles, logger })
-      : await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
+    const resource = reportSnapshotResource(body);
+    let result;
+    try {
+      result = evaluationConfigured
+        ? await generateVehicleEvaluationReport(body, { importedVehicles: reportVehicles, logger })
+        : await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
+      await saveSnapshot(resource, result, {
+        endpoint: result?.meta?.endpoint || "ScaniaDriverwiseStandstillReport",
+        fetchedAt: result.generatedAt,
+        httpStatus: result?.meta?.httpStatus || 200,
+        recordCount: result.rows.length,
+      }).catch((error) => logger("report_cache_save_failed", {
+        kind: error?.kind || "storage",
+        statusCode: error?.statusCode || null,
+      }));
+    } catch (error) {
+      const cached = await loadSnapshot(resource).catch(() => null);
+      result = storedReportFallback(cached);
+      if (!result) throw error;
+      logger("report_cache_fallback", {
+        resource,
+        cachedAt: cached.fetchedAt,
+        rowCount: result.rows.length,
+        liveErrorKind: error?.kind || "upstream",
+        liveHttpStatus: error?.httpStatus || null,
+      });
+    }
     return response(request, 200, result);
   }, context);
 }
