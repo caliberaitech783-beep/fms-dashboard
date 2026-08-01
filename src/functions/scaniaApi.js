@@ -445,14 +445,24 @@ async function getShiftStatusSnapshot(logger) {
   const ttlMs = Math.max(5, Number(process.env.SCANIA_CACHE_SECONDS || 300)) * 1000;
   if (shiftStatusCache && shiftStatusCache.expiresAt > now) return shiftStatusCache.result;
   if (pendingShiftStatus) return pendingShiftStatus;
+  const staleResult = shiftStatusCache?.result || null;
 
   pendingShiftStatus = (async () => {
-    const client = createScaniaClientFromEnv({
-      onEvent: (event, details) => logger(event, details),
-    });
-    const result = await client.getVehicleStatuses();
-    shiftStatusCache = { result, expiresAt: Date.now() + ttlMs };
-    return result;
+    try {
+      const client = createScaniaClientFromEnv({
+        onEvent: (event, details) => logger(event, details),
+      });
+      const result = await client.getVehicleStatuses();
+      shiftStatusCache = { result, expiresAt: Date.now() + ttlMs };
+      return result;
+    } catch (error) {
+      if (!staleResult) throw error;
+      logger("shift_status_stale_fallback", {
+        kind: error?.kind || "upstream",
+        statusCode: error?.statusCode || null,
+      });
+      return staleResult;
+    }
   })().finally(() => {
     pendingShiftStatus = null;
   });
