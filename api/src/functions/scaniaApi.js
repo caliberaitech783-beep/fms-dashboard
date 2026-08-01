@@ -13,7 +13,9 @@ const {
 } = require("../lib/scania/scaniaClient");
 const {
   generateVehicleEvaluationReport,
+  validateReportInput,
 } = require("../lib/scania/scaniaVehicleEvaluation");
+const { buildScaniaShiftSummary } = require("../lib/scania/scaniaShiftSummary");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
 
@@ -83,6 +85,7 @@ function scaniaSecrets() {
   return [
     process.env.SCANIA_CLIENT_ID,
     process.env.SCANIA_CLIENT_SECRET,
+    process.env.SCANIA_SECRET_KEY,
     process.env.SCANIA_ACCESS_TOKEN,
     process.env.SCANIA_REPORT_SESSION_ID,
   ].filter(Boolean);
@@ -107,7 +110,7 @@ function publicError(error) {
   if (kind === "authentication") {
     return {
       kind,
-      message: "Scania API authentication failed. Check the server-side Client ID and Client Secret.",
+      message: "Scania API authentication failed. Check the server-side Scania credentials.",
     };
   }
   if (kind === "permission") {
@@ -435,6 +438,47 @@ async function handleVehicleEvaluation(request, context) {
   }, context);
 }
 
+async function handleShiftSummary(request, context) {
+  return withLiveActor(request, "shift summary report", async () => {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ScaniaApiError("A valid JSON report request body is required.", {
+        kind: "validation",
+        statusCode: 400,
+      });
+    }
+
+    const requestDetails = validateReportInput(body);
+    const logger = createLogger(context);
+    const client = createScaniaClientFromEnv({
+      onEvent: (event, details) => logger(event, details),
+    });
+    const [vehicleResult, statusResult, importedVehicles] = await Promise.all([
+      client.getVehicles(),
+      client.getVehicleStatuses(),
+      listImportedVehicles(),
+    ]);
+    const report = buildScaniaShiftSummary({
+      vehicles: vehicleResult.records,
+      statuses: statusResult.records,
+      importedVehicles,
+      request: requestDetails,
+    });
+    logger("shift_summary_complete", {
+      vehicleEndpoint: vehicleResult.endpoint,
+      statusEndpoint: statusResult.endpoint,
+      apiVehicleCount: vehicleResult.records.length,
+      apiStatusCount: statusResult.records.length,
+      matchedVehicleCount: report.meta.matchedVehicleCount,
+      site: requestDetails.siteMapping.fmsSite,
+      shift: requestDetails.shift,
+    });
+    return response(request, 200, report);
+  }, context);
+}
+
 app.http("scaniaVehicles", {
   route: "scania/vehicles",
   authLevel: "anonymous",
@@ -470,6 +514,13 @@ app.http("scaniaVehicleEvaluationReport", {
   handler: handleVehicleEvaluation,
 });
 
+app.http("scaniaShiftSummaryReport", {
+  route: "scania/reports/shift-summary",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: handleShiftSummary,
+});
+
 module.exports = {
   createLogger,
   exceptionItem,
@@ -477,6 +528,7 @@ module.exports = {
   handleExceptions,
   handlePositions,
   handleStatus,
+  handleShiftSummary,
   handleVehicleEvaluation,
   handleVehicles,
   positionItem,

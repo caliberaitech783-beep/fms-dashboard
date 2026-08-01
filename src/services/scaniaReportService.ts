@@ -19,6 +19,20 @@ const SCANIA_REPORT_COLUMNS = [
   "Performance mode - Power (% of distance)",
   "Powertrain coasting (% of distance)",
 ];
+const SCANIA_SHIFT_REPORT_COLUMNS = [
+  "Shift",
+  "Site",
+  "Vehicles",
+  "Fuel consumed (L)",
+  "Distance (km)",
+  "Running hours",
+  "Idle hours",
+  "Idle (%)",
+  "Efficiency (km/L)",
+  "Trips",
+  "Production (m3)",
+  "Coverage",
+];
 
 interface ScaniaReportRow {
   registrationNumber: string;
@@ -43,6 +57,36 @@ interface ScaniaReportResponse {
   rows: ScaniaReportRow[];
   period: NonNullable<ReportPreview["period"]>;
   meta: NonNullable<ReportPreview["meta"]>;
+}
+
+interface ScaniaShiftSummaryResponse {
+  reportType: "Shift-wise Fuel Report";
+  source: string;
+  generatedAt: string;
+  rows: Array<{
+    shift: string;
+    site: string;
+    vehicles: number;
+    fuelConsumedLitres: number | null;
+    distanceKm: number | null;
+    runningHours: number | null;
+    idleHours: number | null;
+    idlePercentage: number | null;
+    efficiencyKmPerLitre: number | null;
+    trips: number | null;
+    productionM3: number | null;
+    coverage: string;
+  }>;
+  period: NonNullable<ReportPreview["period"]>;
+  meta: {
+    apiVehicleCount?: number;
+    apiStatusCount?: number;
+    latestStatusCount?: number;
+    vehicleMasterCount?: number;
+    matchedVehicleCount?: number;
+    eventDates?: string[];
+    emptyReason?: string | null;
+  };
 }
 
 interface ScaniaErrorResponse {
@@ -143,6 +187,16 @@ function isScaniaReportResponse(value: unknown): value is ScaniaReportResponse {
   if (!value || typeof value !== "object") return false;
   const report = value as Partial<ScaniaReportResponse>;
   return report.reportType === "Driverwise Standstill Tracking"
+    && typeof report.generatedAt === "string"
+    && Array.isArray(report.rows)
+    && Boolean(report.period)
+    && Boolean(report.meta);
+}
+
+function isScaniaShiftSummaryResponse(value: unknown): value is ScaniaShiftSummaryResponse {
+  if (!value || typeof value !== "object") return false;
+  const report = value as Partial<ScaniaShiftSummaryResponse>;
+  return report.reportType === "Shift-wise Fuel Report"
     && typeof report.generatedAt === "string"
     && Array.isArray(report.rows)
     && Boolean(report.period)
@@ -293,6 +347,135 @@ export async function fetchScaniaDriverStandstillReport(
         "The Scania live report service could not be reached.",
         { retryable: true },
       );
+    } finally {
+      inFlightReports.delete(cacheKey);
+    }
+  })();
+
+  inFlightReports.set(cacheKey, reportRequest);
+  return reportRequest;
+}
+
+export async function fetchScaniaShiftSummaryReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean } = {},
+): Promise<ReportPreview> {
+  const session = getAuthSession();
+  if (!session?.token) {
+    return {
+      ...errorPreview(filters, "portal_authentication", "Dashboard authentication is required."),
+      reportType: "Shift-wise Fuel Report",
+      columns: SCANIA_SHIFT_REPORT_COLUMNS,
+    };
+  }
+
+  const request = scaniaRequest(filters);
+  if (request.error) {
+    return {
+      ...request.error,
+      reportType: "Shift-wise Fuel Report",
+      columns: SCANIA_SHIFT_REPORT_COLUMNS,
+    };
+  }
+
+  const cacheKey = `shift:${JSON.stringify(request.body)}`;
+  if (options.forceRefresh) {
+    reportCache.delete(cacheKey);
+  } else {
+    const cached = reportCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.preview;
+    if (cached) reportCache.delete(cacheKey);
+  }
+  const pending = inFlightReports.get(cacheKey);
+  if (pending) return pending;
+
+  const reportRequest = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/scania/reports/shift-summary`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${session.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(request.body),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const details = payload && typeof payload === "object"
+          ? (payload as ScaniaErrorResponse).error
+          : null;
+        return {
+          ...errorPreview(
+            filters,
+            details?.kind ?? "upstream",
+            details?.message ?? "Scania live shift report request failed.",
+            { retryable: details?.retryable, status: response.status },
+          ),
+          reportType: "Shift-wise Fuel Report" as const,
+          columns: SCANIA_SHIFT_REPORT_COLUMNS,
+        };
+      }
+      if (!isScaniaShiftSummaryResponse(payload)) {
+        return {
+          ...errorPreview(
+            filters,
+            "upstream",
+            "Scania returned an invalid shift-summary response.",
+            { status: response.status },
+          ),
+          reportType: "Shift-wise Fuel Report" as const,
+          columns: SCANIA_SHIFT_REPORT_COLUMNS,
+        };
+      }
+
+      const eventDateText = payload.meta.eventDates?.length
+        ? ` Snapshot shift date${payload.meta.eventDates.length === 1 ? "" : "s"}: ${payload.meta.eventDates.join(", ")}.`
+        : "";
+      const preview: ReportPreview = {
+        reportType: payload.reportType,
+        generatedAt: payload.generatedAt,
+        columns: SCANIA_SHIFT_REPORT_COLUMNS,
+        rows: payload.rows.map((row) => ({
+          Shift: `Shift ${row.shift}`,
+          Site: row.site,
+          Vehicles: row.vehicles,
+          "Fuel consumed (L)": row.fuelConsumedLitres,
+          "Distance (km)": row.distanceKm,
+          "Running hours": row.runningHours,
+          "Idle hours": row.idleHours,
+          "Idle (%)": row.idlePercentage,
+          "Efficiency (km/L)": row.efficiencyKmPerLitre,
+          Trips: row.trips,
+          "Production (m3)": row.productionM3,
+          Coverage: row.coverage,
+        })),
+        oem: "Scania",
+        live: true,
+        source: payload.source,
+        period: payload.period,
+        meta: {
+          rawRecordCount: payload.meta.apiStatusCount ?? null,
+          finalFilteredVehicleCount: payload.meta.matchedVehicleCount ?? null,
+          siteVehicleMasterCount: payload.meta.vehicleMasterCount ?? null,
+          emptyReason: payload.meta.emptyReason ?? null,
+        },
+        notice: payload.meta.emptyReason
+          ?? `Latest cumulative Scania RFMS snapshots are assigned by imported site and Asia/Kolkata event time.${eventDateText}`,
+      };
+      reportCache.set(cacheKey, { expiresAt: Date.now() + REPORT_CACHE_MS, preview });
+      return preview;
+    } catch {
+      return {
+        ...errorPreview(
+          filters,
+          "network",
+          "The Scania live shift report service could not be reached.",
+          { retryable: true },
+        ),
+        reportType: "Shift-wise Fuel Report" as const,
+        columns: SCANIA_SHIFT_REPORT_COLUMNS,
+      };
     } finally {
       inFlightReports.delete(cacheKey);
     }

@@ -19,6 +19,7 @@ import { getFilteredPortalData, getPortalData } from "./dataAccess";
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
 import {
   fetchScaniaDriverStandstillReport,
+  fetchScaniaShiftSummaryReport,
   invalidateScaniaReportCache,
 } from "./scaniaReportService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
@@ -294,7 +295,7 @@ async function buildScaniaShiftWiseFuelReport(
   for (let index = 0; index < scopes.length; index += 3) {
     const batch = scopes.slice(index, index + 3);
     const batchPreviews = await Promise.all(batch.map((scope) => (
-      fetchScaniaDriverStandstillReport(
+      fetchScaniaShiftSummaryReport(
         { ...filters, siteId: scope.siteId, shift: scope.shift },
         options,
       )
@@ -302,34 +303,19 @@ async function buildScaniaShiftWiseFuelReport(
     previews.push(...batchPreviews);
   }
 
-  const successful = previews.filter((preview) => preview.live && !preview.error);
+  const successful = previews.filter((preview) => preview.live && !preview.error && preview.rows.length);
   if (!successful.length) {
     const firstError = previews.find((preview) => preview.error)?.error;
+    const firstNotice = previews.find((preview) => preview.notice)?.notice;
     const unavailable = unavailableShiftReport(
-      firstError?.message ?? "Scania returned no live records for the selected sites and shifts.",
+      firstError?.message
+        ?? firstNotice
+        ?? "Scania returned no live records for the selected sites and shifts.",
     );
     return firstError ? { ...unavailable, error: firstError, source: "SCANIA_LIVE_API" } : unavailable;
   }
 
-  const rows = successful.map((preview) => {
-    const runningHours = sumDurationColumn(preview.rows, "Engine running time (h:m)");
-    const idleHours = sumDurationColumn(preview.rows, "Idling (h:m)");
-    const fuel = sumColumn(preview.rows, "Consumption liquid fuel (litres)");
-    const distance = sumColumn(preview.rows, "Distance driven (km)");
-    return shiftReportRow({
-      shift: shiftLabel(preview.period?.shift as ShiftCode),
-      site: preview.period?.site ?? "Scania site",
-      vehicles: preview.rows.length,
-      fuel,
-      distance,
-      runningHours,
-      idleHours,
-      engineHours: runningHours,
-      trips: 0,
-      production: 0,
-      coverage: "Scania live shift report",
-    });
-  });
+  const rows = successful.flatMap((preview) => preview.rows);
   const failures = previews.length - successful.length;
 
   return {
@@ -342,7 +328,7 @@ async function buildScaniaShiftWiseFuelReport(
     source: "SCANIA_LIVE_API",
     notice: failures
       ? `${successful.length} Scania site/shift reports loaded; ${failures} could not be loaded. Retry or narrow the filters for details.`
-      : "Generated from Scania live site-wise Vehicle Evaluation data for the selected operational shifts.",
+      : "Generated from Scania live cumulative RFMS snapshots, imported site mappings, and Asia/Kolkata event-time shifts.",
   };
 }
 
@@ -422,25 +408,6 @@ function shiftCoverage(records: FleetTelemetryRecord[]): string {
   if (sources.has("SCANIA_RFMS_LIVE")) labels.push("Scania live cumulative snapshot");
   if (sources.has("DUMMY_SAMPLE")) labels.push("Sample period data");
   return labels.join(" + ") || "No source";
-}
-
-function sumColumn(rows: ReportPreview["rows"], column: string): number {
-  return rows.reduce((sum, row) => sum + numericValue(row[column]), 0);
-}
-
-function sumDurationColumn(rows: ReportPreview["rows"], column: string): number {
-  return rows.reduce((sum, row) => sum + durationHours(row[column]), 0);
-}
-
-function numericValue(value: string | number | null | undefined): number {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function durationHours(value: string | number | null | undefined): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const match = String(value || "").match(/^(\d+):(\d{1,2})$/);
-  return match ? Number(match[1]) + Number(match[2]) / 60 : 0;
 }
 
 function roundNumber(value: number, digits = 2): number {
