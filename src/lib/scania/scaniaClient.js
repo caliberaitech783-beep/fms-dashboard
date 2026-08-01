@@ -2,6 +2,7 @@ const { createHmac } = require("node:crypto");
 const { safeErrorMessage } = require("../tracking/masking");
 
 const DEFAULT_AUTH_BASE_URL = "https://dataaccess.scania.com/auth";
+const DEFAULT_DATA_BASE_URL = "https://dataaccess.scania.com";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const DEFAULT_TOKEN_TTL_MS = 60 * 60_000;
 const DEFAULT_TOKEN_REFRESH_SKEW_MS = 60_000;
@@ -47,6 +48,11 @@ function configuredUrl(name, value) {
       statusCode: 503,
     });
   }
+}
+
+function optionalConfiguredUrl(name, value) {
+  const normalized = String(value || "").trim();
+  return normalized ? configuredUrl(name, normalized) : null;
 }
 
 function endpointForLog(value) {
@@ -174,18 +180,18 @@ class ScaniaClient {
         : `${this.authBaseUrl}/response2token`,
     };
     this.urls = {
-      vehicles: configuredUrl("SCANIA_RFMS_VEHICLES_URL", options.vehiclesUrl),
-      positions: configuredUrl("SCANIA_RFMS_VEHICLE_POSITIONS_URL", options.positionsUrl),
-      statuses: configuredUrl("SCANIA_RFMS_VEHICLE_STATUSES_URL", options.statusesUrl),
+      vehicles: optionalConfiguredUrl("SCANIA_RFMS_VEHICLES_URL", options.vehiclesUrl),
+      positions: optionalConfiguredUrl("SCANIA_RFMS_VEHICLE_POSITIONS_URL", options.positionsUrl),
+      statuses: optionalConfiguredUrl("SCANIA_RFMS_VEHICLE_STATUSES_URL", options.statusesUrl),
       lastReportedPosition: options.lastReportedPositionUrl
         ? configuredUrl("SCANIA_LAST_REPORTED_POSITION_URL", options.lastReportedPositionUrl)
         : null,
-      exceptions: configuredUrl("SCANIA_EXCEPTION_HISTORY_URL", options.exceptionsUrl),
-      vehicleEvaluation: configuredUrl(
+      exceptions: optionalConfiguredUrl("SCANIA_EXCEPTION_HISTORY_URL", options.exceptionsUrl),
+      vehicleEvaluation: optionalConfiguredUrl(
         "SCANIA_VEHICLE_EVALUATION_URL",
         options.vehicleEvaluationUrl,
       ),
-      vehicleEvaluationGas: configuredUrl(
+      vehicleEvaluationGas: optionalConfiguredUrl(
         "SCANIA_VEHICLE_EVALUATION_GAS_URL",
         options.vehicleEvaluationGasUrl || options.vehicleEvaluationUrl,
       ),
@@ -210,6 +216,11 @@ class ScaniaClient {
           options.driverEvaluationResultUrl,
         )
         : null,
+    };
+    this.accept = {
+      vehicles: String(options.acceptVehicles || ACCEPT_HEADERS.vehicles).trim(),
+      positions: String(options.acceptPositions || ACCEPT_HEADERS.positions).trim(),
+      statuses: String(options.acceptStatuses || ACCEPT_HEADERS.statuses).trim(),
     };
     this.fetchFn = options.fetchFn || globalThis.fetch;
     this.timeoutMs = Number(options.timeoutMs || DEFAULT_TIMEOUT_MS);
@@ -457,9 +468,9 @@ class ScaniaClient {
 
   async getVehicles(query = {}) {
     return this.collectPages({
-      url: this.urls.vehicles,
+      url: configuredUrl("SCANIA_RFMS_VEHICLES_URL", this.urls.vehicles),
       query,
-      accept: ACCEPT_HEADERS.vehicles,
+      accept: this.accept.vehicles,
       operation: "vehicles",
       rows: vehicleRows,
     });
@@ -467,9 +478,9 @@ class ScaniaClient {
 
   async getLatestPositions(query = {}) {
     return this.collectPages({
-      url: this.urls.positions,
+      url: configuredUrl("SCANIA_RFMS_VEHICLE_POSITIONS_URL", this.urls.positions),
       query: { latestOnly: true, ...query },
-      accept: ACCEPT_HEADERS.positions,
+      accept: this.accept.positions,
       operation: "positions",
       rows: positionRows,
     });
@@ -488,9 +499,9 @@ class ScaniaClient {
 
   async getVehicleStatuses(query = {}) {
     return this.collectPages({
-      url: this.urls.statuses,
+      url: configuredUrl("SCANIA_RFMS_VEHICLE_STATUSES_URL", this.urls.statuses),
       query: { latestOnly: true, ...query },
-      accept: ACCEPT_HEADERS.statuses,
+      accept: this.accept.statuses,
       operation: "statuses",
       rows: statusRows,
     });
@@ -498,7 +509,7 @@ class ScaniaClient {
 
   async getExceptions(query = {}) {
     const result = await this.requestJson({
-      url: this.urls.exceptions,
+      url: configuredUrl("SCANIA_EXCEPTION_HISTORY_URL", this.urls.exceptions),
       query,
       accept: ACCEPT_HEADERS.json,
       operation: "exceptions",
@@ -508,7 +519,7 @@ class ScaniaClient {
 
   async getVehicleEvaluation(query = {}) {
     return this.requestJson({
-      url: this.urls.vehicleEvaluation,
+      url: configuredUrl("SCANIA_VEHICLE_EVALUATION_URL", this.urls.vehicleEvaluation),
       query,
       accept: ACCEPT_HEADERS.json,
       operation: "vehicle_evaluation",
@@ -519,7 +530,10 @@ class ScaniaClient {
     const gasQuery = { ...query };
     if (this.gasQueryParameter) gasQuery[this.gasQueryParameter] = true;
     return this.requestJson({
-      url: this.urls.vehicleEvaluationGas,
+      url: configuredUrl(
+        "SCANIA_VEHICLE_EVALUATION_GAS_URL",
+        this.urls.vehicleEvaluationGas,
+      ),
       query: gasQuery,
       accept: ACCEPT_HEADERS.json,
       operation: "vehicle_evaluation_gas",
@@ -630,17 +644,34 @@ class ScaniaClient {
 
 function createScaniaClientFromEnv(options = {}) {
   const env = options.env || process.env;
+  const dataBaseUrl = String(
+    env.SCANIA_DATAACCESS_BASE_URL
+    || env.SCANIA_API_BASE_URL
+    || DEFAULT_DATA_BASE_URL,
+  ).trim().replace(/\/$/, "");
   return new ScaniaClient({
     clientId: env.SCANIA_CLIENT_ID,
-    clientSecret: env.SCANIA_CLIENT_SECRET,
+    clientSecret: env.SCANIA_CLIENT_SECRET || env.SCANIA_SECRET_KEY,
     accessToken: env.SCANIA_ACCESS_TOKEN,
     initialTokenTtlMs: Number(env.SCANIA_ACCESS_TOKEN_TTL_SECONDS || 0) * 1000,
     authBaseUrl: env.SCANIA_AUTH_BASE_URL || DEFAULT_AUTH_BASE_URL,
     challengeUrl: env.SCANIA_CHALLENGE_URL,
     tokenUrl: env.SCANIA_TOKEN_URL,
-    vehiclesUrl: env.SCANIA_RFMS_VEHICLES_URL,
-    positionsUrl: env.SCANIA_RFMS_VEHICLE_POSITIONS_URL,
-    statusesUrl: env.SCANIA_RFMS_VEHICLE_STATUSES_URL,
+    vehiclesUrl:
+      env.SCANIA_RFMS_VEHICLES_URL
+      || env.SCANIA_RFMS4_VEHICLES_URL
+      || `${dataBaseUrl}/rfms4/vehicles`,
+    positionsUrl:
+      env.SCANIA_RFMS_VEHICLE_POSITIONS_URL
+      || env.SCANIA_RFMS4_POSITIONS_URL
+      || `${dataBaseUrl}/rfms4/vehiclepositions`,
+    statusesUrl:
+      env.SCANIA_RFMS_VEHICLE_STATUSES_URL
+      || env.SCANIA_RFMS4_STATUSES_URL
+      || `${dataBaseUrl}/rfms4/vehiclestatuses`,
+    acceptVehicles: env.SCANIA_ACCEPT_VEHICLES,
+    acceptPositions: env.SCANIA_ACCEPT_POSITIONS,
+    acceptStatuses: env.SCANIA_ACCEPT_STATUSES,
     lastReportedPositionUrl: env.SCANIA_LAST_REPORTED_POSITION_URL,
     exceptionsUrl: env.SCANIA_EXCEPTION_HISTORY_URL,
     vehicleEvaluationUrl: env.SCANIA_VEHICLE_EVALUATION_URL,
@@ -655,7 +686,11 @@ function createScaniaClientFromEnv(options = {}) {
     driverEvaluationRequestUrl: env.SCANIA_DRIVER_EVALUATION_V3_REQUEST_URL,
     driverEvaluationResultUrl: env.SCANIA_DRIVER_EVALUATION_V3_RESPONSE_URL,
     gasQueryParameter: env.SCANIA_VEHICLE_EVALUATION_GAS_QUERY_PARAM,
-    timeoutMs: Number(env.SCANIA_HTTP_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
+    timeoutMs: Number(
+      env.SCANIA_HTTP_TIMEOUT_MS
+      || env.SCANIA_REQUEST_TIMEOUT_MS
+      || DEFAULT_TIMEOUT_MS,
+    ),
     retries: Number(env.SCANIA_HTTP_RETRIES ?? 1),
     maxPages: Number(env.SCANIA_MAX_PAGES || 20),
     tokenTtlMs: Number(env.SCANIA_TOKEN_TTL_SECONDS || 3600) * 1000,

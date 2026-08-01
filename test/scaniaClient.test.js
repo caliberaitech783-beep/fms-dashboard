@@ -5,6 +5,7 @@ const {
   ACCEPT_HEADERS,
   ScaniaClient,
   computeScaniaChallengeResponse,
+  createScaniaClientFromEnv,
 } = require("../src/lib/scania/scaniaClient");
 
 function jsonResponse(body, status = 200) {
@@ -142,4 +143,31 @@ test("parses the supplied Scania Position API VehicleTracksList envelope", async
 
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].Vin, "VIN-TRACK");
+});
+
+test("supports deployed RFMS4 setting names without requiring report-only endpoints", async () => {
+  const calls = [];
+  const client = createScaniaClientFromEnv({
+    env: {
+      SCANIA_CLIENT_ID: "client-id",
+      SCANIA_SECRET_KEY: Buffer.from("client-secret-bytes").toString("base64url"),
+      SCANIA_ACCESS_TOKEN: "valid-token",
+      SCANIA_ACCESS_TOKEN_TTL_SECONDS: "3600",
+      SCANIA_DATAACCESS_BASE_URL: "https://dataaccess.scania.test",
+      SCANIA_RFMS4_VEHICLES_URL: "https://dataaccess.scania.test/rfms4/vehicles",
+      SCANIA_RFMS4_STATUSES_URL: "https://dataaccess.scania.test/rfms4/vehiclestatuses",
+      SCANIA_ACCEPT_VEHICLES: "application/json; rfms=vehicles.v4.0",
+    },
+    fetchFn: async (url, options) => {
+      calls.push({ url: String(url), options });
+      return jsonResponse({ vehicleResponse: { vehicles: [{ vin: "VIN-1" }] } });
+    },
+    retries: 0,
+  });
+
+  const result = await client.getVehicles();
+
+  assert.equal(result.records.length, 1);
+  assert.equal(calls[0].url, "https://dataaccess.scania.test/rfms4/vehicles");
+  assert.equal(calls[0].options.headers.Authorization, "Bearer valid-token");
 });
