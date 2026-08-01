@@ -26,7 +26,7 @@ import { WhatsAppDeliveryDashboard } from "../components/dashboard/WhatsAppDeliv
 import { LoadingState } from "../components/ui/LoadingState";
 import { Panel } from "../components/ui/Panel";
 import { TimingToast } from "../components/ui/TimingToast";
-import { invalidateVolvoLiveCache, refreshVolvoLiveData } from "../services/adapters/volvoRfmsAdapter";
+import { invalidateLiveOemCaches, refreshLiveOemData } from "../services/adapters/volvoRfmsAdapter";
 
 export function App() {
   return (
@@ -76,11 +76,11 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     [currentUser],
   );
   const reloadDashboard = () => {
-    invalidateVolvoLiveCache();
+    invalidateLiveOemCaches();
     setRefreshKey((current) => current + 1);
   };
-  const refreshVolvo = async () => {
-    await refreshVolvoLiveData();
+  const refreshLiveOems = async () => {
+    await refreshLiveOemData();
     reloadDashboard();
   };
 
@@ -162,7 +162,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               refreshKey,
               showTimingNotice,
               reloadDashboard,
-              ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshVolvo : undefined,
+              ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshLiveOems : undefined,
             )
           )}
         </div>

@@ -4,6 +4,11 @@ import type { FleetDataAdapter } from "../../types/integrations";
 import { resolveOperationalShift } from "../../utils/shiftResolver";
 import { fetchScaniaIntegrationStatus } from "../scaniaReportService";
 import { mockAdapter } from "./mockAdapter";
+import {
+  fetchScaniaLiveSnapshot,
+  invalidateScaniaLiveCache,
+  refreshScaniaLiveData,
+} from "./scaniaLiveService";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -300,6 +305,11 @@ export function invalidateVolvoLiveCache() {
   cachedSnapshot = null;
 }
 
+export function invalidateLiveOemCaches() {
+  invalidateVolvoLiveCache();
+  invalidateScaniaLiveCache();
+}
+
 export async function refreshVolvoLiveData(): Promise<void> {
   const session = getAuthSession();
   if (!session?.token) throw new Error("Authentication required.");
@@ -317,6 +327,20 @@ export async function refreshVolvoLiveData(): Promise<void> {
   invalidateVolvoLiveCache();
 }
 
+export async function refreshLiveOemData(): Promise<void> {
+  const results = await Promise.allSettled([
+    refreshVolvoLiveData(),
+    refreshScaniaLiveData(),
+  ]);
+  invalidateLiveOemCaches();
+  if (results.every((result) => result.status === "rejected")) {
+    const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    throw firstFailure?.reason instanceof Error
+      ? firstFailure.reason
+      : new Error("Live OEM data refresh failed.");
+  }
+}
+
 async function mockVehicleContext() {
   const vehicles = await mockAdapter.fetchVehicles();
   const nonVolvoVehicles = vehicles.filter((vehicle) => (
@@ -329,21 +353,34 @@ async function mockVehicleContext() {
 }
 
 async function liveAwareTelemetry(): Promise<FleetTelemetryRecord[]> {
-  const [snapshot, records, context] = await Promise.all([
+  const [volvoSnapshot, scaniaSnapshot, records, context] = await Promise.all([
     fetchLiveSnapshot(),
+    fetchScaniaLiveSnapshot(),
     mockAdapter.fetchTelemetry(),
     mockVehicleContext(),
   ]);
   const nonVolvoRecords = records.filter((record) => context.nonVolvoIds.has(record.vehicleId));
-  return snapshot ? [...nonVolvoRecords, ...snapshot.telemetry] : nonVolvoRecords;
+  return [
+    ...nonVolvoRecords,
+    ...(volvoSnapshot?.telemetry ?? []),
+    ...(scaniaSnapshot?.telemetry ?? []),
+  ];
 }
 
 export const volvoRfmsAdapter: FleetDataAdapter = {
   fetchSites: () => mockAdapter.fetchSites(),
 
   async fetchVehicles() {
-    const [snapshot, context] = await Promise.all([fetchLiveSnapshot(), mockVehicleContext()]);
-    return snapshot ? [...context.nonVolvoVehicles, ...snapshot.vehicles] : context.nonVolvoVehicles;
+    const [volvoSnapshot, scaniaSnapshot, context] = await Promise.all([
+      fetchLiveSnapshot(),
+      fetchScaniaLiveSnapshot(),
+      mockVehicleContext(),
+    ]);
+    return [
+      ...context.nonVolvoVehicles,
+      ...(volvoSnapshot?.vehicles ?? []),
+      ...(scaniaSnapshot?.vehicles ?? []),
+    ];
   },
 
   fetchTelemetry: liveAwareTelemetry,
@@ -354,14 +391,15 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
     return (await liveAwareTelemetry()).filter((record) => record.trips !== null);
   },
   async fetchIntegrations() {
-    const [snapshot, scaniaIntegration, integrations] = await Promise.all([
+    const [snapshot, scaniaSnapshot, scaniaIntegration, integrations] = await Promise.all([
       fetchLiveSnapshot(),
+      fetchScaniaLiveSnapshot(),
       fetchScaniaIntegrationStatus(),
       mockAdapter.fetchIntegrations(),
     ]);
     return integrations.map((integration) => {
       if (integration.company === "Volvo" && snapshot) return snapshot.integration;
-      if (integration.company === "Scania") return scaniaIntegration;
+      if (integration.company === "Scania") return scaniaSnapshot?.integration ?? scaniaIntegration;
       return integration;
     });
   },

@@ -549,7 +549,7 @@ export async function fetchScaniaIntegrationStatus(): Promise<IntegrationSource>
     return { ...fallback, status: "not_configured", errorMessage: "Dashboard authentication is required." };
   }
   try {
-    const response = await fetch(`${API_BASE_URL}/scania/status`, {
+    const response = await fetch(`${API_BASE_URL}/scania/snapshot`, {
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${session.token}`,
