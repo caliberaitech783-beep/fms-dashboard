@@ -1,4 +1,5 @@
 const { app } = require("@azure/functions");
+const { timingSafeEqual } = require("node:crypto");
 const { loadLocalEnv } = require("../lib/loadLocalEnv");
 
 loadLocalEnv();
@@ -16,6 +17,11 @@ const {
   validateReportInput,
 } = require("../lib/scania/scaniaVehicleEvaluation");
 const { buildScaniaShiftSummary } = require("../lib/scania/scaniaShiftSummary");
+const {
+  clearScaniaLiveCache,
+  getLiveScaniaSnapshot,
+  synchronizeScania,
+} = require("../lib/scania/scaniaSyncService");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
 let shiftStatusCache = null;
@@ -166,6 +172,16 @@ function failureResponse(request, context, error, operation) {
 
 function queryValue(request, name) {
   return String(request.query.get(name) || "").trim();
+}
+
+function safeSecretEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""));
+  const rightBuffer = Buffer.from(String(right || ""));
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function requestSyncSecret(request) {
+  return request.headers.get("x-sync-secret") || request.query.get("secret") || "";
 }
 
 function maskVin(value) {
@@ -358,37 +374,69 @@ async function handlePositions(request, context) {
 async function handleStatus(request, context) {
   return withLiveActor(request, "status", async (actor) => {
     const logger = createLogger(context);
-    const client = createScaniaClientFromEnv({
-      onEvent: (event, details) => logger(event, details),
-    });
-    const result = await client.getVehicleStatuses({
-      vin: queryValue(request, "vin"),
-    });
+    const snapshot = await getLiveScaniaSnapshot({ allowBootstrap: true });
     const canViewPrecise = LIVE_ROLES.has(actor.role);
-    const statuses = result.records.map((status) => statusItem(status, canViewPrecise));
-    const fetchedAt = new Date().toISOString();
+    const requestedVin = queryValue(request, "vin").toUpperCase();
+    const statuses = snapshot.telemetry
+      .filter((record) => !requestedVin || record.trackerId.toUpperCase() === requestedVin)
+      .map((record) => ({
+        ...statusItem(record.rawMetrics.scaniaStatus || {}, canViewPrecise),
+        vin: canViewPrecise ? record.trackerId : maskVin(record.trackerId),
+        recordedAt: record.timestamp,
+        speedKph: record.rawMetrics.speedKph ?? null,
+      }));
     logger("status_complete", {
-      scaniaEndpoint: result.endpoint,
-      httpStatus: result.status,
-      apiRecordCount: result.records.length,
+      storageTables: snapshot.storage.tableNames,
+      apiRecordCount: snapshot.storage.persistedStateCount,
       finalVehicleCount: statuses.length,
     });
     return response(request, 200, {
       statuses,
       count: statuses.length,
-      fetchedAt,
-      source: "SCANIA_LIVE_API",
-      integration: {
-        id: "live-integration-scania",
-        company: "Scania",
-        sourceType: "API",
-        status: "connected",
-        lastSyncAt: fetchedAt,
-        nextSyncAt: null,
-        recordsSyncedToday: statuses.length,
-      },
+      fetchedAt: snapshot.fetchedAt,
+      source: snapshot.source,
+      integration: snapshot.integration,
     });
   }, context);
+}
+
+async function handleSnapshot(request, context) {
+  if (request.method === "OPTIONS") return response(request, 204, null);
+  try {
+    await requireActor(request);
+    return response(request, 200, await getLiveScaniaSnapshot({ allowBootstrap: true }));
+  } catch (error) {
+    return failureResponse(request, context, error, "snapshot");
+  }
+}
+
+async function handleManualRefresh(request, context) {
+  return withLiveActor(request, "manual refresh", async () => {
+    const sync = await synchronizeScania({ force: true });
+    clearScaniaLiveCache();
+    shiftStatusCache = null;
+    return response(request, 200, {
+      ok: true,
+      sync,
+      snapshot: await getLiveScaniaSnapshot({ allowBootstrap: false, force: true }),
+    });
+  }, context);
+}
+
+async function handleInternalSync(request, context) {
+  if (request.method === "OPTIONS") return response(request, 204, null);
+  const expected = process.env.SCANIA_SYNC_SECRET;
+  if (!expected || !safeSecretEquals(requestSyncSecret(request), expected)) {
+    return response(request, 401, { message: "Authentication required." });
+  }
+  try {
+    const sync = await synchronizeScania();
+    clearScaniaLiveCache();
+    shiftStatusCache = null;
+    return response(request, 200, { ok: true, sync });
+  } catch (error) {
+    return failureResponse(request, context, error, "internal synchronization");
+  }
 }
 
 async function handleExceptions(request, context) {
@@ -449,10 +497,14 @@ async function getShiftStatusSnapshot(logger) {
 
   pendingShiftStatus = (async () => {
     try {
-      const client = createScaniaClientFromEnv({
-        onEvent: (event, details) => logger(event, details),
-      });
-      const result = await client.getVehicleStatuses();
+      const snapshot = await getLiveScaniaSnapshot({ allowBootstrap: true });
+      const result = {
+        endpoint: "ScaniaVehicleState",
+        status: 200,
+        records: snapshot.telemetry
+          .map((record) => record.rawMetrics.scaniaStatus)
+          .filter(Boolean),
+      };
       shiftStatusCache = { result, expiresAt: Date.now() + ttlMs };
       return result;
     } catch (error) {
@@ -552,11 +604,50 @@ app.http("scaniaVehicleEvaluationReport", {
   handler: handleVehicleEvaluation,
 });
 
+app.http("scaniaSnapshot", {
+  route: "scania/snapshot",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: handleSnapshot,
+});
+
+app.http("scaniaManualRefresh", {
+  route: "integrations/scania/refresh",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: handleManualRefresh,
+});
+
+app.http("scaniaInternalSync", {
+  route: "internal/scania-sync",
+  authLevel: "anonymous",
+  methods: ["POST", "OPTIONS"],
+  handler: handleInternalSync,
+});
+
 app.http("scaniaShiftSummaryReport", {
   route: "scania/reports/shift-summary",
   authLevel: "anonymous",
   methods: ["POST", "OPTIONS"],
   handler: handleShiftSummary,
+});
+
+app.timer("scaniaScheduledSync", {
+  schedule: "30 */5 * * * *",
+  handler: async (_timer, context) => {
+    const configured = Boolean(
+      process.env.SCANIA_ACCESS_TOKEN
+      || (process.env.SCANIA_CLIENT_ID && (process.env.SCANIA_CLIENT_SECRET || process.env.SCANIA_SECRET_KEY)),
+    );
+    if (!configured) return;
+    try {
+      await synchronizeScania();
+      clearScaniaLiveCache();
+      shiftStatusCache = null;
+    } catch (error) {
+      context.error("Scheduled Scania synchronization failed", safeErrorMessage(error, scaniaSecrets()));
+    }
+  },
 });
 
 module.exports = {
@@ -565,6 +656,7 @@ module.exports = {
   failureResponse,
   handleExceptions,
   handlePositions,
+  handleSnapshot,
   handleStatus,
   handleShiftSummary,
   handleVehicleEvaluation,
