@@ -120,15 +120,39 @@ function createAccumulator(vehicle, driverId, driverName) {
 function addInterval(target, previous, current) {
   const accumulatedCurrent = eventAccumulated(current) || {};
   const accumulatedPrevious = eventAccumulated(previous) || {};
-  const currentValue = (lower, upper) => accumulatedCurrent[lower] ?? accumulatedCurrent[upper];
-  const previousValue = (lower, upper) => accumulatedPrevious[lower] ?? accumulatedPrevious[upper];
+  const currentValue = (...keys) => keys
+    .map((key) => accumulatedCurrent[key])
+    .find((value) => value !== undefined && value !== null);
+  const previousValue = (...keys) => keys
+    .map((key) => accumulatedPrevious[key])
+    .find((value) => value !== undefined && value !== null);
   const runningSeconds = difference(
-    currentValue("durationWheelbaseSpeedOverZero", "DurationWheelbaseSpeedOverZero"),
-    previousValue("durationWheelbaseSpeedOverZero", "DurationWheelbaseSpeedOverZero"),
+    currentValue(
+      "durationWheelbaseSpeedOverZero",
+      "DurationWheelbaseSpeedOverZero",
+      "durationWheelbasedSpeedOverZero",
+      "DurationWheelbasedSpeedOverZero",
+    ),
+    previousValue(
+      "durationWheelbaseSpeedOverZero",
+      "DurationWheelbaseSpeedOverZero",
+      "durationWheelbasedSpeedOverZero",
+      "DurationWheelbasedSpeedOverZero",
+    ),
   );
   const standstillSeconds = difference(
-    currentValue("durationWheelbaseSpeedZero", "DurationWheelbaseSpeedZero"),
-    previousValue("durationWheelbaseSpeedZero", "DurationWheelbaseSpeedZero"),
+    currentValue(
+      "durationWheelbaseSpeedZero",
+      "DurationWheelbaseSpeedZero",
+      "durationWheelbasedSpeedZero",
+      "DurationWheelbasedSpeedZero",
+    ),
+    previousValue(
+      "durationWheelbaseSpeedZero",
+      "DurationWheelbaseSpeedZero",
+      "durationWheelbasedSpeedZero",
+      "DurationWheelbasedSpeedZero",
+    ),
   );
   const coastingClass = classSecondsDelta(current, previous, "DrivingWithoutTorqueClass");
   const engineLoadClass = classSecondsDelta(current, previous, "EngineTorqueClass");
@@ -182,6 +206,7 @@ function finalizeRow(value, shiftName, shiftDurationHours) {
 
   return {
     vehicle: value.vehicleNumber,
+    vin: value.vin,
     driverId: value.driverId,
     driver: value.driverName,
     totalTime: formatHoursMinutes(value.totalTimeSeconds),
@@ -270,13 +295,18 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
     while (nextIndex < vins.length) {
       const index = nextIndex;
       nextIndex += 1;
-      eventBatches[index] = await client.fetchHistoricalVehicleStatuses({
-        startTime: options.startTime,
-        stopTime: options.stopTime,
-        contentFilter: options.contentFilter,
-        maxPages: options.maxPages,
-        vin: vins[index],
-      });
+      try {
+        eventBatches[index] = await client.fetchHistoricalVehicleStatuses({
+          startTime: options.startTime,
+          stopTime: options.stopTime,
+          contentFilter: options.contentFilter,
+          maxPages: options.maxPages,
+          vin: vins[index],
+        });
+      } catch (error) {
+        if (!options.continueOnError) throw error;
+        eventBatches[index] = [];
+      }
       if (requestDelayMs > 0 && nextIndex < vins.length) {
         await new Promise((resolve) => setTimeout(resolve, requestDelayMs));
       }

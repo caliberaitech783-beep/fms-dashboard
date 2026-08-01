@@ -162,6 +162,14 @@ function hasMoreData(payload) {
     || payload?.vehicleStatusResponse?.moreDataAvailable === true;
 }
 
+function continuationUrl(nextLink, currentUrl) {
+  const next = String(nextLink || "").trim();
+  const current = new URL(currentUrl);
+  if (/^https?:\/\//i.test(next)) return new URL(next).toString();
+  if (next.startsWith("?")) return new URL(next, current).toString();
+  return new URL(`/${next.replace(/^\/+/, "")}`, current.origin).toString();
+}
+
 class ScaniaClient {
   constructor(options = {}) {
     this.clientId = String(options.clientId || "").trim();
@@ -627,7 +635,7 @@ class ScaniaClient {
           },
         );
       }
-      pageUrl = new URL(next, pageUrl).toString();
+      pageUrl = continuationUrl(next, pageUrl);
       pageQuery = {};
     }
 
@@ -703,6 +711,7 @@ module.exports = {
   ScaniaApiError,
   ScaniaClient,
   computeScaniaChallengeResponse,
+  continuationUrl,
   createScaniaClientFromEnv,
   endpointForLog,
   exceptionRows,
