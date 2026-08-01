@@ -431,31 +431,39 @@ export async function fetchScaniaShiftSummaryReport(
 
   const reportRequest = (async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/scania/reports/shift-summary`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${session.token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request.body),
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
+      let response: Response | null = null;
+      let payload: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        response = await fetch(`${API_BASE_URL}/scania/reports/shift-summary`, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${session.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request.body),
+        });
+        payload = await response.json().catch(() => null);
+        if (response.ok) break;
         const details = payload && typeof payload === "object"
           ? (payload as ScaniaErrorResponse).error
           : null;
-        return {
-          ...errorPreview(
-            filters,
-            details?.kind ?? "upstream",
-            details?.message ?? "Scania live shift report request failed.",
-            { retryable: details?.retryable, status: response.status },
-          ),
-          reportType: "Shift-wise Fuel Report" as const,
-          columns: SCANIA_SHIFT_REPORT_COLUMNS,
-        };
+        const retryable = Boolean(details?.retryable || [502, 503, 504].includes(response.status));
+        if (!retryable || attempt === 1) {
+          return {
+            ...errorPreview(
+              filters,
+              details?.kind ?? "upstream",
+              details?.message ?? "Scania live shift report request failed.",
+              { retryable, status: response.status },
+            ),
+            reportType: "Shift-wise Fuel Report" as const,
+            columns: SCANIA_SHIFT_REPORT_COLUMNS,
+          };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_200));
       }
+      if (!response) throw new Error("Scania shift report request did not start.");
       if (!isScaniaShiftSummaryResponse(payload)) {
         return {
           ...errorPreview(
