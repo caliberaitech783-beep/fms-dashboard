@@ -34,7 +34,7 @@ export type VehicleStatus =
 
 export type ShiftCode = "A" | "B" | "C" | "UNKNOWN" | "ALL_DAY";
 
-export type DataSource = "DUMMY_SAMPLE" | "VOLVO_RFMS_LIVE" | "SCANIA_RFMS_LIVE";
+export type DataSource = "DUMMY_SAMPLE" | "VOLVO_RFMS_LIVE" | "SCANIA_RFMS_LIVE" | "EICHER_VECV_LIVE";
 
 export interface Site {
   id: string;

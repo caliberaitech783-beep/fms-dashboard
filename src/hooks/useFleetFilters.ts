@@ -45,7 +45,7 @@ const initialFilterVehicles = seedVehicles.map((vehicle) => {
   };
 });
 
-const LIVE_REPORT_OEMS: Vehicle["company"][] = ["Volvo", "Scania"];
+const LIVE_REPORT_OEMS: Vehicle["company"][] = ["Volvo", "Scania", "Eicher"];
 const CATEGORY_OEMS: Partial<Record<Vehicle["assetCategory"], Vehicle["company"][]>> = {
   Truck: ["Volvo", "Scania", "Eicher"],
   HEMM: ["Case", "Komatsu", "LiuGong", "Tata Hitachi"],

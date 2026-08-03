@@ -22,6 +22,10 @@ import {
   fetchScaniaShiftSummaryReport,
   invalidateScaniaReportCache,
 } from "./scaniaReportService";
+import {
+  fetchEicherLiveSnapshot,
+  invalidateEicherLiveCache,
+} from "./adapters/eicherLiveService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
 import { resolveOperationalShift } from "../utils/shiftResolver";
 import {
@@ -41,6 +45,10 @@ export const reportService = {
     filters: DashboardFilters,
     options: { forceRefresh?: boolean } = {},
   ): Promise<ReportPreview> {
+    if (reportType === "Eicher Report") {
+      return buildEicherReport(filters, options);
+    }
+
     if (reportType === "Shift-wise Fuel Report") {
       return buildShiftWiseFuelReport(filters, options);
     }
@@ -187,6 +195,29 @@ export const reportService = {
   },
 };
 
+const EICHER_REPORT_COLUMNS = [
+  "Registration Number",
+  "Chassis Number",
+  "Model",
+  "Vehicle Status",
+  "Total Distance Travelled",
+  "Latitude",
+  "Longitude",
+  "Speed (Km/h)",
+  "Vehicle Direction",
+  "Device ID",
+  "Current Location",
+  "GPS Timestamp",
+  "Last Successful Update",
+  "Total Engine Hours (Hr)",
+  "Fuel Efficiency (Km/L)",
+  "Total Fuel Consumed (L)",
+  "Fuel Consumed in Idling (L or Kg)",
+  "Fuel Consumed in Idling (%)",
+  "Time Spent in Idling (Min)",
+  "Time Spent in Idling (%)",
+];
+
 const SHIFT_REPORT_COLUMNS = [
   "Shift",
   "Site",
@@ -201,6 +232,108 @@ const SHIFT_REPORT_COLUMNS = [
   "Production (m3)",
   "Coverage",
 ];
+
+async function buildEicherReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  if (options.forceRefresh) {
+    invalidateEicherLiveCache();
+  }
+
+  const snapshot = await fetchEicherLiveSnapshot();
+  if (!snapshot) {
+    return {
+      reportType: "Eicher Report",
+      generatedAt: new Date().toISOString(),
+      columns: EICHER_REPORT_COLUMNS,
+      rows: [],
+      oem: "Eicher",
+      live: false,
+      source: "EICHER_VECV_LIVE",
+      error: {
+        kind: "upstream",
+        message: "Eicher live data is temporarily unavailable.",
+        retryable: true,
+      },
+    };
+  }
+
+  const latestByVehicle = latestRecordsByVehicle(snapshot.telemetry);
+  const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
+  const rows = snapshot.vehicles
+    .filter((vehicle) => vehicle.source === "EICHER_VECV_LIVE")
+    .filter((vehicle) => filters.status === "All" || vehicle.status === filters.status)
+    .filter((vehicle) => !vehicleSearch || vehicle.vehicleNumber.toLowerCase().includes(vehicleSearch))
+    .map((vehicle) => {
+      const record = latestByVehicle.get(vehicle.id);
+      const raw = record?.rawMetrics ?? {};
+      const distance = numberMetric(raw, "lifetimeOdometerKm")
+        ?? numberMetric(raw, "odometerKm")
+        ?? record?.odometerKm
+        ?? null;
+      const engineHours = numberMetric(raw, "engineHours") ?? record?.engineHours ?? null;
+      const fuelConsumed = numberMetric(raw, "fuelConsumedLitres") ?? record?.fuelConsumedLitres ?? null;
+      const idleFuel = numberMetric(raw, "idleFuelConsumedLitres")
+        ?? numberMetric(raw, "fuelConsumedInIdling")
+        ?? null;
+      const idleMinutes = numberMetric(raw, "idleMinutes")
+        ?? numberMetric(raw, "timeSpentInIdlingMinutes")
+        ?? (record?.idleHours !== null && record?.idleHours !== undefined ? record.idleHours * 60 : null);
+
+      return {
+        "Registration Number": stringMetric(raw, "registrationNumber") ?? vehicle.vehicleNumber,
+        "Chassis Number": stringMetric(raw, "chassisNumber") ?? vehicle.trackerId,
+        Model: vehicle.modelNumber ?? stringMetric(raw, "model") ?? null,
+        "Vehicle Status": stringMetric(raw, "vehicleStatus") ?? record?.status ?? vehicle.status,
+        "Total Distance Travelled": roundNullable(distance),
+        Latitude: roundNullable(numberMetric(raw, "latitude"), 6),
+        Longitude: roundNullable(numberMetric(raw, "longitude"), 6),
+        "Speed (Km/h)": roundNullable(numberMetric(raw, "speedKph")),
+        "Vehicle Direction": roundNullable(numberMetric(raw, "vehicleDirection") ?? numberMetric(raw, "heading")),
+        "Device ID": stringMetric(raw, "deviceId"),
+        "Current Location": stringMetric(raw, "currentLocation") ?? record?.location ?? null,
+        "GPS Timestamp": stringMetric(raw, "gpsTimestamp") ?? record?.timestamp ?? null,
+        "Last Successful Update": stringMetric(raw, "lastSuccessfulUpdate"),
+        "Total Engine Hours (Hr)": roundNullable(engineHours),
+        "Fuel Efficiency (Km/L)": fuelConsumed && distance !== null ? roundNullable(distance / fuelConsumed) : null,
+        "Total Fuel Consumed (L)": roundNullable(fuelConsumed),
+        "Fuel Consumed in Idling (L or Kg)": roundNullable(idleFuel),
+        "Fuel Consumed in Idling (%)": fuelConsumed && idleFuel !== null ? roundNullable(idleFuel / fuelConsumed * 100) : null,
+        "Time Spent in Idling (Min)": roundNullable(idleMinutes),
+        "Time Spent in Idling (%)": engineHours && idleMinutes !== null ? roundNullable(idleMinutes / 60 / engineHours * 100) : null,
+      };
+    })
+    .sort((left, right) => String(left["Registration Number"]).localeCompare(
+      String(right["Registration Number"]),
+      undefined,
+      { numeric: true },
+    ));
+
+  return {
+    reportType: "Eicher Report",
+    generatedAt: new Date().toISOString(),
+    columns: EICHER_REPORT_COLUMNS,
+    rows,
+    oem: "Eicher",
+    live: true,
+    source: snapshot.source,
+    notice: "Generated from Eicher VECV live location data. Fuel, engine-hour, and idling columns remain blank where the API does not supply those fields.",
+    meta: {
+      rawRecordCount: snapshot.meta?.rawRecordCount ?? snapshot.telemetry.length,
+      finalFilteredVehicleCount: rows.length,
+      unavailableFields: [
+        "Total Engine Hours (Hr)",
+        "Fuel Efficiency (Km/L)",
+        "Total Fuel Consumed (L)",
+        "Fuel Consumed in Idling (L or Kg)",
+        "Fuel Consumed in Idling (%)",
+        "Time Spent in Idling (Min)",
+        "Time Spent in Idling (%)",
+      ],
+    },
+  };
+}
 
 async function buildShiftWiseFuelReport(
   filters: DashboardFilters,
@@ -406,6 +539,7 @@ function shiftCoverage(records: FleetTelemetryRecord[]): string {
   const labels: string[] = [];
   if (sources.has("VOLVO_RFMS_LIVE")) labels.push("Volvo live cumulative snapshot");
   if (sources.has("SCANIA_RFMS_LIVE")) labels.push("Scania live cumulative snapshot");
+  if (sources.has("EICHER_VECV_LIVE")) labels.push("Eicher live location snapshot");
   if (sources.has("DUMMY_SAMPLE")) labels.push("Sample period data");
   return labels.join(" + ") || "No source";
 }
@@ -413,6 +547,27 @@ function shiftCoverage(records: FleetTelemetryRecord[]): string {
 function roundNumber(value: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round((Number.isFinite(value) ? value : 0) * factor) / factor;
+}
+
+function roundNullable(value: number | null | undefined, digits = 2): number | null {
+  return value === null || value === undefined || !Number.isFinite(value)
+    ? null
+    : roundNumber(value, digits);
+}
+
+function stringMetric(metrics: Record<string, unknown>, key: string): string | null {
+  const value = metrics[key];
+  const text = value === null || value === undefined ? "" : String(value).trim();
+  return text || null;
+}
+
+function numberMetric(metrics: Record<string, unknown>, key: string): number | null {
+  const value = metrics[key];
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function rowsToCsv(rows: Record<string, string | number | null>[], columns: string[]) {

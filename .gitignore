@@ -7,6 +7,19 @@ vite.config.js
 vite.config.d.ts
 .env
 .env.local
+.env.*
+!.env.example
+api/.env
+api/.env.*
+!api/.env.example
+**/*API Key*.pdf
+**/Caliber Mining API VINs Status.xlsx
+**/Curls VECV Location*.txt
+**/eicher-api-response*.json
+**/eicher-token*.json
+api-responses/
+tokens/
+tmp/
 .DS_Store
 src-tauri/target/
 src-tauri/gen/

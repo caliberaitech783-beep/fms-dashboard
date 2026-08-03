@@ -3,7 +3,7 @@ const { defaultTableNames } = require("./oemTableStore");
 const OEM_DEFINITIONS = [
   { name: "Volvo", prefix: "VOLVO", implemented: true },
   { name: "Scania", prefix: "SCANIA", implemented: true },
-  { name: "Eicher", prefix: "EICHER", implemented: false },
+  { name: "Eicher", prefix: "EICHER", implemented: true },
   { name: "LiuGong", prefix: "LIUGONG", implemented: false },
   { name: "TataHitachi", prefix: "TATA_HITACHI", implemented: false },
   { name: "Case", prefix: "CASE", implemented: false },

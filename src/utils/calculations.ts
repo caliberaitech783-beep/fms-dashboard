@@ -299,6 +299,7 @@ export function generateAlerts(
     const variance = calculateVarianceFromNorm(row.efficiency, vehicle.standardFuelNorm, vehicle.fuelMeasurementUnit);
     const lPer100Km = typeof latest?.rawMetrics?.lPer100Km === "number" ? latest.rawMetrics.lPer100Km : null;
     const isLiveVolvo = vehicle.source === "VOLVO_RFMS_LIVE";
+    const isEicherLive = vehicle.source === "EICHER_VECV_LIVE";
     const eventType = typeof latest?.rawMetrics?.eventType === "string" ? latest.rawMetrics.eventType : null;
     const adBluePercent = typeof latest?.rawMetrics?.adBluePercent === "number" ? latest.rawMetrics.adBluePercent : null;
     const fuelPercent = typeof latest?.rawMetrics?.fuelPercent === "number" ? latest.rawMetrics.fuelPercent : null;
@@ -338,7 +339,7 @@ export function generateAlerts(
       alerts.push(makeAlert("EXCESSIVE_IDLE", "warning", vehicle, latest, `${vehicle.vehicleNumber} idle time is ${idlePercentage}% of engine hours.`));
     }
 
-    if (!isLiveVolvo && latest && (latest.distanceKm === null || latest.fuelConsumedLitres === null || latest.engineHours === null)) {
+    if (!isLiveVolvo && !isEicherLive && latest && (latest.distanceKm === null || latest.fuelConsumedLitres === null || latest.engineHours === null)) {
       alerts.push(makeAlert("DATA_MAPPING_WARNING", "info", vehicle, latest, `${vehicle.vehicleNumber} has missing mapped source fields.`));
     }
   });

@@ -3,6 +3,12 @@ import type { FleetTelemetryRecord, IntegrationSource, Vehicle, VehicleStatus } 
 import type { FleetDataAdapter } from "../../types/integrations";
 import { resolveOperationalShift } from "../../utils/shiftResolver";
 import { fetchScaniaIntegrationStatus } from "../scaniaReportService";
+import {
+  defaultEicherIntegration,
+  fetchEicherLiveSnapshot,
+  invalidateEicherLiveCache,
+  refreshEicherLiveData,
+} from "./eicherLiveService";
 import { mockAdapter } from "./mockAdapter";
 import {
   fetchScaniaLiveSnapshot,
@@ -308,6 +314,7 @@ export function invalidateVolvoLiveCache() {
 export function invalidateLiveOemCaches() {
   invalidateVolvoLiveCache();
   invalidateScaniaLiveCache();
+  invalidateEicherLiveCache();
 }
 
 export async function refreshVolvoLiveData(): Promise<void> {
@@ -331,6 +338,7 @@ export async function refreshLiveOemData(): Promise<void> {
   const results = await Promise.allSettled([
     refreshVolvoLiveData(),
     refreshScaniaLiveData(),
+    refreshEicherLiveData(),
   ]);
   invalidateLiveOemCaches();
   if (results.every((result) => result.status === "rejected")) {
@@ -344,7 +352,7 @@ export async function refreshLiveOemData(): Promise<void> {
 async function mockVehicleContext() {
   const vehicles = await mockAdapter.fetchVehicles();
   const nonVolvoVehicles = vehicles.filter((vehicle) => (
-    vehicle.company !== "Volvo" && vehicle.company !== "Scania"
+    vehicle.company !== "Volvo" && vehicle.company !== "Scania" && vehicle.company !== "Eicher"
   ));
   return {
     nonVolvoVehicles,
@@ -353,9 +361,10 @@ async function mockVehicleContext() {
 }
 
 async function liveAwareTelemetry(): Promise<FleetTelemetryRecord[]> {
-  const [volvoSnapshot, scaniaSnapshot, records, context] = await Promise.all([
+  const [volvoSnapshot, scaniaSnapshot, eicherSnapshot, records, context] = await Promise.all([
     fetchLiveSnapshot(),
     fetchScaniaLiveSnapshot(),
+    fetchEicherLiveSnapshot(),
     mockAdapter.fetchTelemetry(),
     mockVehicleContext(),
   ]);
@@ -364,6 +373,7 @@ async function liveAwareTelemetry(): Promise<FleetTelemetryRecord[]> {
     ...nonVolvoRecords,
     ...(volvoSnapshot?.telemetry ?? []),
     ...(scaniaSnapshot?.telemetry ?? []),
+    ...(eicherSnapshot?.telemetry ?? []),
   ];
 }
 
@@ -371,15 +381,17 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
   fetchSites: () => mockAdapter.fetchSites(),
 
   async fetchVehicles() {
-    const [volvoSnapshot, scaniaSnapshot, context] = await Promise.all([
+    const [volvoSnapshot, scaniaSnapshot, eicherSnapshot, context] = await Promise.all([
       fetchLiveSnapshot(),
       fetchScaniaLiveSnapshot(),
+      fetchEicherLiveSnapshot(),
       mockVehicleContext(),
     ]);
     return [
       ...context.nonVolvoVehicles,
       ...(volvoSnapshot?.vehicles ?? []),
       ...(scaniaSnapshot?.vehicles ?? []),
+      ...(eicherSnapshot?.vehicles ?? []),
     ];
   },
 
@@ -391,15 +403,17 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
     return (await liveAwareTelemetry()).filter((record) => record.trips !== null);
   },
   async fetchIntegrations() {
-    const [snapshot, scaniaSnapshot, scaniaIntegration, integrations] = await Promise.all([
+    const [snapshot, scaniaSnapshot, eicherSnapshot, scaniaIntegration, integrations] = await Promise.all([
       fetchLiveSnapshot(),
       fetchScaniaLiveSnapshot(),
+      fetchEicherLiveSnapshot(),
       fetchScaniaIntegrationStatus(),
       mockAdapter.fetchIntegrations(),
     ]);
     return integrations.map((integration) => {
       if (integration.company === "Volvo" && snapshot) return snapshot.integration;
       if (integration.company === "Scania") return scaniaSnapshot?.integration ?? scaniaIntegration;
+      if (integration.company === "Eicher") return eicherSnapshot?.integration ?? defaultEicherIntegration();
       return integration;
     });
   },

@@ -8,6 +8,7 @@ import {
 } from "../utils/calculations";
 import { TRACKER_HEALTH_THRESHOLDS } from "../constants/thresholds";
 import { getFilteredPortalData } from "./dataAccess";
+import { isLiveOemSource } from "../utils/filters";
 
 export interface FleetVehicleRow {
   vehicle: Vehicle;
@@ -31,29 +32,38 @@ export const fleetService = {
     const siteMap = new Map(sites.map((site) => [site.id, site.name]));
     const recordsByVehicle = groupBy(filteredRecords, (record) => record.vehicleId);
     const liveRecordsByVehicle = groupBy(
-      records.filter((record) => record.source === "VOLVO_RFMS_LIVE"),
+      records.filter((record) => isLiveOemSource(record.source)),
       (record) => record.vehicleId,
     );
 
     return filteredVehicles
       .map((vehicle) => {
-        const vehicleRecords = vehicle.source === "VOLVO_RFMS_LIVE"
+        const isLiveOem = isLiveOemSource(vehicle.source);
+        const isEicher = vehicle.source === "EICHER_VECV_LIVE";
+        const vehicleRecords = isLiveOem
           ? liveRecordsByVehicle.get(vehicle.id) ?? []
           : recordsByVehicle.get(vehicle.id) ?? [];
         const totals = sumRecords(vehicleRecords);
         const latestRecord = [...vehicleRecords].sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-        const isLiveVolvo = vehicle.source === "VOLVO_RFMS_LIVE";
-        const runningHours = isLiveVolvo
+        const runningHours = vehicle.source === "VOLVO_RFMS_LIVE"
           ? rawMetricNumber(latestRecord, "lifetimeRunningHours") ?? 0
+          : isEicher
+            ? 0
           : totals.runningHours;
-        const idleHours = isLiveVolvo
+        const idleHours = vehicle.source === "VOLVO_RFMS_LIVE"
           ? rawMetricNumber(latestRecord, "lifetimeIdleHours") ?? 0
+          : isEicher
+            ? 0
           : totals.idleHours;
-        const fuelConsumedLitres = isLiveVolvo
+        const fuelConsumedLitres = vehicle.source === "VOLVO_RFMS_LIVE"
           ? rawMetricNumber(latestRecord, "lifetimeFuelLitres") ?? 0
+          : isEicher
+            ? 0
           : totals.fuelConsumedLitres;
-        const efficiency = isLiveVolvo
+        const efficiency = vehicle.source === "VOLVO_RFMS_LIVE"
           ? rawMetricNumber(latestRecord, "lifetimeEfficiencyKmPerLitre")
+          : isEicher
+            ? null
           : vehicle.assetCategory === "Truck"
           ? calculateTruckEfficiency(totals.distanceKm, totals.fuelConsumedLitres)
           : calculateHemmFuelRate(totals.fuelConsumedLitres, totals.runningHours);
@@ -62,7 +72,11 @@ export const fleetService = {
           vehicle,
           siteName: vehicle.siteName
             ?? (vehicle.siteId ? siteMap.get(vehicle.siteId) : null)
-            ?? (isLiveVolvo ? "Site assignment required" : "Not available"),
+            ?? (vehicle.source === "VOLVO_RFMS_LIVE"
+              ? "Site assignment required"
+              : isEicher
+                ? "No home site assigned"
+                : "Not available"),
           runningHours,
           idleHours,
           fuelConsumedLitres,

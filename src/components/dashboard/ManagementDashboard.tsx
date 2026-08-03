@@ -25,7 +25,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { DashboardOverview, VehiclePerformanceRow } from "../../types/dashboard";
+import type { DashboardOverview, EicherLiveDashboardRow, VehiclePerformanceRow } from "../../types/dashboard";
 import type { Alert, IntegrationSource } from "../../types/fleet";
 import { formatDateTime, formatEfficiency, formatHours, formatLitres, formatM3, formatNumber, titleCase } from "../../utils/formatters";
 import { KpiCard } from "../cards/KpiCard";
@@ -88,6 +88,20 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
     { header: "Records", render: (row) => formatNumber(row.recordsSyncedToday), align: "right" },
   ];
 
+  const eicherLiveColumns: DataTableColumn<EicherLiveDashboardRow>[] = [
+    { header: "Registration", render: (row) => row.registrationNumber, className: "min-w-36" },
+    { header: "Chassis", render: (row) => row.chassisNumber, className: "min-w-44" },
+    { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
+    { header: "Speed", render: (row) => metricText(row.speedKph, "km/h", 1), align: "right" },
+    { header: "Odometer", render: (row) => metricText(row.odometerKm, "km", 1), align: "right" },
+    { header: "Direction", render: (row) => metricText(row.vehicleDirection, "deg", 0), align: "right" },
+    { header: "Location", render: (row) => row.currentLocation || coordinateText(row.latitude, row.longitude), className: "min-w-64" },
+    { header: "Device", render: (row) => row.deviceId || "-", className: "min-w-36" },
+    { header: "GPS Time", render: (row) => formatDateTime(row.gpsTimestamp), className: "min-w-36" },
+    { header: "Last Update", render: (row) => formatDateTime(row.lastSuccessfulUpdate), className: "min-w-36" },
+  ];
+  const showEicherLiveLocations = Array.isArray(overview.eicherLiveLocations);
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
@@ -96,6 +110,16 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
           return <KpiCard key={metric.label} metric={metric} icon={<Icon className="h-5 w-5" />} />;
         })}
       </div>
+
+      {showEicherLiveLocations && (
+        <Panel title="Eicher Live Location Data" subtitle="Latest VECV location records for the selected Eicher fleet">
+          <DataTable
+            columns={eicherLiveColumns}
+            rows={overview.eicherLiveLocations ?? []}
+            getRowKey={(row) => row.vehicleId}
+          />
+        </Panel>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartFrame title="Production vs Fuel Consumed Trend" subtitle="Daily production and fuel burn across selected filters">
@@ -231,4 +255,13 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
       </div>
     </div>
   );
+}
+
+function coordinateText(latitude: number | null, longitude: number | null): string {
+  if (latitude === null || longitude === null) return "-";
+  return `${formatNumber(latitude, 6)}, ${formatNumber(longitude, 6)}`;
+}
+
+function metricText(value: number | null, unit: string, digits: number): string {
+  return value === null ? "-" : `${formatNumber(value, digits)} ${unit}`;
 }
