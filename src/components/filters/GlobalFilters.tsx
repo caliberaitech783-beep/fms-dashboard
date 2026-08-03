@@ -47,16 +47,6 @@ export function GlobalFilters({
         <FilterSelect label="OEM" value={filters.company} options={withAll(options.companies)} onChange={(value) => setFilter("company", value as DashboardFilters["company"])} />
         <FilterSelect label="Model" value={filters.modelNumber} options={withAll(options.models)} onChange={(value) => setFilter("modelNumber", value)} />
         <FilterInput label="Vehicle" value={filters.vehicleNumber} placeholder="Search vehicle" onChange={(value) => setFilter("vehicleNumber", value)} />
-        <FilterSelect label="Status" value={filters.status} options={withAll(options.statuses)} onChange={(value) => setFilter("status", value as DashboardFilters["status"])} />
-        <FilterInput
-          label="Lead"
-          type="number"
-          value={filters.lead === "All" ? "" : filters.lead}
-          placeholder="Manual"
-          min="0"
-          step="0.1"
-          onChange={(value) => setFilter("lead", value.trim() === "" ? "All" : value)}
-        />
       </div>
     </div>
   );
