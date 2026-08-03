@@ -284,7 +284,7 @@ export function ReportsDashboard({
                 columns={explorerColumns}
                 state={activeExplorerState}
                 onChange={setExplorerState}
-                singleSort={selectedReport === "Driverwise Standstill Tracking"}
+                singleSort
                 explicitSortDirections
               />
             )}

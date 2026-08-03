@@ -41,7 +41,10 @@ export function ReportExplorerControls({
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-2" aria-label="Report sorting and drill-down controls">
+    <div
+      className="flex flex-wrap items-end gap-2"
+      aria-label={singleSort ? "Report sorting controls" : "Report sorting and drill-down controls"}
+    >
       {!singleSort && (
         <>
           <ExplorerSelect
@@ -90,8 +93,8 @@ export function ReportExplorerControls({
         <button
           type="button"
           className="flex h-10 w-10 items-center justify-center rounded-md border border-coal-200 bg-white text-coal-600 hover:border-ore-300 hover:text-ore-700"
-          title="Reset report sorting and drill-down"
-          aria-label="Reset report sorting and drill-down"
+          title={singleSort ? "Reset report sorting" : "Reset report sorting and drill-down"}
+          aria-label={singleSort ? "Reset report sorting" : "Reset report sorting and drill-down"}
           onClick={() => onChange({
             drilldownColumn: "",
             subDrilldownColumn: "",
