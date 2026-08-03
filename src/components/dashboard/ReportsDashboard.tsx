@@ -213,12 +213,13 @@ export function ReportsDashboard({
         subtitle={preview ? `Preview generated ${formatDateTime(preview.generatedAt)}` : "Generating preview"}
         actions={
           <div className="flex flex-wrap items-end gap-2">
-            {preview && !previewLoading && explorerColumns.length > 0 && (
+            {preview && !previewLoading && (
               <ReportExplorerControls
                 columns={explorerColumns}
                 state={activeExplorerState}
                 onChange={setExplorerState}
                 singleSort={selectedReport === "Driverwise Standstill Tracking"}
+                explicitSortDirections
               />
             )}
             <Button

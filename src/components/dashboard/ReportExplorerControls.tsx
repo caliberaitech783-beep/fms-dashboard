@@ -8,6 +8,7 @@ interface ReportExplorerControlsProps {
   state: ReportExplorerState;
   onChange: (state: ReportExplorerState) => void;
   singleSort?: boolean;
+  explicitSortDirections?: boolean;
 }
 
 export function ReportExplorerControls({
@@ -15,6 +16,7 @@ export function ReportExplorerControls({
   state,
   onChange,
   singleSort = false,
+  explicitSortDirections = false,
 }: ReportExplorerControlsProps) {
   const hasExploration = Object.entries(state).some(([key, value]) => (
     key.endsWith("Column") ? Boolean(value) : value !== "asc"
@@ -65,8 +67,11 @@ export function ReportExplorerControls({
         value={state.sortColumn}
         direction={state.sortDirection}
         columns={columns}
-        explicitDirections={singleSort}
-        onColumnChange={(value) => update({ sortColumn: value })}
+        explicitDirections={singleSort || explicitSortDirections}
+        onColumnChange={(value) => update({
+          sortColumn: value,
+          sortDirection: value && !state.sortColumn ? "desc" : state.sortDirection,
+        })}
         onDirectionChange={(direction) => update({ sortDirection: direction })}
       />
       {!singleSort && (
