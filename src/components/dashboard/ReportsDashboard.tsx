@@ -33,6 +33,54 @@ interface ReportsDashboardProps {
   onTimingComplete?: (message: string, elapsedMs: number) => void;
 }
 
+const REPORT_SORT_METRIC_HINTS = [
+  "standstill",
+  "idling",
+  "fuel",
+  "production",
+  "efficiency",
+  "utilization",
+  "running",
+  "idle",
+  "trips",
+  "distance",
+  "percentage",
+  "hours",
+  "count",
+  "score",
+  "retry",
+];
+
+function defaultReportSortColumn(
+  reportType: ReportType,
+  company: DashboardFilters["company"],
+  columns: string[],
+  rows: ReportRow[],
+): string {
+  const driverwiseDefault = company === "Scania"
+    ? "Idling (% of engine running time)"
+    : "Standstill (%)";
+
+  if (reportType === "Driverwise Standstill Tracking" && columns.includes(driverwiseDefault)) {
+    return driverwiseDefault;
+  }
+
+  const metricColumn = columns.find((column) => {
+    const normalizedColumn = column.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return REPORT_SORT_METRIC_HINTS.some((hint) => normalizedColumn.includes(hint));
+  });
+  if (metricColumn) {
+    return metricColumn;
+  }
+
+  const numericColumn = columns.find((column) => rows.some((row) => {
+    const value = row[column];
+    return typeof value === "number" || (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim()));
+  }));
+
+  return numericColumn ?? columns[0] ?? "";
+}
+
 export function ReportsDashboard({
   reports,
   filters,
@@ -84,15 +132,10 @@ export function ReportsDashboard({
   }, [filters, refreshKey, selectedReport]);
 
   useEffect(() => {
-    setExplorerState(selectedReport === "Driverwise Standstill Tracking"
-      ? {
-        ...emptyReportExplorerState,
-        sortColumn: filters.company === "Scania"
-          ? "Idling (% of engine running time)"
-          : "Standstill (%)",
-        sortDirection: "desc",
-      }
-      : emptyReportExplorerState);
+    setExplorerState({
+      ...emptyReportExplorerState,
+      sortDirection: "desc",
+    });
   }, [filters.company, selectedReport]);
 
   useEffect(() => {
@@ -120,6 +163,29 @@ export function ReportsDashboard({
       ? driverStandstillColumns(preview).filter((column) => preview?.columns.includes(column))
       : visibleReportColumns(preview?.columns ?? [])
   ), [preview?.columns, preview?.period, selectedReport]);
+
+  useEffect(() => {
+    if (previewLoading || explorerColumns.length === 0) {
+      return;
+    }
+
+    setExplorerState((current) => {
+      if (current.sortColumn && explorerColumns.includes(current.sortColumn)) {
+        return current;
+      }
+
+      const sortColumn = defaultReportSortColumn(
+        selectedReport,
+        filters.company,
+        explorerColumns,
+        preview?.rows ?? [],
+      );
+      return sortColumn
+        ? { ...current, sortColumn, sortDirection: "desc" }
+        : current;
+    });
+  }, [explorerColumns, filters.company, preview?.rows, previewLoading, selectedReport]);
+
   const activeExplorerState = useMemo(
     () => normalizeReportExplorerState(explorerState, explorerColumns),
     [explorerColumns, explorerState],
