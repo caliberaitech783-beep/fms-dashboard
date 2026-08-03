@@ -46,6 +46,10 @@ const initialFilterVehicles = seedVehicles.map((vehicle) => {
 });
 
 const LIVE_REPORT_OEMS: Vehicle["company"][] = ["Volvo", "Scania"];
+const CATEGORY_OEMS: Partial<Record<Vehicle["assetCategory"], Vehicle["company"][]>> = {
+  Truck: ["Volvo", "Scania", "Eicher"],
+  HEMM: ["Case", "Komatsu", "LiuGong", "Tata Hitachi"],
+};
 
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
@@ -92,10 +96,13 @@ export function useFleetFilters() {
     const configuredModels = filters.assetType === "All"
       ? null
       : getConfiguredModels(filters.assetType, filters.company);
-    const availableCompanies = configuredMakes ?? uniqueSorted([
-      ...typeVehicles.map((vehicle) => vehicle.company),
-      ...LIVE_REPORT_OEMS,
-    ]);
+    const categoryCompanies = uniqueSorted(typeVehicles.map((vehicle) => vehicle.company));
+    const categoryOems = filters.assetCategory === "All"
+      ? null
+      : CATEGORY_OEMS[filters.assetCategory];
+    const availableCompanies = categoryOems
+      ?? configuredMakes
+      ?? uniqueSorted([...categoryCompanies, ...LIVE_REPORT_OEMS]);
 
     return {
       sites: sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
