@@ -443,7 +443,7 @@ export function ReportsDashboard({
 
   if (currentPath === "/reports") {
     pageContent = (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {visibleCategoryViews.map(({ category, reports: categoryReports }) => (
           <ReportCategoryCard
             key={category.id}
