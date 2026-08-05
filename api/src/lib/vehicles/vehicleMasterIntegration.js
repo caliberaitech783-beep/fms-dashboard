@@ -19,7 +19,13 @@ function normalizeVehicleIdentifier(value) {
 function resolveImportedSite(rawSiteName) {
   const normalized = normalizeKey(rawSiteName);
   if (!normalized || normalized === "-") return null;
-  if (normalized === "jayant 2" || normalized.includes("jayant east")) {
+  // The 29 legacy workbook rows labelled exactly "Jayant 2" are part of the
+  // DCH East Volvo fleet. The operational Jayant 2 fleet is represented by
+  // the separate "Jayant, Jayant East" rows.
+  if (normalized === "jayant 2") {
+    return { id: "site-ncl-dch-east", name: "DCH East", group: "NCL", contractType: "OB" };
+  }
+  if (normalized.includes("jayant east")) {
     return { id: "site-ncl-jayant-2", name: "Jayant 2", group: "NCL", contractType: "Coal" };
   }
   if (normalized.includes("jayant")) {
@@ -59,11 +65,10 @@ function isImportedVehicleInPortalScope(vehicle) {
   const imported = vehicle?.importedVehicleMaster;
   if (!imported) return true;
 
-  // The source workbook contains 29 legacy placeholder rows whose site is
-  // literally "Jayant 2". The operational Jayant 2 fleet is represented by
-  // the separate "Jayant, Jayant East" rows, so the placeholders must not be
-  // counted as portal vehicles.
-  return normalizeKey(imported.rawSiteName) !== "jayant 2";
+  // Fail closed if a legacy Jayant 2 row reaches the portal without the DCH
+  // East reassignment above. This prevents it from inflating Jayant 2 again.
+  return normalizeKey(imported.rawSiteName) !== "jayant 2"
+    || imported.siteId === "site-ncl-dch-east";
 }
 
 function mergeVolvoVehicleMasters(apiVehicles, importedVehicles, options = {}) {
