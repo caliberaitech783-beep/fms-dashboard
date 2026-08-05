@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   importedSiteAssignment,
+  isImportedVehicleInPortalScope,
   makeNoDataLiveVehicle,
   mergeVolvoVehicleMasters,
   prepareImportedVehicle,
@@ -113,6 +114,45 @@ test("keeps the authoritative Volvo fleet count when imported master has extra r
 
   assert.equal(merged.length, 40);
   assert.equal(merged.every((vehicle) => vehicle.importedVehicleMaster?.siteId === "site-wcl-gauri-pauni"), true);
+});
+
+test("keeps 40 Jayant East vehicles and excludes 29 legacy Jayant 2 placeholders", () => {
+  const operationalVehicles = Array.from({ length: 40 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 405,
+    vehicleNumber: `V-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Jayant, Jayant East",
+    vin: `JAYANT-EAST-VIN-${index + 1}`,
+    serviceStatus: index < 38 ? "Active" : "-",
+    sourceColumns: {},
+  }));
+  const legacyPlaceholders = Array.from({ length: 29 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 623,
+    vehicleNumber: `OLD-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Jayant 2",
+    vin: `JAYANT-PLACEHOLDER-VIN-${index + 1}`,
+    serviceStatus: "-",
+    sourceColumns: {},
+  }));
+  const importedVehicles = [...operationalVehicles, ...legacyPlaceholders];
+  const apiVehicles = importedVehicles.map((vehicle) => ({
+    VIN: vehicle.vin,
+    CustomerVehicleName: vehicle.vehicleNumber,
+    Model: vehicle.vehicleModel,
+    Type: "TRUCK",
+  }));
+
+  const merged = mergeVolvoVehicleMasters(apiVehicles, importedVehicles, {
+    appendUnmatchedImported: false,
+  });
+  const portalVehicles = merged.filter(isImportedVehicleInPortalScope);
+
+  assert.equal(merged.length, 69);
+  assert.equal(portalVehicles.length, 40);
+  assert.equal(portalVehicles.every((vehicle) => (
+    vehicle.importedVehicleMaster?.rawSiteName === "Jayant, Jayant East"
+  )), true);
 });
 
 test("creates an offline record for imported vehicles without live Volvo state", () => {

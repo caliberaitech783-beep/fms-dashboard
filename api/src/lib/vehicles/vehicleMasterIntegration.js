@@ -55,6 +55,17 @@ function importedSiteAssignment(vehicle) {
   };
 }
 
+function isImportedVehicleInPortalScope(vehicle) {
+  const imported = vehicle?.importedVehicleMaster;
+  if (!imported) return true;
+
+  // The source workbook contains 29 legacy placeholder rows whose site is
+  // literally "Jayant 2". The operational Jayant 2 fleet is represented by
+  // the separate "Jayant, Jayant East" rows, so the placeholders must not be
+  // counted as portal vehicles.
+  return normalizeKey(imported.rawSiteName) !== "jayant 2";
+}
+
 function mergeVolvoVehicleMasters(apiVehicles, importedVehicles, options = {}) {
   const appendUnmatchedImported = options.appendUnmatchedImported !== false;
   const importedByVin = new Map();
@@ -152,6 +163,7 @@ function makeNoDataLiveVehicle(vehicle) {
 
 module.exports = {
   importedSiteAssignment,
+  isImportedVehicleInPortalScope,
   makeNoDataLiveVehicle,
   mergeVolvoVehicleMasters,
   normalizeKey,
