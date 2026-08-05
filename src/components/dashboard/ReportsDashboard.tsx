@@ -1,6 +1,18 @@
-import { Clock, Download, FileSpreadsheet, FileText, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Clock, Download, FileSpreadsheet, FileText, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useAuth } from "../../auth/AuthContext";
+import { hasPermission } from "../../auth/permissions";
+import {
+  findReportCategory,
+  findReportItem,
+  latestReportTimestamp,
+  normalizeReportPath,
+  normalizeReportStatus,
+  reportCategories,
+  summarizeReportStatuses,
+} from "../../config/reportCategories";
 import type { DashboardFilters, Report } from "../../types/fleet";
+import type { ReportView } from "../../types/reportCategories";
 import type { ReportPreview, ReportType } from "../../types/reports";
 import { reportService } from "../../services/reportService";
 import { formatDateTime, makeCsvFileName, titleCase } from "../../utils/formatters";
@@ -18,6 +30,11 @@ import { EmptyState } from "../ui/EmptyState";
 import { LoadingState } from "../ui/LoadingState";
 import { Panel } from "../ui/Panel";
 import { StatusBadge } from "../ui/StatusBadge";
+import { EmptyReportState } from "../reports/EmptyReportState";
+import { ReportBreadcrumb } from "../reports/ReportBreadcrumb";
+import { ReportCategoryCard } from "../reports/ReportCategoryCard";
+import { ReportCategoryPage } from "../reports/ReportCategoryPage";
+import { ReportStatusBadge } from "../reports/ReportStatusBadge";
 import {
   DriverStandstillReportPreview,
   driverStandstillColumns,
@@ -88,25 +105,98 @@ export function ReportsDashboard({
   refreshKey,
   onTimingComplete,
 }: ReportsDashboardProps) {
-  const [selectedReport, setSelectedReport] = useState<ReportType>("Daily Fuel Consumption Report");
+  const { currentUser } = useAuth();
+  const [currentPath, setCurrentPath] = useState(() => {
+    const pathname = window.location.pathname.startsWith("/reports")
+      ? window.location.pathname
+      : "/reports";
+    return normalizeReportPath(pathname);
+  });
+  const [previewRequestKey, setPreviewRequestKey] = useState(0);
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [busyReportType, setBusyReportType] = useState<ReportType | null>(null);
   const [explorerState, setExplorerState] = useState<ReportExplorerState>(emptyReportExplorerState);
   const [downloadState, setDownloadState] = useState<{
     open: boolean;
     status: "running" | "done";
     format: "CSV" | "PDF" | "Excel";
+    reportType: ReportType;
     startedAt: number;
     elapsedMs: number;
   } | null>(null);
   const closeDownloadRef = useRef<HTMLButtonElement | null>(null);
   const timingCompleteRef = useRef(onTimingComplete);
 
+  const categoryViews = useMemo(() => {
+    const reportsByType = new Map(reports.map((report) => [report.type, report]));
+
+    return reportCategories.map((category) => ({
+      category,
+      reports: category.reports
+        .filter((item) => !item.requiredPermission || hasPermission(currentUser, item.requiredPermission))
+        .map<ReportView>((item) => {
+          const source = reportsByType.get(item.reportType) ?? null;
+          return {
+            item,
+            source,
+            status: normalizeReportStatus(source?.status),
+            generatedAt: source?.generatedAt ?? null,
+            exportFormats: source?.exportFormats ?? [],
+          };
+        }),
+    }));
+  }, [currentUser, reports]);
+  const visibleCategoryViews = categoryViews.filter((entry) => entry.reports.length > 0);
+  const activeCategory = findReportCategory(currentPath);
+  const activeCategoryView = visibleCategoryViews.find((entry) => entry.category.id === activeCategory?.id);
+  const activeItem = findReportItem(currentPath);
+  const activeReport = visibleCategoryViews
+    .flatMap((entry) => entry.reports)
+    .find((report) => report.item.route === activeItem?.route);
+  const selectedReport = activeItem?.reportType ?? "Daily Fuel Consumption Report";
+  const canExportReports = hasPermission(currentUser, "reports:export");
+
+  useEffect(() => {
+    const syncPath = () => {
+      if (!window.location.pathname.startsWith("/reports")) {
+        return;
+      }
+
+      const requestedPath = window.location.pathname;
+      const normalizedPath = normalizeReportPath(requestedPath);
+      if (requestedPath !== normalizedPath || window.location.search) {
+        window.history.replaceState({}, "", normalizedPath);
+      }
+      setCurrentPath(normalizedPath);
+    };
+
+    if (
+      !window.location.pathname.startsWith("/reports")
+      && new URLSearchParams(window.location.search).get("section") === "reports"
+    ) {
+      window.history.replaceState({}, "", "/reports");
+    }
+    syncPath();
+    window.addEventListener("popstate", syncPath);
+    window.addEventListener("reports:root", syncPath);
+    return () => {
+      window.removeEventListener("popstate", syncPath);
+      window.removeEventListener("reports:root", syncPath);
+    };
+  }, []);
+
   useEffect(() => {
     timingCompleteRef.current = onTimingComplete;
   }, [onTimingComplete]);
 
   useEffect(() => {
+    if (!activeItem || !activeReport) {
+      setPreview(null);
+      setPreviewLoading(false);
+      return;
+    }
+
     let mounted = true;
     const startedAt = performance.now();
     setPreviewLoading(true);
@@ -115,6 +205,7 @@ export function ReportsDashboard({
         if (mounted) {
           setPreview(result);
           setPreviewLoading(false);
+          setBusyReportType(null);
           timingCompleteRef.current?.("Report loaded", performance.now() - startedAt);
         }
       })
@@ -122,6 +213,7 @@ export function ReportsDashboard({
         if (mounted) {
           setPreview(null);
           setPreviewLoading(false);
+          setBusyReportType(null);
           timingCompleteRef.current?.("Report failed", performance.now() - startedAt);
         }
       });
@@ -129,7 +221,7 @@ export function ReportsDashboard({
     return () => {
       mounted = false;
     };
-  }, [filters, refreshKey, selectedReport]);
+  }, [activeItem, activeReport, filters, previewRequestKey, refreshKey, selectedReport]);
 
   useEffect(() => {
     setExplorerState({
@@ -194,8 +286,9 @@ export function ReportsDashboard({
     () => sortReportRows(preview?.rows ?? [], activeExplorerState),
     [activeExplorerState, preview?.rows],
   );
-  const canExport = Boolean(
-    preview
+  const canExportPreview = Boolean(
+    canExportReports
+    && preview
     && !previewLoading
     && !preview.error
     && exploredRows.length > 0
@@ -216,8 +309,30 @@ export function ReportsDashboard({
 
   const closeDownloadDialog = () => setDownloadState(null);
 
+  const navigate = (route: string) => {
+    const normalizedRoute = normalizeReportPath(route);
+    if (window.location.pathname !== normalizedRoute || window.location.search) {
+      window.history.pushState({}, "", normalizedRoute);
+    }
+    setCurrentPath(normalizedRoute);
+  };
+
+  const openReport = (report: ReportView) => {
+    navigate(report.item.redirectTo ?? report.item.route);
+  };
+
+  const generateReport = (report: ReportView) => {
+    const route = normalizeReportPath(report.item.redirectTo ?? report.item.route);
+    setBusyReportType(report.item.reportType);
+    if (currentPath === route) {
+      setPreviewRequestKey((current) => current + 1);
+    } else {
+      navigate(route);
+    }
+  };
+
   const handleDownload = async (format: "CSV" | "PDF" | "Excel") => {
-    if (!preview || !canExport) {
+    if (!preview || !canExportPreview) {
       return;
     }
 
@@ -229,129 +344,281 @@ export function ReportsDashboard({
       rows: exploredRows,
     };
     const csvFileName = makeCsvFileName(selectedReport, filters.siteId, filters.shift, filters.dateTo);
-    setDownloadState({ open: true, status: "running", format, startedAt, elapsedMs: 0 });
+    setDownloadState({
+      open: true,
+      status: "running",
+      format,
+      reportType: selectedReport,
+      startedAt,
+      elapsedMs: 0,
+    });
 
-    if (format === "CSV") {
-      reportService.exportCsv(exploredPreview, csvFileName);
-    } else if (format === "PDF") {
-      await reportService.exportPdf(
-        exploredPreview,
-        csvFileName.replace(/\.csv$/, ".pdf"),
-        { company: filters.company, shift: filters.shift },
-      );
-    } else {
-      await reportService.exportExcel(exploredPreview, csvFileName.replace(/\.csv$/, ".xlsx"));
+    try {
+      if (format === "CSV") {
+        reportService.exportCsv(exploredPreview, csvFileName);
+      } else if (format === "PDF") {
+        await reportService.exportPdf(
+          exploredPreview,
+          csvFileName.replace(/\.csv$/, ".pdf"),
+          { company: filters.company, shift: filters.shift },
+        );
+      } else {
+        await reportService.exportExcel(exploredPreview, csvFileName.replace(/\.csv$/, ".xlsx"));
+      }
+
+      const elapsedMs = performance.now() - startedAt;
+      setDownloadState({
+        open: true,
+        status: "done",
+        format,
+        reportType: selectedReport,
+        startedAt,
+        elapsedMs,
+      });
+      onTimingComplete?.("Report downloaded", elapsedMs);
+    } catch {
+      setDownloadState(null);
+      onTimingComplete?.("Report download failed", performance.now() - startedAt);
     }
-
-    const elapsedMs = performance.now() - startedAt;
-    setDownloadState(null);
-    onTimingComplete?.("Report downloaded", elapsedMs);
   };
 
-  return (
-    <div className="space-y-6">
-      <Panel title="Report Catalog" subtitle="Report previews use each OEM's configured live service when available.">
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {reports.map((report) => (
-            <button
-              key={report.id}
-              onClick={() => setSelectedReport(report.type as ReportType)}
-              className={`rounded-lg border p-4 text-left transition ${
-                selectedReport === report.type
-                  ? "border-ore-600 bg-ore-50"
-                  : "border-coal-200 bg-white hover:border-ore-300"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-coal-900">{report.name}</p>
-                  <p className="mt-1 text-xs text-coal-500">{formatDateTime(report.generatedAt)}</p>
-                </div>
-                <StatusBadge status={report.status} />
-              </div>
-            </button>
+  const handleCardDownload = async (report: ReportView, format: "PDF" | "Excel") => {
+    if (!canExportReports || report.status !== "ready") {
+      return;
+    }
+
+    const startedAt = performance.now();
+    setBusyReportType(report.item.reportType);
+    setDownloadState({
+      open: true,
+      status: "running",
+      format,
+      reportType: report.item.reportType,
+      startedAt,
+      elapsedMs: 0,
+    });
+
+    try {
+      const reportPreview = await reportService.getReportPreview(report.item.reportType, filters, { forceRefresh: true });
+      if (reportPreview.error || reportPreview.rows.length === 0) {
+        throw new Error(reportPreview.error?.message ?? "No report data is available to export.");
+      }
+      if (filters.company === "Scania" && reportPreview.live !== true) {
+        throw new Error("A live Scania report is required before export.");
+      }
+
+      const fileName = makeCsvFileName(report.item.reportType, filters.siteId, filters.shift, filters.dateTo);
+      if (format === "PDF") {
+        await reportService.exportPdf(
+          { ...reportPreview, oem: filters.company },
+          fileName.replace(/\.csv$/, ".pdf"),
+          { company: filters.company, shift: filters.shift },
+        );
+      } else {
+        await reportService.exportExcel(
+          { ...reportPreview, oem: filters.company },
+          fileName.replace(/\.csv$/, ".xlsx"),
+        );
+      }
+
+      const elapsedMs = performance.now() - startedAt;
+      setDownloadState({
+        open: true,
+        status: "done",
+        format,
+        reportType: report.item.reportType,
+        startedAt,
+        elapsedMs,
+      });
+      onTimingComplete?.("Report downloaded", elapsedMs);
+    } catch {
+      setDownloadState(null);
+      onTimingComplete?.("Report download failed", performance.now() - startedAt);
+    } finally {
+      setBusyReportType(null);
+    }
+  };
+
+  let pageContent: ReactNode;
+
+  if (currentPath === "/reports") {
+    pageContent = (
+      <div className="space-y-5">
+        <div className="rounded-xl border border-coal-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ore-700">Report center</p>
+          <h1 className="mt-2 text-2xl font-semibold text-coal-950">Reports</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">
+            Choose a category to open the existing live previews, generation controls and export tools.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {visibleCategoryViews.map(({ category, reports: categoryReports }) => (
+            <ReportCategoryCard
+              key={category.id}
+              category={category}
+              reportCount={categoryReports.length}
+              counts={summarizeReportStatuses(categoryReports)}
+              lastUpdated={latestReportTimestamp(categoryReports)}
+              onOpen={navigate}
+            />
           ))}
         </div>
-      </Panel>
+      </div>
+    );
+  } else if (activeCategory && activeCategoryView && currentPath === activeCategory.route) {
+    const categoryReports = activeCategoryView.reports;
+    pageContent = (
+      <ReportCategoryPage
+        key={activeCategory.id}
+        category={activeCategory}
+        reports={categoryReports}
+        canExport={canExportReports}
+        busyReportType={busyReportType}
+        onNavigate={navigate}
+        onOpen={openReport}
+        onGenerate={generateReport}
+        onDownload={handleCardDownload}
+      />
+    );
+  } else if (activeCategory && activeCategoryView && activeItem && activeReport) {
+    const isWaiting = activeReport.status === "queued" || activeReport.status === "processing";
+    pageContent = (
+      <div className="space-y-6">
+        <ReportBreadcrumb
+          items={[
+            { label: "Reports", route: "/reports" },
+            { label: activeCategory.name, route: activeCategory.route },
+            { label: activeItem.name },
+          ]}
+          onNavigate={navigate}
+        />
 
-      <Panel
-        title={selectedReport}
-        subtitle={preview ? `Preview generated ${formatDateTime(preview.generatedAt)}` : "Generating preview"}
-        actions={
-          <div className="flex flex-wrap items-end gap-2">
-            {preview && !previewLoading && (
-              <ReportExplorerControls
-                columns={explorerColumns}
-                state={activeExplorerState}
-                onChange={setExplorerState}
-                singleSort
-                explicitSortDirections
-              />
-            )}
+        <div className="rounded-xl border border-coal-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold text-coal-950">{activeItem.name}</h1>
+                <ReportStatusBadge status={activeReport.status} />
+              </div>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">{activeItem.description}</p>
+            </div>
             <Button
-              icon={<Download className="h-4 w-4" />}
-              variant="primary"
-              disabled={!canExport}
-              onClick={() => handleDownload("CSV")}
+              icon={<ArrowLeft aria-hidden="true" className="h-4 w-4" />}
+              onClick={() => navigate(activeCategory.route)}
             >
-              CSV
-            </Button>
-            <Button
-              icon={<FileText className="h-4 w-4" />}
-              disabled={!canExport}
-              onClick={() => handleDownload("PDF")}
-            >
-              PDF
-            </Button>
-            <Button
-              icon={<FileSpreadsheet className="h-4 w-4" />}
-              disabled={!canExport}
-              onClick={() => handleDownload("Excel")}
-            >
-              Excel
+              Back to {activeCategory.name}
             </Button>
           </div>
-        }
-      >
-        {previewLoading || !preview ? (
-          <LoadingState />
-        ) : selectedReport === "Driverwise Standstill Tracking" && preview.period ? (
-          <DriverStandstillReportPreview
-            preview={preview}
-            rows={exploredRows}
-            drilldownColumn={activeExplorerState.drilldownColumn}
-            subDrilldownColumn={activeExplorerState.subDrilldownColumn}
-          />
-        ) : (
-          <div className="space-y-3">
-            {preview.error && (
-              <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {preview.error.message}
-              </div>
-            )}
-            {!preview.error && preview.notice && (
-              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                {preview.notice}
-              </div>
-            )}
-            <ReportPreviewTable
-              reportType={selectedReport}
-              columns={explorerColumns}
+        </div>
+
+        <Panel
+          title={selectedReport}
+          subtitle={preview ? `Preview generated ${formatDateTime(preview.generatedAt)}` : "Generating preview"}
+          actions={
+            <div className="flex flex-wrap items-end gap-2">
+              {preview && !previewLoading && (
+                <ReportExplorerControls
+                  columns={explorerColumns}
+                  state={activeExplorerState}
+                  onChange={setExplorerState}
+                  singleSort
+                  explicitSortDirections
+                />
+              )}
+              {activeItem.supportsGenerate && (
+                <Button
+                  icon={<RefreshCw className={`h-4 w-4 ${busyReportType === selectedReport ? "animate-spin" : ""}`} />}
+                  disabled={busyReportType === selectedReport || isWaiting}
+                  onClick={() => generateReport(activeReport)}
+                >
+                  {activeReport.status === "failed" ? "Retry" : isWaiting ? "In Progress" : "Generate"}
+                </Button>
+              )}
+              {canExportReports && (
+                <>
+                  <Button
+                    icon={<Download className="h-4 w-4" />}
+                    variant="primary"
+                    disabled={!canExportPreview}
+                    onClick={() => handleDownload("CSV")}
+                  >
+                    CSV
+                  </Button>
+                  <Button
+                    icon={<FileText className="h-4 w-4" />}
+                    disabled={!canExportPreview}
+                    onClick={() => handleDownload("PDF")}
+                  >
+                    PDF
+                  </Button>
+                  <Button
+                    icon={<FileSpreadsheet className="h-4 w-4" />}
+                    disabled={!canExportPreview}
+                    onClick={() => handleDownload("Excel")}
+                  >
+                    Excel
+                  </Button>
+                </>
+              )}
+            </div>
+          }
+        >
+          {previewLoading || !preview ? (
+            <LoadingState />
+          ) : selectedReport === "Driverwise Standstill Tracking" && preview.period ? (
+            <DriverStandstillReportPreview
+              preview={preview}
               rows={exploredRows}
               drilldownColumn={activeExplorerState.drilldownColumn}
               subDrilldownColumn={activeExplorerState.subDrilldownColumn}
             />
-          </div>
-        )}
-      </Panel>
+          ) : (
+            <div className="space-y-3">
+              {preview.error && (
+                <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                  {preview.error.message}
+                </div>
+              )}
+              {!preview.error && preview.notice && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {preview.notice}
+                </div>
+              )}
+              <ReportPreviewTable
+                reportType={selectedReport}
+                columns={explorerColumns}
+                rows={exploredRows}
+                drilldownColumn={activeExplorerState.drilldownColumn}
+                subDrilldownColumn={activeExplorerState.subDrilldownColumn}
+              />
+            </div>
+          )}
+        </Panel>
 
-      <Panel
-        title="Report Register"
-        subtitle="Generated report status and available formats."
-      >
-        <DataTable columns={reportColumns} rows={reports} getRowKey={(row) => row.id} />
-      </Panel>
+        <Panel title="Report Register" subtitle="Generated report status and available formats.">
+          {activeReport.source ? (
+            <DataTable columns={reportColumns} rows={[activeReport.source]} getRowKey={(row) => row.id} />
+          ) : (
+            <EmptyReportState />
+          )}
+        </Panel>
+      </div>
+    );
+  } else {
+    pageContent = (
+      <div className="space-y-5">
+        <ReportBreadcrumb items={[{ label: "Reports", route: "/reports" }, { label: "Unavailable" }]} onNavigate={navigate} />
+        <EmptyReportState />
+        <Button icon={<ArrowLeft className="h-4 w-4" />} onClick={() => navigate("/reports")}>
+          Back to Reports
+        </Button>
+      </div>
+    );
+  }
 
+  return (
+    <>
+      {pageContent}
       {downloadState?.open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-coal-950/45 p-4"
@@ -376,7 +643,7 @@ export function ReportsDashboard({
                     {downloadState.status === "done" ? "Report download complete" : "Downloading report"}
                   </h3>
                   <p className="mt-1 text-sm text-coal-500">
-                    {downloadState.format} export for {selectedReport}
+                    {downloadState.format} export for {downloadState.reportType}
                   </p>
                 </div>
               </div>
@@ -413,7 +680,7 @@ export function ReportsDashboard({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
