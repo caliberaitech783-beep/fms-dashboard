@@ -87,10 +87,7 @@ async function requireActor(request) {
   }
   const payload = store.verifyToken(token);
   const actor = await store.getUser(payload.sub);
-  if (!actor || !actor.isActive) {
-    throw Object.assign(new Error("Authentication required."), { statusCode: 401 });
-  }
-  return actor;
+  return store.assertTokenForUser(payload, actor);
 }
 
 function requireSuperAdmin(actor) {
@@ -207,9 +204,12 @@ app.http("pushUnsubscribe", {
   handler: (request, context) => handle(request, context, async () => {
     const actor = await requireActor(request);
     const body = await readJson(request);
+    if (!body.deviceId && !String(body.endpoint || "").trim()) {
+      throw Object.assign(new Error("A device ID or push endpoint is required."), { statusCode: 400 });
+    }
     const result = body.deviceId
       ? await notificationStore.revokeDevice(actor.userId, body.deviceId)
-      : await notificationStore.revokeDeviceByEndpoint(body.endpoint || "");
+      : await notificationStore.revokeDeviceByEndpoint(actor.userId, body.endpoint);
     await store.addAuditLog({ actor, action: "PUSH_UNSUBSCRIBED", targetType: "Device", targetId: body.deviceId || null });
     return response(request, 200, result);
   }),

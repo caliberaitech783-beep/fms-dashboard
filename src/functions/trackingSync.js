@@ -77,9 +77,7 @@ async function requireSuperAdmin(request) {
 
   const payload = store.verifyToken(token);
   const actor = await store.getUser(payload.sub);
-  if (!actor || !actor.isActive) {
-    throw Object.assign(new Error("Authentication required."), { statusCode: 401 });
-  }
+  store.assertTokenForUser(payload, actor);
 
   if (actor.role !== "Super Admin") {
     throw Object.assign(new Error("Only Super Admin users can perform this action."), { statusCode: 403 });

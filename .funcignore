@@ -7,3 +7,8 @@ scripts/
 coverage/
 .git/
 .github/
+public/
+api/public/
+*.zip
+tracking-sync-output*.xlsx
+.gitignore
