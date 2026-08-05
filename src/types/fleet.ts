@@ -176,7 +176,7 @@ export interface Report {
   filters: Record<string, string | number | boolean | null>;
   generatedAt: string;
   exportFormats: ReportExportFormat[];
-  status: "ready" | "queued" | "failed";
+  status: "ready" | "queued" | "processing" | "failed" | "not_generated";
 }
 
 export interface WhatsAppReportSchedule {

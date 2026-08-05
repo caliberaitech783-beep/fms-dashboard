@@ -95,6 +95,12 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   }, [activeSection, allowedItems]);
 
   useEffect(() => {
+    const syncSectionFromUrl = () => setActiveSection(initialSectionFromUrl());
+    window.addEventListener("popstate", syncSectionFromUrl);
+    return () => window.removeEventListener("popstate", syncSectionFromUrl);
+  }, []);
+
+  useEffect(() => {
     if (data.loading) {
       return;
     }
@@ -129,6 +135,15 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   };
 
   const handleSectionChange = (section: NavItemId) => {
+    const targetUrl = section === "reports" ? "/reports" : `/?section=${section}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== targetUrl) {
+      window.history.pushState({}, "", targetUrl);
+    }
+    if (section === "reports" && section === activeSection) {
+      window.dispatchEvent(new Event("reports:root"));
+    }
+
     if (section !== activeSection) {
       sectionTimerRef.current = { section, startedAt: performance.now() };
       setTimingNotice(null);
@@ -184,6 +199,10 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
 }
 
 function initialSectionFromUrl(): NavItemId {
+  if (window.location.pathname.startsWith("/reports")) {
+    return "reports";
+  }
+
   const section = new URLSearchParams(window.location.search).get("section");
   return NAV_ITEMS.some((item) => item.id === section) ? section as NavItemId : "management";
 }
