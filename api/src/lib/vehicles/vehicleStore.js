@@ -1,5 +1,5 @@
 const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
-const { normalizeKey } = require("./vehicleMasterIntegration");
+const { normalizeKey, normalizeVehicleIdentifier } = require("./vehicleMasterIntegration");
 
 const PARTITION_KEY = "VEHICLE_MASTER";
 let setupPromise = null;
@@ -98,11 +98,12 @@ async function upsertVehicles(records, options = {}) {
   const sourceFileName = String(options.sourceFileName || "").trim();
   const existingRecords = await listVehicles();
   const byVin = new Map(existingRecords.map((record) => [normalizeKey(record.vin), record]));
-  const byNumber = new Map(existingRecords.map((record) => [normalizeKey(record.vehicleNumber), record]));
+  const byNumber = new Map(existingRecords.map((record) => [normalizeVehicleIdentifier(record.vehicleNumber), record]));
   const result = { created: 0, updated: 0, unchanged: 0, total: records.length, tableName: tableName() };
 
   for (const record of records) {
-    const existing = byVin.get(normalizeKey(record.vin)) || byNumber.get(normalizeKey(record.vehicleNumber));
+    const existing = byVin.get(normalizeKey(record.vin))
+      || byNumber.get(normalizeVehicleIdentifier(record.vehicleNumber));
     if (existing && sameRecord(existing, record, sourceFileName)) {
       result.unchanged += 1;
       continue;
@@ -130,7 +131,7 @@ async function upsertVehicles(records, options = {}) {
     }, "Replace");
     const stored = { ...record, rowKey, sourceFileName, importedAt: now };
     byVin.set(normalizeKey(record.vin), stored);
-    byNumber.set(normalizeKey(record.vehicleNumber), stored);
+    byNumber.set(normalizeVehicleIdentifier(record.vehicleNumber), stored);
     if (existing) result.updated += 1;
     else result.created += 1;
   }
