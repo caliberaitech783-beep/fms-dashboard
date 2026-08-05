@@ -37,3 +37,5 @@ The previous Azure production API package should be kept as the rollback artifac
 ## GitHub
 
 Pull requests run the web build, report tests, dependency audit, and API tests. Pushes to `main` are the only production frontend deployment source. Release tags prepare PWA and desktop artifacts. Signed desktop releases require external signing secrets.
+
+Because this repository is private and GitHub Code Security is not included in the current account plan, the CodeQL workflow runs analysis without uploading to the paid code-scanning dashboard. Its SARIF report is retained as a downloadable Actions artifact for 14 days. If GitHub Code Security is purchased later, restore `security-events: write` and remove `upload: never` to publish findings in the repository Security tab.
