@@ -34,6 +34,7 @@ const { getShiftWindow } = require("../lib/tracking/shiftResolver");
 const { listVehicles: listImportedVehicles } = require("../lib/vehicles/vehicleStore");
 const {
   importedSiteAssignment,
+  isImportedVehicleInPortalScope,
   makeNoDataLiveVehicle,
   mergeVolvoVehicleMasters,
 } = require("../lib/vehicles/vehicleMasterIntegration");
@@ -281,9 +282,10 @@ async function loadSnapshot() {
       // records enrich matching vehicles but must not inflate dashboard KPIs.
       appendUnmatchedImported: false,
     });
+    const portalMasterVehicles = masterVehicles.filter(isImportedVehicleInPortalScope);
     const selectedVehicles = allowlist.size
-      ? masterVehicles.filter((vehicle) => allowlist.has(vehicleVin(vehicle)))
-      : masterVehicles;
+      ? portalMasterVehicles.filter((vehicle) => allowlist.has(vehicleVin(vehicle)))
+      : portalMasterVehicles;
     const liveByVin = new Map(liveSnapshot.vehicles.map((vehicle) => [vehicle.vin, vehicle]));
     const statusOptions = {
       now: new Date(),
