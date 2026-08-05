@@ -276,7 +276,11 @@ async function loadSnapshot() {
       Type: "TRUCK",
       Model: null,
     }));
-    const masterVehicles = mergeVolvoVehicleMasters(apiMasterVehicles, importedVehicles);
+    const masterVehicles = mergeVolvoVehicleMasters(apiMasterVehicles, importedVehicles, {
+      // The Volvo vehicle endpoint defines the fleet population. Imported
+      // records enrich matching vehicles but must not inflate dashboard KPIs.
+      appendUnmatchedImported: false,
+    });
     const selectedVehicles = allowlist.size
       ? masterVehicles.filter((vehicle) => allowlist.has(vehicleVin(vehicle)))
       : masterVehicles;

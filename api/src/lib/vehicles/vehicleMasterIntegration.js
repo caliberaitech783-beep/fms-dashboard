@@ -55,7 +55,8 @@ function importedSiteAssignment(vehicle) {
   };
 }
 
-function mergeVolvoVehicleMasters(apiVehicles, importedVehicles) {
+function mergeVolvoVehicleMasters(apiVehicles, importedVehicles, options = {}) {
+  const appendUnmatchedImported = options.appendUnmatchedImported !== false;
   const importedByVin = new Map();
   const importedByNumber = new Map();
   for (const record of importedVehicles) {
@@ -88,21 +89,23 @@ function mergeVolvoVehicleMasters(apiVehicles, importedVehicles) {
     };
   });
 
-  for (const imported of importedByVin.values()) {
-    if (matchedImportedVins.has(normalizeKey(imported.vin))) continue;
-    merged.push({
-      vin: imported.vin,
-      VIN: imported.vin,
-      customerVehicleName: imported.vehicleNumber,
-      CustomerVehicleName: imported.vehicleNumber,
-      model: imported.vehicleModel,
-      Model: imported.vehicleModel,
-      type: "TRUCK",
-      Type: "TRUCK",
-      brand: "VOLVO TRUCKS",
-      Brand: "VOLVO TRUCKS",
-      importedVehicleMaster: imported,
-    });
+  if (appendUnmatchedImported) {
+    for (const imported of importedByVin.values()) {
+      if (matchedImportedVins.has(normalizeKey(imported.vin))) continue;
+      merged.push({
+        vin: imported.vin,
+        VIN: imported.vin,
+        customerVehicleName: imported.vehicleNumber,
+        CustomerVehicleName: imported.vehicleNumber,
+        model: imported.vehicleModel,
+        Model: imported.vehicleModel,
+        type: "TRUCK",
+        Type: "TRUCK",
+        brand: "VOLVO TRUCKS",
+        Brand: "VOLVO TRUCKS",
+        importedVehicleMaster: imported,
+      });
+    }
   }
   return merged;
 }
