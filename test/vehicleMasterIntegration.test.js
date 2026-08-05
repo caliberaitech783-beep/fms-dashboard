@@ -68,6 +68,28 @@ test("merges by vehicle number when a VIN changes", () => {
   assert.equal(merged[0].importedVehicleMaster.siteId, "site-wcl-gauri-pauni");
 });
 
+test("merges vehicle numbers with punctuation differences", () => {
+  const imported = prepareImportedVehicle({
+    sourceRow: 2,
+    vehicleNumber: "V117",
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Gouri",
+    vin: "NEW-VIN",
+    serviceStatus: "Active",
+    sourceColumns: {},
+  });
+  const merged = mergeVolvoVehicleMasters([{
+    VIN: "OLD-VIN",
+    CustomerVehicleName: "V-117",
+    Model: "old-model",
+    Type: "TRUCK",
+  }], [imported]);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].VIN, "NEW-VIN");
+  assert.equal(merged[0].importedVehicleMaster.siteId, "site-wcl-gauri-pauni");
+});
+
 test("creates an offline record for imported vehicles without live Volvo state", () => {
   const vehicle = makeNoDataLiveVehicle({ trackerId: "VIN-1" });
   assert.equal(vehicle.vin, "VIN-1");

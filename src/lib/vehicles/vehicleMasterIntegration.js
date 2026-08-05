@@ -12,6 +12,10 @@ function normalizeKey(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function normalizeVehicleIdentifier(value) {
+  return normalizeKey(value).replace(/\s+/g, "");
+}
+
 function resolveImportedSite(rawSiteName) {
   const normalized = normalizeKey(rawSiteName);
   if (!normalized || normalized === "-") return null;
@@ -57,14 +61,15 @@ function mergeVolvoVehicleMasters(apiVehicles, importedVehicles) {
   for (const record of importedVehicles) {
     const prepared = prepareImportedVehicle(record);
     importedByVin.set(normalizeKey(prepared.vin), prepared);
-    importedByNumber.set(normalizeKey(prepared.vehicleNumber), prepared);
+    importedByNumber.set(normalizeVehicleIdentifier(prepared.vehicleNumber), prepared);
   }
 
   const matchedImportedVins = new Set();
   const merged = apiVehicles.map((vehicle) => {
     const vin = String(vehicle?.vin || vehicle?.VIN || "").trim();
     const vehicleNumber = String(vehicle?.customerVehicleName || vehicle?.CustomerVehicleName || "").trim();
-    const imported = importedByVin.get(normalizeKey(vin)) || importedByNumber.get(normalizeKey(vehicleNumber));
+    const imported = importedByVin.get(normalizeKey(vin))
+      || importedByNumber.get(normalizeVehicleIdentifier(vehicleNumber));
     if (!imported) return vehicle;
     matchedImportedVins.add(normalizeKey(imported.vin));
     return {
@@ -147,6 +152,7 @@ module.exports = {
   makeNoDataLiveVehicle,
   mergeVolvoVehicleMasters,
   normalizeKey,
+  normalizeVehicleIdentifier,
   prepareImportedVehicle,
   resolveImportedSite,
 };

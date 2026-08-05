@@ -302,4 +302,9 @@ test("maps Volvo vehicles to configured sites by VIN or customer vehicle name", 
     siteName: "Jayant 1",
     contractType: null,
   });
+  assert.deepEqual(findVolvoSiteAssignment({ CustomerVehicleName: "V-193" }, siteMap), {
+    siteId: null,
+    siteName: "Jayant 1",
+    contractType: null,
+  });
 });
