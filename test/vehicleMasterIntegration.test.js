@@ -18,7 +18,7 @@ test("maps workbook site labels to existing dashboard site IDs", () => {
   assert.equal(resolveImportedSite("Dudhichua East").id, "site-ncl-dch-east");
   assert.equal(resolveImportedSite("Jayant, Jayant West").id, "site-ncl-jayant-1");
   assert.equal(resolveImportedSite("Jayant, Jayant East").id, "site-ncl-jayant-2");
-  assert.equal(resolveImportedSite("Jayant 2").id, "site-ncl-jayant-2");
+  assert.equal(resolveImportedSite("Jayant 2").id, "site-ncl-dch-east");
   assert.equal(resolveImportedSite("-"), null);
 });
 
@@ -116,7 +116,16 @@ test("keeps the authoritative Volvo fleet count when imported master has extra r
   assert.equal(merged.every((vehicle) => vehicle.importedVehicleMaster?.siteId === "site-wcl-gauri-pauni"), true);
 });
 
-test("keeps 40 Jayant East vehicles and excludes 29 legacy Jayant 2 placeholders", () => {
+test("keeps 40 Jayant East vehicles and reassigns 29 legacy Jayant 2 rows to DCH East", () => {
+  const dchEastVehicles = Array.from({ length: 60 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 573,
+    vehicleNumber: `DCH-EAST-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Dudhichua East",
+    vin: `DCH-EAST-VIN-${index + 1}`,
+    serviceStatus: "-",
+    sourceColumns: {},
+  }));
   const operationalVehicles = Array.from({ length: 40 }, (_, index) => prepareImportedVehicle({
     sourceRow: index + 405,
     vehicleNumber: `V-${index + 1}`,
@@ -135,7 +144,7 @@ test("keeps 40 Jayant East vehicles and excludes 29 legacy Jayant 2 placeholders
     serviceStatus: "-",
     sourceColumns: {},
   }));
-  const importedVehicles = [...operationalVehicles, ...legacyPlaceholders];
+  const importedVehicles = [...dchEastVehicles, ...operationalVehicles, ...legacyPlaceholders];
   const apiVehicles = importedVehicles.map((vehicle) => ({
     VIN: vehicle.vin,
     CustomerVehicleName: vehicle.vehicleNumber,
@@ -147,11 +156,19 @@ test("keeps 40 Jayant East vehicles and excludes 29 legacy Jayant 2 placeholders
     appendUnmatchedImported: false,
   });
   const portalVehicles = merged.filter(isImportedVehicleInPortalScope);
+  const dchEastPortalVehicles = portalVehicles.filter((vehicle) => (
+    vehicle.importedVehicleMaster?.siteId === "site-ncl-dch-east"
+  ));
+  const jayantEastPortalVehicles = portalVehicles.filter((vehicle) => (
+    vehicle.importedVehicleMaster?.siteId === "site-ncl-jayant-2"
+  ));
 
-  assert.equal(merged.length, 69);
-  assert.equal(portalVehicles.length, 40);
-  assert.equal(portalVehicles.every((vehicle) => (
-    vehicle.importedVehicleMaster?.rawSiteName === "Jayant, Jayant East"
+  assert.equal(merged.length, 129);
+  assert.equal(portalVehicles.length, 129);
+  assert.equal(dchEastPortalVehicles.length, 89);
+  assert.equal(jayantEastPortalVehicles.length, 40);
+  assert.equal(legacyPlaceholders.every((vehicle) => (
+    vehicle.siteId === "site-ncl-dch-east"
   )), true);
 });
 
