@@ -25,7 +25,7 @@ export function ReportActions({
   const isWaiting = report.status === "queued" || report.status === "processing";
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       <Button
         size="sm"
         variant="primary"
