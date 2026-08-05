@@ -73,6 +73,10 @@ function normalizeSiteAssignment(value) {
   return siteId || siteName ? { siteId, siteName, contractType } : null;
 }
 
+function normalizeVehicleLookupKey(value) {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
 function parseVolvoSiteMap(value) {
   const source = String(value || "").trim();
   if (!source) {
@@ -90,7 +94,7 @@ function parseVolvoSiteMap(value) {
   }
 
   return new Map(Object.entries(parsed).flatMap(([key, assignment]) => {
-    const normalizedKey = String(key || "").trim().toUpperCase();
+    const normalizedKey = normalizeVehicleLookupKey(key);
     const normalizedAssignment = normalizeSiteAssignment(assignment);
     return normalizedKey && normalizedAssignment ? [[normalizedKey, normalizedAssignment]] : [];
   }));
@@ -101,7 +105,7 @@ function findVolvoSiteAssignment(payload, siteMap) {
     return null;
   }
   const keys = [payload?.vin, payload?.VIN, payload?.customerVehicleName, payload?.CustomerVehicleName]
-    .map((value) => String(value || "").trim().toUpperCase())
+    .map(normalizeVehicleLookupKey)
     .filter(Boolean);
   return keys.map((key) => siteMap.get(key)).find(Boolean) || null;
 }
