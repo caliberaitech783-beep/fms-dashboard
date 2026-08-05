@@ -443,26 +443,17 @@ export function ReportsDashboard({
 
   if (currentPath === "/reports") {
     pageContent = (
-      <div className="space-y-5">
-        <div className="rounded-xl border border-coal-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ore-700">Report center</p>
-          <h1 className="mt-2 text-2xl font-semibold text-coal-950">Reports</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">
-            Choose a category to open the existing live previews, generation controls and export tools.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleCategoryViews.map(({ category, reports: categoryReports }) => (
-            <ReportCategoryCard
-              key={category.id}
-              category={category}
-              reportCount={categoryReports.length}
-              counts={summarizeReportStatuses(categoryReports)}
-              lastUpdated={latestReportTimestamp(categoryReports)}
-              onOpen={navigate}
-            />
-          ))}
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {visibleCategoryViews.map(({ category, reports: categoryReports }) => (
+          <ReportCategoryCard
+            key={category.id}
+            category={category}
+            reportCount={categoryReports.length}
+            counts={summarizeReportStatuses(categoryReports)}
+            lastUpdated={latestReportTimestamp(categoryReports)}
+            onOpen={navigate}
+          />
+        ))}
       </div>
     );
   } else if (activeCategory && activeCategoryView && currentPath === activeCategory.route) {
