@@ -16,7 +16,8 @@ export type ReportType =
   | "Utilization Report"
   | "Fuel Consumption Report"
   | "Site-wise Asset / Vehicle Count Report"
-  | "Driver wise Report"
+  | "Driverwise Standstill Tracking"
+  | "Eicher Report"
   | "WhatsApp PDF Delivery Log";
 
 export const reportTypes: ReportType[] = [
@@ -37,7 +38,8 @@ export const reportTypes: ReportType[] = [
   "Utilization Report",
   "Fuel Consumption Report",
   "Site-wise Asset / Vehicle Count Report",
-  "Driver wise Report",
+  "Driverwise Standstill Tracking",
+  "Eicher Report",
   "WhatsApp PDF Delivery Log",
 ];
 
@@ -46,4 +48,47 @@ export interface ReportPreview {
   generatedAt: string;
   rows: Record<string, string | number | null>[];
   columns: string[];
+  oem?: string;
+  live?: boolean;
+  source?: string;
+  notice?: string | null;
+  error?: {
+    kind:
+      | "authentication"
+      | "permission"
+      | "timeout"
+      | "mapping"
+      | "validation"
+      | "configuration"
+      | "rate_limit"
+      | "network"
+      | "upstream"
+      | "portal_authentication"
+      | "portal_permission";
+    message: string;
+    retryable?: boolean;
+    status?: number;
+  };
+  meta?: {
+    endpoint?: string | null;
+    httpStatus?: number | null;
+    rawRecordCount?: number | null;
+    finalFilteredVehicleCount?: number | null;
+    filterCounts?: Record<string, number>;
+    siteVehicleMasterCount?: number | null;
+    sessionId?: string | null;
+    unavailableFields?: string[];
+    emptyReason?: string | null;
+  };
+  period?: {
+    date: string;
+    requestedDate?: string;
+    fallbackApplied?: boolean;
+    shift: string;
+    site?: string;
+    scaniaSite?: string;
+    start: string;
+    end: string;
+    timezone: string;
+  };
 }

@@ -6,19 +6,21 @@ on:
     branches:
       - main
       - feature/**
+      - agent/**
 
 jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run validate:pwa
+      - run: npm run test:reports
       - run: npm run build
       - run: npm audit --omit=dev
 
@@ -28,8 +30,8 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { resolveShift, TIME_ZONE } = require("../src/lib/tracking/shiftResolver");
+const { getShiftWindow, resolveShift, TIME_ZONE } = require("../src/lib/tracking/shiftResolver");
 
 function expectShift(site, timestamp, expected) {
   const actual = resolveShift(site, timestamp);
@@ -104,3 +104,15 @@ test("resolves Majri shift boundaries and inactive gap", () => {
   });
 });
 
+test("builds explicit shift windows for portal site labels", () => {
+  assert.deepEqual(getShiftWindow("Gauri Pauni OCM", "2026-07-14", "A"), {
+    active: true,
+    siteGroup: "Sasti/Dhoptala/Dudhichua/Gauri",
+    shiftName: "A",
+    shiftDate: "2026-07-14",
+    shiftStart: "2026-07-14T05:00:00+05:30",
+    shiftEnd: "2026-07-14T13:00:00+05:30",
+    timezone: TIME_ZONE,
+  });
+  assert.equal(getShiftWindow("Jayant 2", "2026-07-14", "C").shiftEnd, "2026-07-15T04:00:00+05:30");
+});

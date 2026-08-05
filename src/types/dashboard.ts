@@ -47,6 +47,7 @@ export interface DashboardOverview {
   idleVehicles: VehiclePerformanceRow[];
   criticalAlerts: Alert[];
   integrationHealth: IntegrationSource[];
+  eicherLiveLocations?: EicherLiveDashboardRow[];
 }
 
 export interface VehiclePerformanceRow {
@@ -60,4 +61,20 @@ export interface VehiclePerformanceRow {
   efficiency: number | null;
   fuelPerM3: number | null;
   latestRecord?: FleetTelemetryRecord;
+}
+
+export interface EicherLiveDashboardRow {
+  vehicleId: string;
+  registrationNumber: string;
+  chassisNumber: string;
+  status: string;
+  latitude: number | null;
+  longitude: number | null;
+  speedKph: number | null;
+  odometerKm: number | null;
+  vehicleDirection: number | null;
+  deviceId: string | null;
+  currentLocation: string | null;
+  gpsTimestamp: string | null;
+  lastSuccessfulUpdate: string | null;
 }

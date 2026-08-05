@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
 import { canAccessNav } from "../auth/permissions";
 import { NAV_ITEMS, type NavItemId } from "../constants/routes";
@@ -10,25 +10,25 @@ import { GlobalFilters } from "../components/filters/GlobalFilters";
 import { MobileNav } from "../components/layout/MobileNav";
 import { Sidebar } from "../components/layout/Sidebar";
 import { TopBar } from "../components/layout/TopBar";
+import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
+import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
+import { DieselDashboard } from "../components/dashboard/DieselDashboard";
+import { FleetDashboard } from "../components/dashboard/FleetDashboard";
+import { FuelDashboard } from "../components/dashboard/FuelDashboard";
+import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
+import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
+import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
+import { NotificationCenterDashboard } from "../components/dashboard/NotificationCenterDashboard";
+import { ProductionDashboard } from "../components/dashboard/ProductionDashboard";
+import { ReportsDashboard } from "../components/dashboard/ReportsDashboard";
+import { SettingsDashboard } from "../components/dashboard/SettingsDashboard";
+import { UserManagementDashboard } from "../components/dashboard/UserManagementDashboard";
+import { WhatsAppDeliveryDashboard } from "../components/dashboard/WhatsAppDeliveryDashboard";
 import { LoadingState } from "../components/ui/LoadingState";
 import { Panel } from "../components/ui/Panel";
 import { TimingToast } from "../components/ui/TimingToast";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
-
-const AlertsDashboard = lazy(() => import("../components/dashboard/AlertsDashboard").then((module) => ({ default: module.AlertsDashboard })));
-const AdminNotificationsDashboard = lazy(() => import("../components/dashboard/AdminNotificationsDashboard").then((module) => ({ default: module.AdminNotificationsDashboard })));
-const DieselDashboard = lazy(() => import("../components/dashboard/DieselDashboard").then((module) => ({ default: module.DieselDashboard })));
-const FleetDashboard = lazy(() => import("../components/dashboard/FleetDashboard").then((module) => ({ default: module.FleetDashboard })));
-const FuelDashboard = lazy(() => import("../components/dashboard/FuelDashboard").then((module) => ({ default: module.FuelDashboard })));
-const IntegrationsDashboard = lazy(() => import("../components/dashboard/IntegrationsDashboard").then((module) => ({ default: module.IntegrationsDashboard })));
-const ManagementDashboard = lazy(() => import("../components/dashboard/ManagementDashboard").then((module) => ({ default: module.ManagementDashboard })));
-const MasterDataDashboard = lazy(() => import("../components/dashboard/MasterDataDashboard").then((module) => ({ default: module.MasterDataDashboard })));
-const NotificationCenterDashboard = lazy(() => import("../components/dashboard/NotificationCenterDashboard").then((module) => ({ default: module.NotificationCenterDashboard })));
-const ProductionDashboard = lazy(() => import("../components/dashboard/ProductionDashboard").then((module) => ({ default: module.ProductionDashboard })));
-const ReportsDashboard = lazy(() => import("../components/dashboard/ReportsDashboard").then((module) => ({ default: module.ReportsDashboard })));
-const SettingsDashboard = lazy(() => import("../components/dashboard/SettingsDashboard").then((module) => ({ default: module.SettingsDashboard })));
-const UserManagementDashboard = lazy(() => import("../components/dashboard/UserManagementDashboard").then((module) => ({ default: module.UserManagementDashboard })));
-const WhatsAppDeliveryDashboard = lazy(() => import("../components/dashboard/WhatsAppDeliveryDashboard").then((module) => ({ default: module.WhatsAppDeliveryDashboard })));
+import { invalidateLiveOemCaches, refreshLiveOemData } from "../services/adapters/volvoRfmsAdapter";
 
 export function App() {
   return (
@@ -64,13 +64,7 @@ function AppContent() {
 
 function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const { currentUser } = useAuth();
-  const [activeSection, setActiveSection] = useState<NavItemId>(() => {
-    const requested = initialSectionFromUrl();
-    if (canAccessNav(currentUser, requested)) {
-      return requested;
-    }
-    return NAV_ITEMS.find((item) => canAccessNav(currentUser, item.id))?.id ?? "management";
-  });
+  const [activeSection, setActiveSection] = useState<NavItemId>(() => initialSectionFromUrl());
   const [refreshKey, setRefreshKey] = useState(0);
   const [timingNotice, setTimingNotice] = useState<{
     id: number;
@@ -78,53 +72,27 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     message: string;
   } | null>(null);
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
-  const { filters, applyFilters, resetFilters, options, getOptionsFor } = useFleetFilters();
+  const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
   const showGlobalFilters = !["users", "notifications", "admin-notifications", "diesel"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
   );
+  const reloadDashboard = () => {
+    invalidateLiveOemCaches();
+    setRefreshKey((current) => current + 1);
+  };
+  const refreshLiveOems = async () => {
+    await refreshLiveOemData();
+    reloadDashboard();
+  };
 
   useEffect(() => {
     if (!allowedItems.some((item) => item.id === activeSection)) {
-      const fallback = allowedItems[0]?.id ?? "management";
-      setActiveSection(fallback);
-      writeSectionToUrl(fallback, "replace");
-      return;
-    }
-
-    if (sectionFromUrl() !== activeSection) {
-      writeSectionToUrl(activeSection, "replace");
+      setActiveSection(allowedItems[0]?.id ?? "management");
     }
   }, [activeSection, allowedItems]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const requestedSection = sectionFromUrl();
-      const fallback = allowedItems[0]?.id ?? "management";
-      const nextSection = requestedSection && allowedItems.some((item) => item.id === requestedSection)
-        ? requestedSection
-        : fallback;
-
-      if (nextSection !== activeSection) {
-        sectionTimerRef.current = { section: nextSection, startedAt: performance.now() };
-        setTimingNotice(null);
-        setActiveSection(nextSection);
-      }
-      if (requestedSection !== nextSection) {
-        writeSectionToUrl(nextSection, "replace");
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [activeSection, allowedItems]);
-
-  useEffect(() => {
-    const item = NAV_ITEMS.find((candidate) => candidate.id === activeSection);
-    document.title = item ? `${item.label} | Mining Operations` : "Mining Operations";
-  }, [activeSection]);
 
   useEffect(() => {
     if (data.loading) {
@@ -164,7 +132,6 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     if (section !== activeSection) {
       sectionTimerRef.current = { section, startedAt: performance.now() };
       setTimingNotice(null);
-      writeSectionToUrl(section, "push");
       setActiveSection(section);
     }
   };
@@ -178,25 +145,32 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
           <GlobalFilters
             filters={filters}
             options={options}
-            getOptionsFor={getOptionsFor}
-            applyFilters={applyFilters}
+            setFilter={setFilter}
             resetFilters={resetFilters}
-            onRefresh={() => setRefreshKey((current) => current + 1)}
+            onRefresh={reloadDashboard}
           />
         )}
-        <div className="px-4 py-4 pb-24 lg:px-6 lg:pb-4">
+        <div className="px-4 py-4 lg:px-6">
+          <div className="mb-4">
+            <MobileNav active={activeSection} onChange={handleSectionChange} items={allowedItems} />
+          </div>
           {data.error ? (
             <Panel title="Unable to load dashboard">
               <p className="text-sm text-red-700">{data.error}</p>
             </Panel>
           ) : (
-            <Suspense fallback={<LoadingState />}>
-              {renderSection(activeSection, data, filters, showTimingNotice)}
-            </Suspense>
+            renderSection(
+              activeSection,
+              data,
+              filters,
+              refreshKey,
+              showTimingNotice,
+              reloadDashboard,
+              ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshLiveOems : undefined,
+            )
           )}
         </div>
       </main>
-      <MobileNav active={activeSection} onChange={handleSectionChange} items={allowedItems} />
       {timingNotice && (
         <TimingToast
           key={timingNotice.id}
@@ -210,36 +184,24 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
 }
 
 function initialSectionFromUrl(): NavItemId {
-  return sectionFromUrl() ?? "management";
-}
-
-function sectionFromUrl(): NavItemId | null {
   const section = new URLSearchParams(window.location.search).get("section");
-  return NAV_ITEMS.some((item) => item.id === section) ? section as NavItemId : null;
-}
-
-function writeSectionToUrl(section: NavItemId, mode: "push" | "replace") {
-  const url = new URL(window.location.href);
-  url.searchParams.set("section", section);
-  const state = { ...window.history.state, section };
-  if (mode === "push") {
-    window.history.pushState(state, "", url);
-  } else {
-    window.history.replaceState(state, "", url);
-  }
+  return NAV_ITEMS.some((item) => item.id === section) ? section as NavItemId : "management";
 }
 
 function renderSection(
   activeSection: NavItemId,
   data: ReturnType<typeof useDashboardData>,
   filters: ReturnType<typeof useFleetFilters>["filters"],
+  refreshKey: number,
   onTimingComplete: (message: string, elapsedMs: number) => void,
+  onFleetReload: () => void,
+  onFleetRefresh?: () => Promise<void>,
 ) {
   switch (activeSection) {
     case "management":
       return <ManagementDashboard overview={data.overview} loading={data.loading} />;
     case "fleet":
-      return <FleetDashboard rows={data.fleetRows} alerts={data.alerts} loading={data.loading} />;
+      return <FleetDashboard rows={data.fleetRows} alerts={data.alerts} loading={data.loading} onReload={onFleetReload} onRefresh={onFleetRefresh} />;
     case "fuel":
       return <FuelDashboard summary={data.fuelSummary} loading={data.loading} />;
     case "diesel":
@@ -254,6 +216,7 @@ function renderSection(
           reports={data.reports}
           filters={filters}
           loading={data.loading}
+          refreshKey={refreshKey}
           onTimingComplete={onTimingComplete}
         />
       );

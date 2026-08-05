@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardFilters, Site, Vehicle } from "../types/fleet";
 import { MOCK_DATE_FROM, MOCK_DATE_TO } from "../constants/dateRange";
+import {
+  getConfiguredMakes,
+  getConfiguredModels,
+  getWorkbookMakeName,
+  getWorkbookModelName,
+} from "../constants/modelMake";
+import { sites as seedSites, vehicles as seedVehicles } from "../data/mock/seed";
 import { getPortalData } from "../services/dataAccess";
 import { uniqueSorted } from "../utils/filters";
 
@@ -26,28 +33,39 @@ export interface FilterOptions {
   assetTypes: string[];
   companies: string[];
   models: string[];
-  vehicles: string[];
   statuses: string[];
 }
 
-interface FleetCatalog {
-  sites: Site[];
-  vehicles: Vehicle[];
-}
+const initialFilterVehicles = seedVehicles.map((vehicle) => {
+  const company = getWorkbookMakeName(vehicle.assetType, vehicle.company);
+  return {
+    ...vehicle,
+    company: company as Vehicle["company"],
+    modelNumber: getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber),
+  };
+});
 
-const emptyCatalog: FleetCatalog = { sites: [], vehicles: [] };
+const LIVE_REPORT_OEMS: Vehicle["company"][] = ["Volvo", "Scania", "Eicher"];
+const CATEGORY_OEMS: Partial<Record<Vehicle["assetCategory"], Vehicle["company"][]>> = {
+  Truck: ["Volvo", "Scania", "Eicher"],
+  HEMM: ["Case", "Komatsu", "LiuGong", "Tata Hitachi"],
+};
 
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
-  const [catalog, setCatalog] = useState<FleetCatalog>(emptyCatalog);
+  const [sites, setSites] = useState<Site[]>(seedSites);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(initialFilterVehicles);
 
   useEffect(() => {
     let mounted = true;
 
     getPortalData().then((data) => {
-      if (mounted) {
-        setCatalog({ sites: data.sites, vehicles: data.vehicles });
+      if (!mounted) {
+        return;
       }
+
+      setSites(data.sites);
+      setVehicles(data.vehicles);
     });
 
     return () => {
@@ -55,82 +73,93 @@ export function useFleetFilters() {
     };
   }, []);
 
-  const getOptionsFor = useCallback(
-    (draftFilters: DashboardFilters) => buildFilterOptions(catalog, draftFilters),
-    [catalog],
-  );
+  const options = useMemo<FilterOptions>(() => {
+    const siteVehicles = vehicles.filter((vehicle) => (
+      filters.siteId === "All" || vehicle.siteId === filters.siteId
+    ));
+    const contractVehicles = siteVehicles.filter((vehicle) => (
+      filters.contractType === "All" || vehicle.contractType === filters.contractType
+    ));
+    const categoryVehicles = contractVehicles.filter((vehicle) => (
+      filters.assetCategory === "All" || vehicle.assetCategory === filters.assetCategory
+    ));
+    const typeVehicles = categoryVehicles.filter((vehicle) => (
+      filters.assetType === "All" || vehicle.assetType === filters.assetType
+    ));
+    const companyVehicles = typeVehicles.filter((vehicle) => (
+      filters.company === "All" || vehicle.company === filters.company
+    ));
 
-  const options = useMemo(() => getOptionsFor(filters), [filters, getOptionsFor]);
+    const configuredMakes = filters.assetType === "All"
+      ? null
+      : getConfiguredMakes(filters.assetType);
+    const configuredModels = filters.assetType === "All"
+      ? null
+      : getConfiguredModels(filters.assetType, filters.company);
+    const categoryCompanies = uniqueSorted(typeVehicles.map((vehicle) => vehicle.company));
+    const categoryOems = filters.assetCategory === "All"
+      ? null
+      : CATEGORY_OEMS[filters.assetCategory];
+    const availableCompanies = categoryOems
+      ?? configuredMakes
+      ?? uniqueSorted([...categoryCompanies, ...LIVE_REPORT_OEMS]);
+
+    return {
+      sites: sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
+      contracts: uniqueSorted(sites.map((site) => site.contractType)),
+      categories: uniqueSorted(contractVehicles.map((vehicle) => vehicle.assetCategory)),
+      assetTypes: uniqueSorted(categoryVehicles.map((vehicle) => vehicle.assetType)),
+      companies: uniqueSorted(availableCompanies),
+      models: configuredModels ?? uniqueSorted(companyVehicles.map((vehicle) => vehicle.modelNumber)),
+      statuses: uniqueSorted(companyVehicles.map((vehicle) => vehicle.status)),
+    };
+  }, [
+    filters.assetCategory,
+    filters.assetType,
+    filters.company,
+    filters.contractType,
+    filters.siteId,
+    sites,
+    vehicles,
+  ]);
 
   const setFilter = useCallback(
     <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
-      setFilters((current) => ({ ...current, [key]: value }));
+      setFilters((current) => {
+        const next = { ...current, [key]: value };
+
+        if (key === "siteId") {
+          next.contractType = "All";
+          next.assetCategory = "All";
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "contractType") {
+          next.assetCategory = "All";
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "assetCategory") {
+          next.assetType = "All";
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "assetType") {
+          next.company = "All";
+          next.modelNumber = "All";
+        } else if (key === "company") {
+          next.modelNumber = "All";
+        }
+
+        return next;
+      });
     },
     [],
   );
 
-  const applyFilters = useCallback((nextFilters: DashboardFilters) => {
-    setFilters({ ...nextFilters });
-  }, []);
-
-  const resetFilters = useCallback(() => setFilters({ ...defaultFilters }), []);
+  const resetFilters = useCallback(() => setFilters(defaultFilters), []);
 
   return useMemo(
-    () => ({ filters, setFilter, setFilters, applyFilters, resetFilters, options, getOptionsFor }),
-    [applyFilters, filters, getOptionsFor, options, resetFilters, setFilter],
+    () => ({ filters, setFilter, setFilters, resetFilters, options }),
+    [filters, options, resetFilters, setFilter],
   );
-}
-
-function buildFilterOptions(catalog: FleetCatalog, filters: DashboardFilters): FilterOptions {
-  const siteById = new Map(catalog.sites.map((site) => [site.id, site]));
-  const matches = (vehicle: Vehicle, except?: keyof DashboardFilters) => {
-    const site = vehicle.siteId ? siteById.get(vehicle.siteId) : undefined;
-    const contractType = vehicle.contractType ?? site?.contractType ?? null;
-
-    if (except !== "siteId" && filters.siteId !== "All" && vehicle.siteId !== filters.siteId) return false;
-    if (except !== "contractType" && filters.contractType !== "All" && contractType !== filters.contractType) return false;
-    if (except !== "assetCategory" && filters.assetCategory !== "All" && vehicle.assetCategory !== filters.assetCategory) return false;
-    if (except !== "assetType" && filters.assetType !== "All" && vehicle.assetType !== filters.assetType) return false;
-    if (except !== "company" && filters.company !== "All" && vehicle.company !== filters.company) return false;
-    if (except !== "modelNumber" && filters.modelNumber !== "All" && vehicle.modelNumber !== filters.modelNumber) return false;
-    if (except !== "status" && filters.status !== "All" && vehicle.status !== filters.status) return false;
-    if (
-      except !== "vehicleNumber"
-      && filters.vehicleNumber.trim()
-      && !vehicle.vehicleNumber.toLowerCase().includes(filters.vehicleNumber.trim().toLowerCase())
-    ) return false;
-    return true;
-  };
-
-  const eligibleSiteIds = new Set(catalog.vehicles.filter((vehicle) => matches(vehicle, "siteId")).map((vehicle) => vehicle.siteId));
-  const sites = catalog.sites
-    .filter((site) => eligibleSiteIds.has(site.id) || catalog.vehicles.length === 0)
-    .sort((a, b) => a.location.localeCompare(b.location) || a.name.localeCompare(b.name))
-    .map((site) => ({ value: site.id, label: site.name, group: site.location }));
-
-  return {
-    sites: [{ value: "All", label: "All Sites" }, ...sites],
-    contracts: uniqueSorted(
-      catalog.vehicles
-        .filter((vehicle) => matches(vehicle, "contractType"))
-        .map((vehicle) => vehicle.contractType ?? (vehicle.siteId ? siteById.get(vehicle.siteId)?.contractType ?? "" : ""))
-        .filter(Boolean),
-    ),
-    categories: uniqueSorted(catalog.vehicles.filter((vehicle) => matches(vehicle, "assetCategory")).map((vehicle) => vehicle.assetCategory)),
-    assetTypes: uniqueSorted(
-      catalog.vehicles
-        .filter((vehicle) => matches(vehicle, "assetType"))
-        .map((vehicle) => vehicle.assetType ?? "")
-        .filter(Boolean),
-    ),
-    companies: uniqueSorted(catalog.vehicles.filter((vehicle) => matches(vehicle, "company")).map((vehicle) => vehicle.company)),
-    models: uniqueSorted(
-      catalog.vehicles
-        .filter((vehicle) => matches(vehicle, "modelNumber"))
-        .map((vehicle) => vehicle.modelNumber ?? "")
-        .filter(Boolean),
-    ),
-    vehicles: uniqueSorted(catalog.vehicles.filter((vehicle) => matches(vehicle, "vehicleNumber")).map((vehicle) => vehicle.vehicleNumber)),
-    statuses: uniqueSorted(catalog.vehicles.filter((vehicle) => matches(vehicle, "status")).map((vehicle) => vehicle.status)),
-  };
 }

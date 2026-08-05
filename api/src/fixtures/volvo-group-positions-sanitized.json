@@ -1,0 +1,24 @@
+{
+  "vehiclePositionResponse": {
+    "vehiclePositions": [
+      {
+        "vin": "TESTVIN0000000001",
+        "triggerType": { "triggerType": "TIMER", "context": "SANITIZED_TEST" },
+        "createdDateTime": "2026-07-17T05:00:00.000Z",
+        "receivedDateTime": "2026-07-17T05:00:05.000Z",
+        "gnssPosition": {
+          "latitude": 20.0,
+          "longitude": 79.0,
+          "heading": 90,
+          "altitude": 250,
+          "speed": 12,
+          "positionDateTime": "2026-07-17T04:59:58.000Z"
+        },
+        "wheelBasedSpeed": 12,
+        "tachographSpeed": 12
+      }
+    ]
+  },
+  "moreDataAvailable": false,
+  "requestServerDateTime": "2026-07-17T05:01:00.000Z"
+}

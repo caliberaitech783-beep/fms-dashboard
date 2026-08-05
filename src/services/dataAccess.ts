@@ -9,7 +9,8 @@ import type {
   WhatsAppDeliveryLog,
   WhatsAppReportSchedule,
 } from "../types/fleet";
-import { filterTelemetryRecords, filterVehicles } from "../utils/filters";
+import { getWorkbookMakeName, getWorkbookModelName } from "../constants/modelMake";
+import { filterTelemetryRecords, filterVehicles, isLiveOemSource } from "../utils/filters";
 
 export interface PortalData {
   sites: Site[];
@@ -21,25 +22,17 @@ export interface PortalData {
   whatsAppDeliveryLogs: WhatsAppDeliveryLog[];
 }
 
-let portalDataPromise: Promise<PortalData> | null = null;
+function normalizeVehicleModel(vehicle: Vehicle): Vehicle {
+  const company = getWorkbookMakeName(vehicle.assetType, vehicle.company);
+  const modelNumber = getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber);
+  return {
+    ...vehicle,
+    company: company as Vehicle["company"],
+    modelNumber,
+  };
+}
 
 export async function getPortalData(): Promise<PortalData> {
-  if (portalDataPromise) {
-    return portalDataPromise;
-  }
-
-  portalDataPromise = loadPortalData().catch((error) => {
-    portalDataPromise = null;
-    throw error;
-  });
-  return portalDataPromise;
-}
-
-export function invalidatePortalDataCache() {
-  portalDataPromise = null;
-}
-
-async function loadPortalData(): Promise<PortalData> {
   const [
     sites,
     vehicles,
@@ -57,11 +50,22 @@ async function loadPortalData(): Promise<PortalData> {
     apiClient.fleet.fetchWhatsAppSchedules(),
     apiClient.fleet.fetchWhatsAppDeliveryLogs(),
   ]);
+  const normalizedVehicles = vehicles.map(normalizeVehicleModel);
+  const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const normalizedRecords = records.map((record) => {
+    const vehicle = normalizedVehicleById.get(record.vehicleId);
+    if (!vehicle) return record;
+    return {
+      ...record,
+      company: vehicle.company,
+      modelNumber: vehicle.modelNumber,
+    };
+  });
 
   return {
     sites,
-    vehicles,
-    records,
+    vehicles: normalizedVehicles,
+    records: normalizedRecords,
     integrations,
     reports,
     whatsAppSchedules,
@@ -77,7 +81,11 @@ export async function getFilteredPortalData(filters: DashboardFilters) {
 
   return {
     ...data,
-    filteredVehicles: filteredVehicles.filter((vehicle) => filteredVehicleIds.has(vehicle.id) || filteredRecords.length === 0),
+    filteredVehicles: filteredVehicles.filter((vehicle) => (
+      filteredVehicleIds.has(vehicle.id)
+      || isLiveOemSource(vehicle.source)
+      || filteredRecords.length === 0
+    )),
     filteredRecords,
   };
 }

@@ -1,7 +1,5 @@
-import type { DashboardFilters } from "../types/fleet";
-import type { FleetTelemetryRecord, Vehicle } from "../types/fleet";
+import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
 import type { ReportPreview, ReportType } from "../types/reports";
-import { ALERT_THRESHOLDS } from "../constants/thresholds";
 import { formatDateTime, titleCase } from "../utils/formatters";
 import {
   aggregateByCompany,
@@ -12,13 +10,29 @@ import {
   aggregateDashboardKpis,
   calculateFuelPerM3,
   calculateIdlePercentage,
-  calculateRunningPercentage,
   calculateUtilization,
   generateAlerts,
   getVehiclePerformanceRows,
   sumRecords,
 } from "../utils/calculations";
 import { getFilteredPortalData, getPortalData } from "./dataAccess";
+import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
+import {
+  fetchScaniaDriverStandstillReport,
+  fetchScaniaShiftSummaryReport,
+  invalidateScaniaReportCache,
+} from "./scaniaReportService";
+import {
+  fetchEicherLiveSnapshot,
+  invalidateEicherLiveCache,
+} from "./adapters/eicherLiveService";
+import { removeHiddenReportColumns } from "../utils/reportColumns";
+import { resolveOperationalShift } from "../utils/shiftResolver";
+import {
+  buildDriverwiseStandstillPdf,
+  isDriverwiseStandstillReport,
+  type DriverwisePdfContext,
+} from "../utils/driverwisePdf";
 
 export const reportService = {
   async getReports() {
@@ -26,7 +40,26 @@ export const reportService = {
     return data.reports;
   },
 
-  async getReportPreview(reportType: ReportType, filters: DashboardFilters): Promise<ReportPreview> {
+  async getReportPreview(
+    reportType: ReportType,
+    filters: DashboardFilters,
+    options: { forceRefresh?: boolean } = {},
+  ): Promise<ReportPreview> {
+    if (reportType === "Eicher Report") {
+      return buildEicherReport(filters, options);
+    }
+
+    if (reportType === "Shift-wise Fuel Report") {
+      return buildShiftWiseFuelReport(filters, options);
+    }
+
+    if (reportType === "Driverwise Standstill Tracking") {
+      const preview = filters.company === "Scania"
+        ? await fetchScaniaDriverStandstillReport(filters, options)
+        : await fetchVolvoDriverStandstillReport(filters, options);
+      return removeHiddenReportColumns(preview);
+    }
+
     const { sites, vehicles, filteredVehicles, filteredRecords, whatsAppDeliveryLogs } = await getFilteredPortalData(filters);
     const siteMap = new Map(sites.map((site) => [site.id, site.name]));
     const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
@@ -50,43 +83,7 @@ export const reportService = {
       };
     }
 
-    if (reportType === "Driver wise Report") {
-      filteredRecords.forEach((record) => {
-        const vehicle = vehicleMap.get(record.vehicleId);
-        const driverPerformance = classifyDriverPerformance(record, vehicle);
-        if (driverPerformance.category === "Normal") return;
-
-        rows.push({
-          date: record.date || record.timestamp.slice(0, 10),
-          site: record.siteId ? siteMap.get(record.siteId) ?? record.siteName ?? record.siteId : record.siteName ?? "Not available",
-          shift: record.shift === "ALL_DAY" ? "All day" : `Shift ${record.shift}`,
-          driverName: record.driverName || "Unassigned",
-          driverMobile: record.driverMobile || "-",
-          vehicleNumber: record.vehicleNumber,
-          performanceCategory: driverPerformance.category,
-          economy: driverPerformance.economy,
-          norm: vehicle?.standardFuelNorm ?? null,
-          unit: vehicle?.fuelMeasurementUnit ?? (record.assetCategory === "Truck" ? "km/L" : "L/hr"),
-          economyVariancePercent: driverPerformance.economyVariancePercent,
-          runningHours: record.runningHours,
-          runningPercentage: record.runningPercentage ?? calculateRunningPercentage(record.runningHours, record.engineHours),
-          idleHours: record.idleHours,
-          idlePercentage: record.idlePercentage ?? calculateIdlePercentage(record.idleHours, record.engineHours),
-          fuelConsumedLitres: record.fuelConsumedLitres,
-          trips: record.trips,
-          productionM3: record.productionM3,
-          status: record.status,
-        });
-      });
-
-      rows.sort((left, right) => [
-        String(left.site).localeCompare(String(right.site), undefined, { numeric: true }),
-        String(left.shift).localeCompare(String(right.shift), undefined, { numeric: true }),
-        performanceOrder(String(left.performanceCategory)) - performanceOrder(String(right.performanceCategory)),
-        String(left.driverName).localeCompare(String(right.driverName), undefined, { numeric: true }),
-        String(left.vehicleNumber).localeCompare(String(right.vehicleNumber), undefined, { numeric: true }),
-      ].find((value) => value !== 0) ?? 0);
-    } else if (reportType.includes("Company-wise")) {
+    if (reportType.includes("Company-wise")) {
       aggregateByCompany(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
     } else if (reportType.includes("Model-wise")) {
       aggregateByModel(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
@@ -160,69 +157,417 @@ export const reportService = {
     };
   },
 
+  async prefetchReportPreview(reportType: ReportType, filters: DashboardFilters) {
+    if (reportType === "Driverwise Standstill Tracking") {
+      if (filters.company === "Scania") {
+        await fetchScaniaDriverStandstillReport(filters);
+      } else {
+        await fetchVolvoDriverStandstillReport(filters);
+      }
+    }
+  },
+
+  invalidateLiveReportCache() {
+    invalidateScaniaReportCache();
+  },
+
   exportCsv(preview: ReportPreview, fileName: string) {
-    const csv = rowsToCsv(preview.rows, preview.columns);
+    const visiblePreview = removeHiddenReportColumns(preview);
+    const csv = rowsToCsv(visiblePreview.rows, visiblePreview.columns);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, fileName);
   },
 
-  exportPdf(preview: ReportPreview, fileName: string) {
-    const blob = new Blob([buildPdf(preview)], { type: "application/pdf" });
+  exportPdf(preview: ReportPreview, fileName: string, context?: DriverwisePdfContext) {
+    const visiblePreview = removeHiddenReportColumns(preview);
+    const pdf = isDriverwiseStandstillReport(visiblePreview.reportType)
+      ? buildDriverwiseStandstillPdf(visiblePreview, context)
+      : buildPdf(visiblePreview);
+    const blob = new Blob([pdf], { type: "application/pdf" });
     downloadBlob(blob, fileName);
   },
 
   exportExcel(preview: ReportPreview, fileName: string) {
-    const blob = new Blob([buildXlsxWorkbook(preview)], {
+    const blob = new Blob([buildXlsxWorkbook(removeHiddenReportColumns(preview))], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     downloadBlob(blob, fileName);
   },
 };
 
-function classifyDriverPerformance(record: FleetTelemetryRecord, vehicle?: Vehicle) {
-  const idlePercentage = record.idlePercentage ?? calculateIdlePercentage(record.idleHours, record.engineHours);
-  const runningPercentage = record.runningPercentage ?? calculateRunningPercentage(record.runningHours, record.engineHours);
-  const economy = vehicle?.assetCategory === "HEMM"
-    ? record.hemmFuelRateLitrePerHour
-    : record.truckEfficiencyKmPerLitre;
-  const norm = vehicle?.standardFuelNorm ?? null;
-  const economyVariancePercent = calculateEconomyVariancePercent(economy, norm, vehicle?.assetCategory);
+const EICHER_REPORT_COLUMNS = [
+  "Registration Number",
+  "Chassis Number",
+  "Model",
+  "Vehicle Status",
+  "Total Distance Travelled",
+  "Latitude",
+  "Longitude",
+  "Speed (Km/h)",
+  "Vehicle Direction",
+  "Device ID",
+  "Current Location",
+  "GPS Timestamp",
+  "Last Successful Update",
+  "Total Engine Hours (Hr)",
+  "Fuel Efficiency (Km/L)",
+  "Total Fuel Consumed (L)",
+  "Fuel Consumed in Idling (L or Kg)",
+  "Fuel Consumed in Idling (%)",
+  "Time Spent in Idling (Min)",
+  "Time Spent in Idling (%)",
+];
 
-  if (record.status === "idle" || (idlePercentage ?? 0) >= ALERT_THRESHOLDS.excessiveIdlePercentage) {
-    return { category: "Idling", economy, economyVariancePercent };
+const SHIFT_REPORT_COLUMNS = [
+  "Shift",
+  "Site",
+  "Vehicles",
+  "Fuel consumed (L)",
+  "Distance (km)",
+  "Running hours",
+  "Idle hours",
+  "Idle (%)",
+  "Efficiency (km/L)",
+  "Trips",
+  "Production (m3)",
+  "Coverage",
+];
+
+async function buildEicherReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  if (options.forceRefresh) {
+    invalidateEicherLiveCache();
   }
 
-  if ((runningPercentage ?? 0) >= 80 && (record.trips ?? record.productionM3 ?? 0) > 0) {
-    return { category: "High Performance", economy, economyVariancePercent };
+  const snapshot = await fetchEicherLiveSnapshot();
+  if (!snapshot) {
+    return {
+      reportType: "Eicher Report",
+      generatedAt: new Date().toISOString(),
+      columns: EICHER_REPORT_COLUMNS,
+      rows: [],
+      oem: "Eicher",
+      live: false,
+      source: "EICHER_VECV_LIVE",
+      error: {
+        kind: "upstream",
+        message: "Eicher live data is temporarily unavailable.",
+        retryable: true,
+      },
+    };
   }
 
-  if ((economyVariancePercent ?? 0) > 0) {
-    return { category: "Above Economy", economy, economyVariancePercent };
-  }
+  const latestByVehicle = latestRecordsByVehicle(snapshot.telemetry);
+  const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
+  const rows = snapshot.vehicles
+    .filter((vehicle) => vehicle.source === "EICHER_VECV_LIVE")
+    .filter((vehicle) => filters.status === "All" || vehicle.status === filters.status)
+    .filter((vehicle) => !vehicleSearch || vehicle.vehicleNumber.toLowerCase().includes(vehicleSearch))
+    .map((vehicle) => {
+      const record = latestByVehicle.get(vehicle.id);
+      const raw = record?.rawMetrics ?? {};
+      const distance = numberMetric(raw, "lifetimeOdometerKm")
+        ?? numberMetric(raw, "odometerKm")
+        ?? record?.odometerKm
+        ?? null;
+      const engineHours = numberMetric(raw, "engineHours") ?? record?.engineHours ?? null;
+      const fuelConsumed = numberMetric(raw, "fuelConsumedLitres") ?? record?.fuelConsumedLitres ?? null;
+      const idleFuel = numberMetric(raw, "idleFuelConsumedLitres")
+        ?? numberMetric(raw, "fuelConsumedInIdling")
+        ?? null;
+      const idleMinutes = numberMetric(raw, "idleMinutes")
+        ?? numberMetric(raw, "timeSpentInIdlingMinutes")
+        ?? (record?.idleHours !== null && record?.idleHours !== undefined ? record.idleHours * 60 : null);
 
-  return { category: "Normal", economy, economyVariancePercent };
+      return {
+        "Registration Number": stringMetric(raw, "registrationNumber") ?? vehicle.vehicleNumber,
+        "Chassis Number": stringMetric(raw, "chassisNumber") ?? vehicle.trackerId,
+        Model: vehicle.modelNumber ?? stringMetric(raw, "model") ?? null,
+        "Vehicle Status": stringMetric(raw, "vehicleStatus") ?? record?.status ?? vehicle.status,
+        "Total Distance Travelled": roundNullable(distance),
+        Latitude: roundNullable(numberMetric(raw, "latitude"), 6),
+        Longitude: roundNullable(numberMetric(raw, "longitude"), 6),
+        "Speed (Km/h)": roundNullable(numberMetric(raw, "speedKph")),
+        "Vehicle Direction": roundNullable(numberMetric(raw, "vehicleDirection") ?? numberMetric(raw, "heading")),
+        "Device ID": stringMetric(raw, "deviceId"),
+        "Current Location": stringMetric(raw, "currentLocation") ?? record?.location ?? null,
+        "GPS Timestamp": stringMetric(raw, "gpsTimestamp") ?? record?.timestamp ?? null,
+        "Last Successful Update": stringMetric(raw, "lastSuccessfulUpdate"),
+        "Total Engine Hours (Hr)": roundNullable(engineHours),
+        "Fuel Efficiency (Km/L)": fuelConsumed && distance !== null ? roundNullable(distance / fuelConsumed) : null,
+        "Total Fuel Consumed (L)": roundNullable(fuelConsumed),
+        "Fuel Consumed in Idling (L or Kg)": roundNullable(idleFuel),
+        "Fuel Consumed in Idling (%)": fuelConsumed && idleFuel !== null ? roundNullable(idleFuel / fuelConsumed * 100) : null,
+        "Time Spent in Idling (Min)": roundNullable(idleMinutes),
+        "Time Spent in Idling (%)": engineHours && idleMinutes !== null ? roundNullable(idleMinutes / 60 / engineHours * 100) : null,
+      };
+    })
+    .sort((left, right) => String(left["Registration Number"]).localeCompare(
+      String(right["Registration Number"]),
+      undefined,
+      { numeric: true },
+    ));
+
+  return {
+    reportType: "Eicher Report",
+    generatedAt: new Date().toISOString(),
+    columns: EICHER_REPORT_COLUMNS,
+    rows,
+    oem: "Eicher",
+    live: true,
+    source: snapshot.source,
+    notice: "Generated from Eicher VECV live location data. Fuel, engine-hour, and idling columns remain blank where the API does not supply those fields.",
+    meta: {
+      rawRecordCount: snapshot.meta?.rawRecordCount ?? snapshot.telemetry.length,
+      finalFilteredVehicleCount: rows.length,
+      unavailableFields: [
+        "Total Engine Hours (Hr)",
+        "Fuel Efficiency (Km/L)",
+        "Total Fuel Consumed (L)",
+        "Fuel Consumed in Idling (L or Kg)",
+        "Fuel Consumed in Idling (%)",
+        "Time Spent in Idling (Min)",
+        "Time Spent in Idling (%)",
+      ],
+    },
+  };
 }
 
-function calculateEconomyVariancePercent(
-  economy: number | null | undefined,
-  norm: number | null | undefined,
-  assetCategory: Vehicle["assetCategory"] | undefined,
-) {
-  if (economy === null || economy === undefined || norm === null || norm === undefined || norm <= 0) {
+async function buildShiftWiseFuelReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  if (filters.company === "Scania") {
+    return buildScaniaShiftWiseFuelReport(filters, options);
+  }
+
+  const data = await getFilteredPortalData({ ...filters, shift: "All" });
+  const vehicleById = new Map(data.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const selectedShift = filters.shift === "All" ? null : filters.shift as ShiftCode;
+  const records = data.filteredRecords
+    .map((record) => {
+      if (record.shift !== "UNKNOWN") return record;
+      const vehicle = vehicleById.get(record.vehicleId);
+      return {
+        ...record,
+        shift: resolveOperationalShift(record.siteName || vehicle?.siteName, record.timestamp),
+      };
+    })
+    .filter((record) => !selectedShift || record.shift === selectedShift);
+
+  if (!records.length) {
+    const oem = filters.company === "All" ? "selected OEM" : filters.company;
+    const shift = selectedShift ? shiftLabel(selectedShift) : "selected shifts";
+    return unavailableShiftReport(
+      `No ${oem} telemetry could be assigned to ${shift}. Check the site mapping and live integration status.`,
+    );
+  }
+
+  const groups = new Map<ShiftCode, FleetTelemetryRecord[]>();
+  records.forEach((record) => {
+    const group = groups.get(record.shift) ?? [];
+    group.push(record);
+    groups.set(record.shift, group);
+  });
+  const shiftOrder: ShiftCode[] = ["A", "B", "C", "ALL_DAY", "UNKNOWN"];
+  const rows = [...groups.entries()]
+    .sort(([left], [right]) => shiftOrder.indexOf(left) - shiftOrder.indexOf(right))
+    .map(([shift, shiftRecords]) => {
+      const latestByVehicle = latestRecordsByVehicle(shiftRecords);
+      const totals = sumRecords(recordsForShiftTotals(shiftRecords));
+      return shiftReportRow({
+        shift: shiftLabel(shift),
+        site: selectedSiteLabel(filters, data.sites),
+        vehicles: latestByVehicle.size,
+        fuel: totals.fuelConsumedLitres,
+        distance: totals.distanceKm,
+        runningHours: totals.runningHours,
+        idleHours: totals.idleHours,
+        engineHours: totals.engineHours,
+        trips: totals.trips,
+        production: totals.productionM3,
+        coverage: shiftCoverage(shiftRecords),
+      });
+    });
+  const live = records.some((record) => record.source !== "DUMMY_SAMPLE");
+
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: SHIFT_REPORT_COLUMNS,
+    rows,
+    live,
+    notice: live
+      ? "Live Volvo rows use each vehicle's latest cumulative RFMS snapshot, assigned by mapped site and Asia/Kolkata event time."
+      : "Generated from normalized period records.",
+  };
+}
+
+async function buildScaniaShiftWiseFuelReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  const siteIds = filters.siteId && filters.siteId !== "All"
+    ? [filters.siteId]
+    : ["All"];
+  const shifts: Extract<ShiftCode, "A" | "B" | "C">[] = (
+    filters.shift === "A" || filters.shift === "B" || filters.shift === "C"
+      ? [filters.shift]
+      : filters.shift === "All" || filters.shift === "ALL_DAY"
+        ? ["A", "B", "C"]
+        : []
+  );
+  if (!shifts.length) {
+    return unavailableShiftReport("Select All Shifts, All Day, Shift A, Shift B, or Shift C for the Scania report.");
+  }
+
+  const scopes = siteIds.flatMap((siteId) => shifts.map((shift) => ({ siteId, shift })));
+  const previews: ReportPreview[] = [];
+  for (let index = 0; index < scopes.length; index += 3) {
+    const batch = scopes.slice(index, index + 3);
+    const batchPreviews = await Promise.all(batch.map((scope) => (
+      fetchScaniaShiftSummaryReport(
+        { ...filters, siteId: scope.siteId, shift: scope.shift },
+        options,
+      )
+    )));
+    previews.push(...batchPreviews);
+  }
+
+  const successful = previews.filter((preview) => preview.live && !preview.error && preview.rows.length);
+  if (!successful.length) {
+    const firstError = previews.find((preview) => preview.error)?.error;
+    const firstNotice = previews.find((preview) => preview.notice)?.notice;
+    const unavailable = unavailableShiftReport(
+      firstError?.message
+        ?? firstNotice
+        ?? "Scania returned no live records for the selected sites and shifts.",
+    );
+    return firstError ? { ...unavailable, error: firstError, source: "SCANIA_LIVE_API" } : unavailable;
+  }
+
+  const rows = successful.flatMap((preview) => preview.rows);
+  const failures = previews.length - successful.length;
+
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: SHIFT_REPORT_COLUMNS,
+    rows,
+    oem: "Scania",
+    live: true,
+    source: "SCANIA_LIVE_API",
+    notice: failures
+      ? `${successful.length} Scania site/shift reports loaded; ${failures} could not be loaded. Retry or narrow the filters for details.`
+      : "Generated from Scania live cumulative RFMS snapshots, imported site mappings, and Asia/Kolkata event-time shifts.",
+  };
+}
+
+function unavailableShiftReport(message: string): ReportPreview {
+  return {
+    reportType: "Shift-wise Fuel Report",
+    generatedAt: new Date().toISOString(),
+    columns: ["Status", "Message"],
+    rows: [{ Status: "No shift data", Message: message }],
+    live: false,
+    notice: message,
+  };
+}
+
+function latestRecordsByVehicle(records: FleetTelemetryRecord[]): Map<string, FleetTelemetryRecord> {
+  const latest = new Map<string, FleetTelemetryRecord>();
+  records.forEach((record) => {
+    const current = latest.get(record.vehicleId);
+    if (!current || record.timestamp > current.timestamp) latest.set(record.vehicleId, record);
+  });
+  return latest;
+}
+
+function recordsForShiftTotals(records: FleetTelemetryRecord[]): FleetTelemetryRecord[] {
+  const periodRecords = records.filter((record) => record.source === "DUMMY_SAMPLE");
+  const liveRecords = records.filter((record) => record.source !== "DUMMY_SAMPLE");
+  return [...periodRecords, ...latestRecordsByVehicle(liveRecords).values()];
+}
+
+function shiftReportRow(values: {
+  shift: string;
+  site: string;
+  vehicles: number;
+  fuel: number;
+  distance: number;
+  runningHours: number;
+  idleHours: number;
+  engineHours: number;
+  trips: number;
+  production: number;
+  coverage: string;
+}) {
+  return {
+    Shift: values.shift,
+    Site: values.site,
+    Vehicles: values.vehicles,
+    "Fuel consumed (L)": roundNumber(values.fuel),
+    "Distance (km)": roundNumber(values.distance),
+    "Running hours": roundNumber(values.runningHours),
+    "Idle hours": roundNumber(values.idleHours),
+    "Idle (%)": calculateIdlePercentage(
+      values.idleHours,
+      values.engineHours || values.runningHours + values.idleHours,
+    ),
+    "Efficiency (km/L)": values.fuel > 0 ? roundNumber(values.distance / values.fuel) : null,
+    Trips: roundNumber(values.trips),
+    "Production (m3)": roundNumber(values.production),
+    Coverage: values.coverage,
+  };
+}
+
+function selectedSiteLabel(filters: DashboardFilters, sites: { id: string; name: string }[]) {
+  if (!filters.siteId || filters.siteId === "All") return "All sites";
+  return sites.find((site) => site.id === filters.siteId)?.name ?? filters.siteId;
+}
+
+function shiftLabel(shift: ShiftCode | undefined): string {
+  if (shift === "ALL_DAY") return "All day";
+  if (shift === "UNKNOWN" || !shift) return "Unresolved shift";
+  return `Shift ${shift}`;
+}
+
+function shiftCoverage(records: FleetTelemetryRecord[]): string {
+  const sources = new Set(records.map((record) => record.source));
+  const labels: string[] = [];
+  if (sources.has("VOLVO_RFMS_LIVE")) labels.push("Volvo live cumulative snapshot");
+  if (sources.has("SCANIA_RFMS_LIVE")) labels.push("Scania live cumulative snapshot");
+  if (sources.has("EICHER_VECV_LIVE")) labels.push("Eicher live location snapshot");
+  if (sources.has("DUMMY_SAMPLE")) labels.push("Sample period data");
+  return labels.join(" + ") || "No source";
+}
+
+function roundNumber(value: number, digits = 2): number {
+  const factor = 10 ** digits;
+  return Math.round((Number.isFinite(value) ? value : 0) * factor) / factor;
+}
+
+function roundNullable(value: number | null | undefined, digits = 2): number | null {
+  return value === null || value === undefined || !Number.isFinite(value)
+    ? null
+    : roundNumber(value, digits);
+}
+
+function stringMetric(metrics: Record<string, unknown>, key: string): string | null {
+  const value = metrics[key];
+  const text = value === null || value === undefined ? "" : String(value).trim();
+  return text || null;
+}
+
+function numberMetric(metrics: Record<string, unknown>, key: string): number | null {
+  const value = metrics[key];
+  if (value === null || value === undefined || value === "") {
     return null;
   }
-
-  const variance = assetCategory === "HEMM"
-    ? ((norm - economy) / norm) * 100
-    : ((economy - norm) / norm) * 100;
-  return Math.round(variance * 10) / 10;
-}
-
-function performanceOrder(category: string) {
-  if (category === "High Performance") return 0;
-  if (category === "Above Economy") return 1;
-  if (category === "Idling") return 2;
-  return 3;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function rowsToCsv(rows: Record<string, string | number | null>[], columns: string[]) {

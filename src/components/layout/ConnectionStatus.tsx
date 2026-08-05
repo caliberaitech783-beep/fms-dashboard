@@ -1,8 +1,8 @@
-import { Database, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getPendingOperations, subscribeOfflineQueue } from "../../pwa/offlineQueue";
-import { activeDataSource } from "../../services/adapters";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 
 export function ConnectionStatus() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -29,16 +29,12 @@ export function ConnectionStatus() {
           {online ? "Online" : "Offline"}
         </span>
       </Badge>
-      <Badge tone="warning">
-        <Database className="h-3 w-3" />
-        {activeDataSource.label} · as of {formatDataDate(activeDataSource.asOf)}
-      </Badge>
-      {pendingCount > 0 && <Badge tone="warning">{pendingCount} local changes pending</Badge>}
+      <Badge tone={pendingCount ? "warning" : "info"}>{pendingCount ? `${pendingCount} pending sync` : "Synced"}</Badge>
+      {pendingCount > 0 && (
+        <Button size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => window.dispatchEvent(new CustomEvent("cmll:fms-retry-sync"))}>
+          Retry
+        </Button>
+      )}
     </div>
   );
-}
-
-function formatDataDate(value: string): string {
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" })
-    .format(new Date(`${value}T00:00:00`));
 }

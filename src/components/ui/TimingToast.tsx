@@ -1,5 +1,4 @@
-import { X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { formatElapsedSeconds } from "../../utils/formatters";
 
 interface TimingToastProps {
@@ -9,28 +8,35 @@ interface TimingToastProps {
 }
 
 export function TimingToast({ elapsedMs, message, onClose }: TimingToastProps) {
+  const okButtonRef = useRef<HTMLButtonElement | null>(null);
+
   useEffect(() => {
-    const timeoutId = window.setTimeout(onClose, 3500);
-    return () => window.clearTimeout(timeoutId);
-  }, [elapsedMs, message, onClose]);
+    okButtonRef.current?.focus();
+  }, [elapsedMs, message]);
 
   return (
     <div
-      className="fixed bottom-20 right-4 z-[70] max-w-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900 shadow-command lg:bottom-5 lg:right-5"
+      className="fixed left-1/2 top-6 z-[70] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-lg bg-emerald-700 px-5 py-4 text-white shadow-command sm:px-9 sm:py-6"
       role="status"
       aria-live="polite"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-lg font-semibold sm:text-2xl">
           {message}. Time taken: {formatElapsedSeconds(elapsedMs)}.
         </p>
         <button
+          ref={okButtonRef}
           type="button"
           onClick={onClose}
-          aria-label="Dismiss status"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-emerald-800 hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+          className="h-14 rounded-md bg-white px-7 text-lg font-semibold text-coal-950 shadow-sm transition hover:bg-coal-50 focus:outline-none focus:ring-2 focus:ring-white/80 focus:ring-offset-2 focus:ring-offset-emerald-700"
         >
-          <X aria-hidden="true" className="h-4 w-4" />
+          OK
         </button>
       </div>
     </div>

@@ -24,15 +24,15 @@ export const NAV_GROUPS = [
 export type NavGroupId = (typeof NAV_GROUPS)[number]["id"];
 
 export const NAV_ITEMS = [
-  { id: "management", label: "Command Centre", icon: BarChart3, group: "operate" },
+  { id: "management", label: "Management Dashboard", icon: BarChart3, group: "operate" },
   { id: "fleet", label: "Fleet", icon: Truck, group: "operate" },
-  { id: "fuel", label: "Fuel Control", icon: Fuel, group: "operate" },
+  { id: "fuel", label: "Fuel", icon: Fuel, group: "operate" },
   { id: "production", label: "Production", icon: Gauge, group: "operate" },
   { id: "diesel", label: "Diesel Analysis", icon: Fuel, group: "analyze" },
-  { id: "alerts", label: "Alerts & Exceptions", icon: AlertTriangle, group: "analyze" },
+  { id: "alerts", label: "Alerts", icon: AlertTriangle, group: "analyze" },
   { id: "reports", label: "Reports", icon: ClipboardList, group: "analyze" },
   { id: "notifications", label: "Notifications", icon: Bell, group: "control" },
-  { id: "admin-notifications", label: "Broadcasts", icon: Megaphone, group: "control" },
+  { id: "admin-notifications", label: "Admin Notifications", icon: Megaphone, group: "control" },
   { id: "whatsapp", label: "WhatsApp Delivery", icon: MessageCircle, group: "control" },
   { id: "integrations", label: "Integrations", icon: Database, group: "admin" },
   { id: "master-data", label: "Master Data", icon: BellDot, group: "admin" },

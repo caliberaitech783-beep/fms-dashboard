@@ -1,12 +1,5 @@
-import { mockAdapter } from "./mockAdapter";
-import { DUMMY_DATA_END_DATE } from "../../data/mock/seed";
+import { volvoRfmsAdapter } from "./volvoRfmsAdapter";
 
-export const activeFleetAdapter = mockAdapter;
-
-export const activeDataSource = {
-  mode: "demo" as const,
-  label: "Demo data",
-  asOf: DUMMY_DATA_END_DATE,
-};
+export const activeFleetAdapter = volvoRfmsAdapter;
 
 export type ActiveFleetAdapter = typeof activeFleetAdapter;

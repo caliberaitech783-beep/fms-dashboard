@@ -1,8 +1,14 @@
-public/
-test/
+.env
+.env.*
 local.settings.json
 local.settings.*.json
+test/
+scripts/
+coverage/
+.git/
+.github/
+public/
+api/public/
 *.zip
 tracking-sync-output*.xlsx
-.git/
 .gitignore
