@@ -1,0 +1,46 @@
+name: Sync Azure Function API deployment branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "api/**"
+      - ".github/workflows/azure-functionapp-deploy_cmll-fms-api.yml"
+      - ".github/workflows/sync-azure-functionapp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-azure-functionapp-deploy
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish the API subtree
+        run: |
+          git subtree split --prefix=api -b azure-functionapp-deploy-next
+          git push origin azure-functionapp-deploy-next:azure-functionapp-deploy --force
+
+      - name: Start the Azure Function deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run azure-functionapp-deploy_cmll-fms-api.yml --ref azure-functionapp-deploy; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
