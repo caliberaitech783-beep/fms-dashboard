@@ -90,6 +90,31 @@ test("merges vehicle numbers with punctuation differences", () => {
   assert.equal(merged[0].importedVehicleMaster.siteId, "site-wcl-gauri-pauni");
 });
 
+test("keeps the authoritative Volvo fleet count when imported master has extra rows", () => {
+  const apiVehicles = Array.from({ length: 40 }, (_, index) => ({
+    VIN: `VOLVO-VIN-${index + 1}`,
+    CustomerVehicleName: `V-${index + 1}`,
+    Model: "Volvo FMXB384R",
+    Type: "TRUCK",
+  }));
+  const importedVehicles = Array.from({ length: 69 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 2,
+    vehicleNumber: `V-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Gouri",
+    vin: `VOLVO-VIN-${index + 1}`,
+    serviceStatus: "Active",
+    sourceColumns: {},
+  }));
+
+  const merged = mergeVolvoVehicleMasters(apiVehicles, importedVehicles, {
+    appendUnmatchedImported: false,
+  });
+
+  assert.equal(merged.length, 40);
+  assert.equal(merged.every((vehicle) => vehicle.importedVehicleMaster?.siteId === "site-wcl-gauri-pauni"), true);
+});
+
 test("creates an offline record for imported vehicles without live Volvo state", () => {
   const vehicle = makeNoDataLiveVehicle({ trackerId: "VIN-1" });
   assert.equal(vehicle.vin, "VIN-1");
