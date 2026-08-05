@@ -77,7 +77,7 @@ export function ReportCategoryPage({
       {filteredReports.length === 0 ? (
         <EmptyReportState filtered={Boolean(search.trim()) || status !== "all"} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {filteredReports.map((report) => (
             <ReportCard
               key={report.item.id}
