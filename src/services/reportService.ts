@@ -10,6 +10,7 @@ import {
   aggregateDashboardKpis,
   calculateFuelPerM3,
   calculateIdlePercentage,
+  calculateRunningPercentage,
   calculateUtilization,
   generateAlerts,
   getVehiclePerformanceRows,
@@ -83,7 +84,43 @@ export const reportService = {
       };
     }
 
-    if (reportType.includes("Company-wise")) {
+    if (reportType === "Driver wise Report") {
+      filteredRecords.forEach((record) => {
+        const vehicle = vehicleMap.get(record.vehicleId);
+        const driverPerformance = classifyDriverPerformance(record, vehicle);
+        if (driverPerformance.category === "Normal") return;
+
+        rows.push({
+          date: record.date || record.timestamp.slice(0, 10),
+          site: record.siteId ? siteMap.get(record.siteId) ?? record.siteName ?? record.siteId : record.siteName ?? "Not available",
+          shift: record.shift === "ALL_DAY" ? "All day" : `Shift ${record.shift}`,
+          driverName: record.driverName || "Unassigned",
+          driverMobile: record.driverMobile || "-",
+          vehicleNumber: record.vehicleNumber,
+          performanceCategory: driverPerformance.category,
+          economy: driverPerformance.economy,
+          norm: vehicle?.standardFuelNorm ?? null,
+          unit: vehicle?.fuelMeasurementUnit ?? (record.assetCategory === "Truck" ? "km/L" : "L/hr"),
+          economyVariancePercent: driverPerformance.economyVariancePercent,
+          runningHours: record.runningHours,
+          runningPercentage: record.runningPercentage ?? calculateRunningPercentage(record.runningHours, record.engineHours),
+          idleHours: record.idleHours,
+          idlePercentage: record.idlePercentage ?? calculateIdlePercentage(record.idleHours, record.engineHours),
+          fuelConsumedLitres: record.fuelConsumedLitres,
+          trips: record.trips,
+          productionM3: record.productionM3,
+          status: record.status,
+        });
+      });
+
+      rows.sort((left, right) => [
+        String(left.site).localeCompare(String(right.site), undefined, { numeric: true }),
+        String(left.shift).localeCompare(String(right.shift), undefined, { numeric: true }),
+        performanceOrder(String(left.performanceCategory)) - performanceOrder(String(right.performanceCategory)),
+        String(left.driverName).localeCompare(String(right.driverName), undefined, { numeric: true }),
+        String(left.vehicleNumber).localeCompare(String(right.vehicleNumber), undefined, { numeric: true }),
+      ].find((value) => value !== 0) ?? 0);
+    } else if (reportType.includes("Company-wise")) {
       aggregateByCompany(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
     } else if (reportType.includes("Model-wise")) {
       aggregateByModel(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));

@@ -51,6 +51,7 @@ export interface AppUser {
   lastPasswordResetAt: string | null;
   lastPasswordResetBy: string | null;
   appVersionAtLogin: string | null;
+  temporaryPasswordExpiresAt?: string | null;
 }
 
 export interface PasswordHistoryRecord {

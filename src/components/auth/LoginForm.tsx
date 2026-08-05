@@ -4,7 +4,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../ui/Button";
 
 export function LoginForm() {
-  const { login, rememberedUserId, rememberedPassword, updateMessage } = useAuth();
+  const { login, rememberedUserId, updateMessage } = useAuth();
   const [userId, setUserId] = useState(rememberedUserId);
   const [password, setPassword] = useState(rememberedPassword);
   const [showPassword, setShowPassword] = useState(false);
@@ -108,7 +108,7 @@ export function LoginForm() {
                 onChange={(event) => setRemember(event.target.checked)}
                 className="h-4 w-4 rounded border-coal-300 text-ore-600 focus:ring-ore-500"
               />
-              Remember user ID and password
+              Remember user ID
             </label>
 
             <Button type="submit" variant="primary" className="w-full" disabled={submitting}>

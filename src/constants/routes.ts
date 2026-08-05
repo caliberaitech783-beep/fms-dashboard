@@ -14,6 +14,15 @@ import {
   UserCog,
 } from "lucide-react";
 
+export const NAV_GROUPS = [
+  { id: "operate", label: "Operate" },
+  { id: "analyze", label: "Analyze" },
+  { id: "control", label: "Control" },
+  { id: "admin", label: "Admin" },
+] as const;
+
+export type NavGroupId = (typeof NAV_GROUPS)[number]["id"];
+
 export const NAV_ITEMS = [
   { id: "management", label: "Management Dashboard", icon: BarChart3 },
   { id: "fleet", label: "Fleet", icon: Truck },

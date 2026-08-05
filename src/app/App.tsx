@@ -30,9 +30,11 @@ import { invalidateLiveOemCaches, refreshLiveOemData } from "../services/adapter
 
 export function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -86,7 +88,14 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (!allowedItems.some((item) => item.id === activeSection)) {
-      setActiveSection(allowedItems[0]?.id ?? "management");
+      const fallback = allowedItems[0]?.id ?? "management";
+      setActiveSection(fallback);
+      writeSectionToUrl(fallback, "replace");
+      return;
+    }
+
+    if (sectionFromUrl() !== activeSection) {
+      writeSectionToUrl(activeSection, "replace");
     }
   }, [activeSection, allowedItems]);
 
@@ -141,7 +150,8 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
           <GlobalFilters
             filters={filters}
             options={options}
-            setFilter={setFilter}
+            getOptionsFor={getOptionsFor}
+            applyFilters={applyFilters}
             resetFilters={resetFilters}
             onRefresh={reloadDashboard}
           />
@@ -200,6 +210,8 @@ function renderSection(
       return <FleetDashboard rows={data.fleetRows} alerts={data.alerts} loading={data.loading} onReload={onFleetReload} onRefresh={onFleetRefresh} />;
     case "fuel":
       return <FuelDashboard summary={data.fuelSummary} loading={data.loading} />;
+    case "diesel":
+      return <DieselDashboard />;
     case "production":
       return <ProductionDashboard summary={data.productionSummary} loading={data.loading} />;
     case "alerts":

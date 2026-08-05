@@ -1,5 +1,16 @@
 const { app } = require("@azure/functions");
 const store = require("../lib/authStore");
+const {
+  clearFailedLogins,
+  generateTemporaryPassword,
+  isLoginLocked,
+  temporaryPasswordExpiresAt,
+} = require("../lib/authSecurity");
+
+const CREDENTIAL_PROTOCOL_HEADER = "x-fms-credential-protocol";
+const CREDENTIAL_PROTOCOL_VERSION = "one-time-v1";
+const CLIENT_SECURITY_HEADER = "x-fms-client-security";
+const CLIENT_SECURITY_VERSION = "auth-v2";
 
 function allowedOrigin(request) {
   const configured = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in")
@@ -26,9 +37,11 @@ function response(request, status, body) {
     headers: {
       "Access-Control-Allow-Origin": allowedOrigin(request),
       "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      "Access-Control-Allow-Headers": `Content-Type,Authorization,${CREDENTIAL_PROTOCOL_HEADER},${CLIENT_SECURITY_HEADER}`,
       "Access-Control-Max-Age": "86400",
       "Vary": "Origin",
+      "Cache-Control": "no-store",
+      "Pragma": "no-cache",
     },
   };
 }
@@ -40,7 +53,7 @@ function emptyResponse(request, status = 204) {
     headers: {
       "Access-Control-Allow-Origin": allowedOrigin(request),
       "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      "Access-Control-Allow-Headers": `Content-Type,Authorization,${CREDENTIAL_PROTOCOL_HEADER},${CLIENT_SECURITY_HEADER}`,
       "Access-Control-Max-Age": "86400",
       "Vary": "Origin",
     },
@@ -79,7 +92,7 @@ function bearerToken(request) {
   return match ? match[1] : null;
 }
 
-async function requireActor(request) {
+async function requireActor(request, options) {
   const token = bearerToken(request);
   if (!token) {
     throw Object.assign(new Error("Authentication required."), { statusCode: 401 });
@@ -87,16 +100,33 @@ async function requireActor(request) {
 
   const payload = store.verifyToken(token);
   const actor = await store.getUser(payload.sub);
-  if (!actor || !actor.isActive) {
-    throw Object.assign(new Error("Authentication required."), { statusCode: 401 });
-  }
-
-  return actor;
+  return store.assertTokenForUser(payload, actor, options);
 }
 
 function requireSuperAdmin(actor) {
   if (actor.role !== "Super Admin") {
     throw Object.assign(new Error("Only Super Admin users can perform this action."), { statusCode: 403 });
+  }
+}
+
+function requireCredentialProtocol(request) {
+  if (request.headers.get(CREDENTIAL_PROTOCOL_HEADER) !== CREDENTIAL_PROTOCOL_VERSION) {
+    throw Object.assign(new Error("Update the portal before creating or resetting users."), { statusCode: 409 });
+  }
+}
+
+function requireSecurityClient(request) {
+  if (request.headers.get(CLIENT_SECURITY_HEADER) !== CLIENT_SECURITY_VERSION) {
+    throw Object.assign(new Error("A security update is required. Refresh the portal and try again."), { statusCode: 426 });
+  }
+}
+
+async function requireAdminContinuity(target, removesAdminAccess) {
+  if (!removesAdminAccess || target.role !== "Super Admin" || !target.isActive) return;
+  const users = await store.listUsers();
+  const activeAdmins = users.filter((user) => user.role === "Super Admin" && user.isActive);
+  if (activeAdmins.length <= 1) {
+    throw Object.assign(new Error("At least one active Super Admin must remain."), { statusCode: 409 });
   }
 }
 
@@ -116,6 +146,7 @@ app.http("login", {
   authLevel: "anonymous",
   methods: ["POST", "OPTIONS"],
   handler: (request, context) => handle(request, context, async () => {
+    requireSecurityClient(request);
     const body = await readJson(request);
     const userId = String(body.userId || "").trim();
     const password = String(body.password || "");
@@ -127,17 +158,24 @@ app.http("login", {
       throw generic;
     }
 
+    if (isLoginLocked(user)) {
+      await store.addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "account_locked" } });
+      throw generic;
+    }
+
     if (!store.verifyPassword(password, user.passwordHash)) {
-      user.failedLoginAttempts += 1;
-      user.lockedUntil = null;
-      user.updatedAt = new Date().toISOString();
-      await store.saveUser(user);
+      await store.registerFailedLoginAtomic(user.userId);
       await store.addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "invalid_credentials" } });
       throw generic;
     }
 
-    user.failedLoginAttempts = 0;
-    user.lockedUntil = null;
+    if (user.mustChangePassword && user.temporaryPasswordExpiresAt
+      && Date.parse(user.temporaryPasswordExpiresAt) <= Date.now()) {
+      await store.addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "temporary_password_expired" } });
+      throw generic;
+    }
+
+    clearFailedLogins(user);
     user.lastLoginAt = new Date().toISOString();
     user.updatedAt = new Date().toISOString();
     user.appVersionAtLogin = body.appVersion || null;
@@ -156,7 +194,7 @@ app.http("me", {
   authLevel: "anonymous",
   methods: ["GET", "OPTIONS"],
   handler: (request, context) => handle(request, context, async () => {
-    const actor = await requireActor(request);
+    const actor = await requireActor(request, { allowPasswordChange: true });
     return response(request, 200, store.safeUser(actor));
   }),
 });
@@ -166,7 +204,7 @@ app.http("changePassword", {
   authLevel: "anonymous",
   methods: ["POST", "OPTIONS"],
   handler: (request, context) => handle(request, context, async () => {
-    const actor = await requireActor(request);
+    const actor = await requireActor(request, { allowPasswordChange: true });
     const body = await readJson(request);
     const currentPassword = String(body.currentPassword || "");
     const newPassword = String(body.newPassword || "");
@@ -185,13 +223,21 @@ app.http("changePassword", {
     const passwordHash = store.hashPassword(newPassword.trim());
     actor.passwordHash = passwordHash;
     actor.mustChangePassword = false;
+    actor.isPending = false;
+    actor.temporaryPasswordExpiresAt = null;
     actor.passwordChangedAt = new Date().toISOString();
     actor.updatedAt = new Date().toISOString();
     actor.updatedBy = actor.userId;
+    store.bumpTokenVersion(actor);
     await store.saveUser(actor);
     await store.savePasswordHistory(actor.userId, passwordHash);
     await store.addAuditLog({ actor, action: "PASSWORD_CHANGED", targetType: "User", targetId: actor.userId });
-    return response(request, 200, store.safeUser(actor));
+    const publicUser = store.safeUser(actor);
+    return response(request, 200, {
+      ...publicUser,
+      user: publicUser,
+      token: store.signToken(actor),
+    });
   }),
 });
 
@@ -203,6 +249,7 @@ app.http("logout", {
     const actor = await requireActor(request);
     actor.lastLogoutAt = new Date().toISOString();
     actor.updatedAt = new Date().toISOString();
+    store.bumpTokenVersion(actor);
     await store.saveUser(actor);
     await store.addAuditLog({ actor, action: "LOGOUT", targetType: "User", targetId: actor.userId });
     return response(request, 200, { ok: true });
@@ -221,6 +268,8 @@ app.http("users", {
       return response(request, 200, await store.listUsers());
     }
 
+    requireCredentialProtocol(request);
+
     const body = await readJson(request);
     const name = String(body.name || "").trim();
     const userId = String(body.userId || "").trim();
@@ -237,7 +286,9 @@ app.http("users", {
       throw Object.assign(new Error("A user with this mobile number / user ID already exists."), { statusCode: 409 });
     }
 
-    const passwordHash = store.hashPassword(userId);
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = store.hashPassword(temporaryPassword);
+    const expiresAt = temporaryPasswordExpiresAt();
     const createdAt = new Date().toISOString();
     const user = {
       id: `user-${userId}`,
@@ -251,8 +302,8 @@ app.http("users", {
       siteAccess: [],
       department,
       isActive: body.isActive !== false,
-      isPending: false,
-      mustChangePassword: false,
+      isPending: true,
+      mustChangePassword: true,
       passwordChangedAt: null,
       lastLoginAt: null,
       lastLogoutAt: null,
@@ -265,12 +316,18 @@ app.http("users", {
       lastPasswordResetAt: null,
       lastPasswordResetBy: null,
       appVersionAtLogin: null,
+      tokenVersion: 0,
+      temporaryPasswordExpiresAt: expiresAt,
     };
 
     await store.saveUser(user);
     await store.savePasswordHistory(user.userId, passwordHash, createdAt);
     await store.addAuditLog({ actor, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "admin_ui", role } });
-    return response(request, 201, store.safeUser(user));
+    return response(request, 201, {
+      user: store.safeUser(user),
+      temporaryPassword,
+      expiresAt,
+    });
   }),
 });
 
@@ -281,24 +338,37 @@ app.http("resetPassword", {
   handler: (request, context) => handle(request, context, async () => {
     const actor = await requireActor(request);
     requireSuperAdmin(actor);
+    requireCredentialProtocol(request);
     const target = await store.getUser(getRouteUserId(request));
     if (!target) {
       throw Object.assign(new Error("User not found."), { statusCode: 404 });
     }
+    if (target.userId === actor.userId) {
+      throw Object.assign(new Error("Use Change Password for your own account."), { statusCode: 409 });
+    }
 
-    const passwordHash = store.hashPassword(target.userId);
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = store.hashPassword(temporaryPassword);
+    const expiresAt = temporaryPasswordExpiresAt();
     target.passwordHash = passwordHash;
-    target.mustChangePassword = false;
+    target.mustChangePassword = true;
+    target.isPending = true;
+    target.temporaryPasswordExpiresAt = expiresAt;
     target.failedLoginAttempts = 0;
     target.lockedUntil = null;
     target.lastPasswordResetAt = new Date().toISOString();
     target.lastPasswordResetBy = actor.userId;
     target.updatedAt = new Date().toISOString();
     target.updatedBy = actor.userId;
+    store.bumpTokenVersion(target);
     await store.saveUser(target);
     await store.savePasswordHistory(target.userId, passwordHash);
     await store.addAuditLog({ actor, action: "PASSWORD_RESET_BY_ADMIN", targetType: "User", targetId: target.userId });
-    return response(request, 200, store.safeUser(target));
+    return response(request, 200, {
+      user: store.safeUser(target),
+      temporaryPassword,
+      expiresAt,
+    });
   }),
 });
 
@@ -314,9 +384,14 @@ app.http("setUserActive", {
       throw Object.assign(new Error("User not found."), { statusCode: 404 });
     }
     const body = await readJson(request);
+    if (target.userId === actor.userId && body.isActive !== true) {
+      throw Object.assign(new Error("You cannot deactivate your own account."), { statusCode: 409 });
+    }
+    await requireAdminContinuity(target, body.isActive !== true);
     target.isActive = body.isActive === true;
     target.updatedAt = new Date().toISOString();
     target.updatedBy = actor.userId;
+    store.bumpTokenVersion(target);
     await store.saveUser(target);
     await store.addAuditLog({
       actor,
@@ -341,9 +416,14 @@ app.http("setUserRole", {
     }
     const body = await readJson(request);
     const role = store.normalizeRole(body.role);
+    if (target.userId === actor.userId && role !== "Super Admin") {
+      throw Object.assign(new Error("You cannot remove your own Super Admin access."), { statusCode: 409 });
+    }
+    await requireAdminContinuity(target, role !== "Super Admin");
     target.role = role;
     target.updatedAt = new Date().toISOString();
     target.updatedBy = actor.userId;
+    store.bumpTokenVersion(target);
     await store.saveUser(target);
     await store.addAuditLog({ actor, action: "ROLE_CHANGED", targetType: "User", targetId: target.userId, metadata: { role } });
     return response(request, 200, store.safeUser(target));

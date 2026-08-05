@@ -1,15 +1,18 @@
-import seedUsers from "../data/seed/users.json";
 import { APP_VERSION } from "../constants/appVersion";
 import { getAuthSession } from "../auth/sessionService";
-import { hashPassword, verifyPassword } from "../auth/passwordService";
+import { clearFailedLogins, isLoginLocked, registerFailedLogin } from "../auth/securityPolicy";
+import { generateTemporaryPassword, hashPassword, verifyPassword } from "../auth/passwordService";
 import { addAuditLog } from "./auditLogService";
-import type { AppUser, PasswordHistoryRecord, SeedUserDefinition, UserRole } from "../types/auth";
+import type { AppUser, PasswordHistoryRecord, UserRole } from "../types/auth";
 import { validateNewPassword } from "../utils/passwordValidation";
 
 const USERS_STORAGE_KEY = "mining.auth.users.v1";
 const PASSWORD_HISTORY_STORAGE_KEY = "mining.auth.passwordHistory.v1";
 const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
 const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_AUTH_API_BASE_URL).replace(/\/$/, "");
+const TEMPORARY_PASSWORD_TTL_MS = 24 * 60 * 60_000;
+const CLIENT_SECURITY_PROTOCOL = "auth-v2";
+const CREDENTIAL_PROTOCOL = "one-time-v1";
 
 export interface CreateUserInput {
   name: string;
@@ -22,6 +25,12 @@ export interface CreateUserInput {
 export interface AuthenticatedUser {
   user: AppUser;
   token: string | null;
+}
+
+export interface TemporaryCredentialResult {
+  user: AppUser;
+  temporaryPassword: string;
+  expiresAt: string;
 }
 
 function now(): string {
@@ -58,6 +67,7 @@ async function remoteRequest<T>(path: string, init: RequestInit = {}): Promise<T
   const token = getAuthSession()?.token;
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
+  headers.set("X-FMS-Client-Security", CLIENT_SECURITY_PROTOCOL);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -79,79 +89,19 @@ async function remoteRequest<T>(path: string, init: RequestInit = {}): Promise<T
   return payload as T;
 }
 
-function normalizeSeedUser(seed: SeedUserDefinition): SeedUserDefinition {
-  return {
-    ...seed,
-    sourceTransactionPower: seed.sourceTransactionPower === "None" ? null : seed.sourceTransactionPower,
-    sourceSoftwarePower: seed.sourceSoftwarePower === "None" ? null : seed.sourceSoftwarePower,
-  };
-}
-
 export async function initializeUserStore(): Promise<{ created: number; updated: number; skipped: number; errors: number }> {
   if (remoteAuthEnabled()) {
     return { created: 0, updated: 0, skipped: 0, errors: 0 };
   }
 
-  const seeds = (seedUsers as SeedUserDefinition[]).map(normalizeSeedUser);
   const users = readUsers();
-  const history = readPasswordHistory();
-  let created = 0;
   let updated = 0;
 
-  for (const seed of seeds) {
-    const existing = users.find((user) => user.userId === seed.mobile);
-    if (!existing) {
-      const passwordHash = await hashPassword(seed.mobile);
-      const createdAt = now();
-      const user: AppUser = {
-        id: makeId("user", seed.mobile),
-        name: seed.name,
-        mobile: seed.mobile,
-        userId: seed.mobile,
-        passwordHash,
-        role: seed.mappedMiningRole,
-        sourceTransactionPower: seed.sourceTransactionPower,
-        sourceSoftwarePower: seed.sourceSoftwarePower,
-        siteAccess: [],
-        department: null,
-        isActive: true,
-        isPending: false,
-        mustChangePassword: true,
-        passwordChangedAt: null,
-        lastLoginAt: null,
-        lastLogoutAt: null,
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        createdAt,
-        updatedAt: createdAt,
-        createdBy: "seed",
-        updatedBy: "seed",
-        lastPasswordResetAt: null,
-        lastPasswordResetBy: null,
-        appVersionAtLogin: null,
-      };
-      users.push(user);
-      history.push({ id: makeId("history"), userId: user.userId, passwordHash, createdAt });
-      addAuditLog({ actor: null, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "seed" } });
-      created += 1;
-    } else {
-      existing.name = seed.name;
-      existing.mobile = seed.mobile;
-      existing.role = seed.mappedMiningRole;
-      existing.sourceTransactionPower = seed.sourceTransactionPower;
-      existing.sourceSoftwarePower = seed.sourceSoftwarePower;
-      existing.updatedAt = now();
-      existing.updatedBy = "seed";
-      existing.failedLoginAttempts = 0;
-      existing.lockedUntil = null;
-      updated += 1;
-    }
-  }
-
+  // Existing local installations are retained, but known user-ID default passwords
+  // are forced through the password-change screen. No employee seed data is bundled.
   for (const user of users) {
-    if (user.lockedUntil) {
-      user.lockedUntil = null;
-      user.failedLoginAttempts = 0;
+    if (!user.mustChangePassword && !user.passwordChangedAt && await verifyPassword(user.userId, user.passwordHash)) {
+      user.mustChangePassword = true;
       user.updatedAt = now();
       user.updatedBy = "system";
       updated += 1;
@@ -159,8 +109,7 @@ export async function initializeUserStore(): Promise<{ created: number; updated:
   }
 
   writeUsers(users);
-  writePasswordHistory(history);
-  return { created, updated, skipped: 0, errors: 0 };
+  return { created: 0, updated, skipped: users.length - updated, errors: 0 };
 }
 
 export async function getUsers(): Promise<AppUser[]> {
@@ -213,18 +162,27 @@ export async function authenticateUser(userId: string, password: string): Promis
     throw genericError;
   }
 
+  if (isLoginLocked(user)) {
+    addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "account_locked" } });
+    throw genericError;
+  }
+
   const passwordMatches = await verifyPassword(password, user.passwordHash);
   if (!passwordMatches) {
-    user.failedLoginAttempts += 1;
-    user.lockedUntil = null;
+    registerFailedLogin(user);
     user.updatedAt = now();
     writeUsers(users);
     addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "invalid_credentials" } });
     throw genericError;
   }
 
-  user.failedLoginAttempts = 0;
-  user.lockedUntil = null;
+  if (user.mustChangePassword && user.temporaryPasswordExpiresAt
+    && Date.parse(user.temporaryPasswordExpiresAt) <= Date.now()) {
+    addAuditLog({ actor: user, action: "LOGIN_FAILED", targetType: "User", targetId: user.userId, metadata: { reason: "temporary_password_expired" } });
+    throw genericError;
+  }
+
+  clearFailedLogins(user);
   user.lastLoginAt = now();
   user.appVersionAtLogin = APP_VERSION;
   user.updatedAt = now();
@@ -233,12 +191,14 @@ export async function authenticateUser(userId: string, password: string): Promis
   return { user, token: null };
 }
 
-export async function changeUserPassword(userId: string, currentPassword: string, newPassword: string, confirmPassword: string): Promise<AppUser> {
+export async function changeUserPassword(userId: string, currentPassword: string, newPassword: string, confirmPassword: string): Promise<AuthenticatedUser> {
   if (remoteAuthEnabled()) {
-    return remoteRequest<AppUser>("/auth/change-password", {
+    const result = await remoteRequest<AuthenticatedUser | AppUser>("/auth/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     });
+    if ("user" in result) return result;
+    return { user: result, token: getAuthSession()?.token ?? null };
   }
 
   const users = readUsers();
@@ -261,6 +221,8 @@ export async function changeUserPassword(userId: string, currentPassword: string
   const passwordHash = await hashPassword(newPassword.trim());
   user.passwordHash = passwordHash;
   user.mustChangePassword = false;
+  user.isPending = false;
+  user.temporaryPasswordExpiresAt = null;
   user.passwordChangedAt = now();
   user.updatedAt = now();
   user.updatedBy = user.userId;
@@ -270,7 +232,7 @@ export async function changeUserPassword(userId: string, currentPassword: string
   passwordHistory.push({ id: makeId("history"), userId: user.userId, passwordHash, createdAt: now() });
   writePasswordHistory(passwordHistory);
   addAuditLog({ actor: user, action: "PASSWORD_CHANGED", targetType: "User", targetId: user.userId });
-  return user;
+  return { user, token: null };
 }
 
 function assertSuperAdmin(actor: AppUser) {
@@ -279,10 +241,11 @@ function assertSuperAdmin(actor: AppUser) {
   }
 }
 
-export async function createUser(actor: AppUser, input: CreateUserInput): Promise<AppUser> {
+export async function createUser(actor: AppUser, input: CreateUserInput): Promise<TemporaryCredentialResult> {
   if (remoteAuthEnabled()) {
-    return remoteRequest<AppUser>("/users", {
+    return remoteRequest<TemporaryCredentialResult>("/users", {
       method: "POST",
+      headers: { "X-FMS-Credential-Protocol": CREDENTIAL_PROTOCOL },
       body: JSON.stringify(input),
     });
   }
@@ -310,8 +273,10 @@ export async function createUser(actor: AppUser, input: CreateUserInput): Promis
     throw new Error("A user with this mobile number / user ID already exists.");
   }
 
-  const passwordHash = await hashPassword(userId);
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
   const createdAt = now();
+  const expiresAt = new Date(Date.now() + TEMPORARY_PASSWORD_TTL_MS).toISOString();
   const user: AppUser = {
     id: makeId("user", userId),
     name,
@@ -324,7 +289,7 @@ export async function createUser(actor: AppUser, input: CreateUserInput): Promis
     siteAccess: [],
     department,
     isActive: input.isActive ?? true,
-    isPending: false,
+    isPending: true,
     mustChangePassword: true,
     passwordChangedAt: null,
     lastLoginAt: null,
@@ -338,6 +303,7 @@ export async function createUser(actor: AppUser, input: CreateUserInput): Promis
     lastPasswordResetAt: null,
     lastPasswordResetBy: null,
     appVersionAtLogin: null,
+    temporaryPasswordExpiresAt: expiresAt,
   };
 
   users.push(user);
@@ -347,13 +313,14 @@ export async function createUser(actor: AppUser, input: CreateUserInput): Promis
   history.push({ id: makeId("history"), userId: user.userId, passwordHash, createdAt });
   writePasswordHistory(history);
   addAuditLog({ actor, action: "USER_CREATED", targetType: "User", targetId: user.userId, metadata: { source: "admin_ui", role: user.role } });
-  return user;
+  return { user, temporaryPassword, expiresAt };
 }
 
-export async function resetUserPassword(actor: AppUser, targetUserId: string): Promise<AppUser> {
+export async function resetUserPassword(actor: AppUser, targetUserId: string): Promise<TemporaryCredentialResult> {
   if (remoteAuthEnabled()) {
-    return remoteRequest<AppUser>(`/users/${encodeURIComponent(targetUserId)}/reset-password`, {
+    return remoteRequest<TemporaryCredentialResult>(`/users/${encodeURIComponent(targetUserId)}/reset-password`, {
       method: "POST",
+      headers: { "X-FMS-Credential-Protocol": CREDENTIAL_PROTOCOL },
     });
   }
 
@@ -364,9 +331,13 @@ export async function resetUserPassword(actor: AppUser, targetUserId: string): P
     throw new Error("User not found.");
   }
 
-  const passwordHash = await hashPassword(target.userId);
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const expiresAt = new Date(Date.now() + TEMPORARY_PASSWORD_TTL_MS).toISOString();
   target.passwordHash = passwordHash;
   target.mustChangePassword = true;
+  target.isPending = true;
+  target.temporaryPasswordExpiresAt = expiresAt;
   target.failedLoginAttempts = 0;
   target.lockedUntil = null;
   target.lastPasswordResetAt = now();
@@ -379,7 +350,7 @@ export async function resetUserPassword(actor: AppUser, targetUserId: string): P
   history.push({ id: makeId("history"), userId: target.userId, passwordHash, createdAt: now() });
   writePasswordHistory(history);
   addAuditLog({ actor, action: "PASSWORD_RESET_BY_ADMIN", targetType: "User", targetId: target.userId });
-  return target;
+  return { user: target, temporaryPassword, expiresAt };
 }
 
 export async function setUserActive(actor: AppUser, targetUserId: string, isActive: boolean): Promise<AppUser> {
