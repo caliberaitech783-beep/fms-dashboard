@@ -6,9 +6,9 @@ import { Button } from "../ui/Button";
 export function LoginForm() {
   const { login, rememberedUserId, updateMessage } = useAuth();
   const [userId, setUserId] = useState(rememberedUserId);
-  const [password, setPassword] = useState(rememberedPassword);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(Boolean(rememberedUserId || rememberedPassword));
+  const [remember, setRemember] = useState(Boolean(rememberedUserId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

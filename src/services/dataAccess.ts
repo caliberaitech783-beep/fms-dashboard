@@ -33,22 +33,6 @@ function normalizeVehicleModel(vehicle: Vehicle): Vehicle {
 }
 
 export async function getPortalData(): Promise<PortalData> {
-  if (portalDataPromise) {
-    return portalDataPromise;
-  }
-
-  portalDataPromise = loadPortalData().catch((error) => {
-    portalDataPromise = null;
-    throw error;
-  });
-  return portalDataPromise;
-}
-
-export function invalidatePortalDataCache() {
-  portalDataPromise = null;
-}
-
-async function loadPortalData(): Promise<PortalData> {
   const [
     sites,
     vehicles,

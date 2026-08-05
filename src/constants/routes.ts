@@ -24,19 +24,20 @@ export const NAV_GROUPS = [
 export type NavGroupId = (typeof NAV_GROUPS)[number]["id"];
 
 export const NAV_ITEMS = [
-  { id: "management", label: "Management Dashboard", icon: BarChart3 },
-  { id: "fleet", label: "Fleet", icon: Truck },
-  { id: "fuel", label: "Fuel", icon: Fuel },
-  { id: "production", label: "Production", icon: Gauge },
-  { id: "alerts", label: "Alerts", icon: AlertTriangle },
-  { id: "reports", label: "Reports", icon: ClipboardList },
-  { id: "notifications", label: "Notifications", icon: Bell },
-  { id: "admin-notifications", label: "Admin Notifications", icon: Megaphone },
-  { id: "integrations", label: "Integrations", icon: Database },
-  { id: "whatsapp", label: "WhatsApp Delivery", icon: MessageCircle },
-  { id: "master-data", label: "Master Data", icon: BellDot },
-  { id: "users", label: "Users", icon: UserCog },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "management", label: "Management Dashboard", icon: BarChart3, group: "operate" },
+  { id: "fleet", label: "Fleet", icon: Truck, group: "operate" },
+  { id: "fuel", label: "Fuel", icon: Fuel, group: "operate" },
+  { id: "production", label: "Production", icon: Gauge, group: "operate" },
+  { id: "diesel", label: "Diesel Analysis", icon: Fuel, group: "analyze" },
+  { id: "alerts", label: "Alerts", icon: AlertTriangle, group: "analyze" },
+  { id: "reports", label: "Reports", icon: ClipboardList, group: "analyze" },
+  { id: "notifications", label: "Notifications", icon: Bell, group: "control" },
+  { id: "admin-notifications", label: "Admin Notifications", icon: Megaphone, group: "control" },
+  { id: "whatsapp", label: "WhatsApp Delivery", icon: MessageCircle, group: "control" },
+  { id: "integrations", label: "Integrations", icon: Database, group: "admin" },
+  { id: "master-data", label: "Master Data", icon: BellDot, group: "admin" },
+  { id: "users", label: "Users", icon: UserCog, group: "admin" },
+  { id: "settings", label: "Settings", icon: Settings, group: "admin" },
 ] as const;
 
 export type NavItem = (typeof NAV_ITEMS)[number];

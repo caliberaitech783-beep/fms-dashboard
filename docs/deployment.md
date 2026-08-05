@@ -2,10 +2,15 @@
 
 ## Web / PWA
 
+Production source of truth is the GitHub `main` branch. A push to `main` runs CI, builds the same frontend for both hosting targets, publishes the immutable `dist/` output to the `hostinger-deploy` branch, and deploys the validation copy to Azure Static Web Apps. Hostinger remains the public host for `fms.cmll.in`; Azure Static Web Apps is the secondary deployment target.
+
+Before merging to `main`:
+
 1. Run `npm ci`.
-2. Run `npm run build`.
-3. Upload the contents of `dist/` to Hostinger `public_html`.
-4. Confirm:
+2. Run `npm run lint`, `npm run validate:pwa`, `npm run test:reports`, and `npm run build`.
+3. Confirm the pull-request CI jobs are green.
+4. Merge to `main` and confirm both `Deploy Hostinger Web App` and `Deploy web app to Azure Static Web Apps` finish successfully.
+5. Confirm:
    - `https://fms.cmll.in/manifest.webmanifest` returns JSON.
    - `https://fms.cmll.in/service-worker.js` returns JavaScript and is not cached forever.
    - `https://fms.cmll.in/offline.html` returns the offline fallback.
@@ -31,4 +36,4 @@ The previous Azure production API package should be kept as the rollback artifac
 
 ## GitHub
 
-Pull requests run web build and API tests. Release tags prepare PWA and desktop artifacts. Signed desktop releases require external signing secrets.
+Pull requests run the web build, report tests, dependency audit, and API tests. Pushes to `main` are the only production frontend deployment source. Release tags prepare PWA and desktop artifacts. Signed desktop releases require external signing secrets.

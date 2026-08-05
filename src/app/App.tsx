@@ -12,6 +12,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { TopBar } from "../components/layout/TopBar";
 import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
 import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
+import { DieselDashboard } from "../components/dashboard/DieselDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
 import { FuelDashboard } from "../components/dashboard/FuelDashboard";
 import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
@@ -26,6 +27,7 @@ import { WhatsAppDeliveryDashboard } from "../components/dashboard/WhatsAppDeliv
 import { LoadingState } from "../components/ui/LoadingState";
 import { Panel } from "../components/ui/Panel";
 import { TimingToast } from "../components/ui/TimingToast";
+import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { invalidateLiveOemCaches, refreshLiveOemData } from "../services/adapters/volvoRfmsAdapter";
 
 export function App() {
@@ -72,7 +74,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
-  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
+  const showGlobalFilters = !["users", "notifications", "admin-notifications", "diesel"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -88,14 +90,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
 
   useEffect(() => {
     if (!allowedItems.some((item) => item.id === activeSection)) {
-      const fallback = allowedItems[0]?.id ?? "management";
-      setActiveSection(fallback);
-      writeSectionToUrl(fallback, "replace");
-      return;
-    }
-
-    if (sectionFromUrl() !== activeSection) {
-      writeSectionToUrl(activeSection, "replace");
+      setActiveSection(allowedItems[0]?.id ?? "management");
     }
   }, [activeSection, allowedItems]);
 
@@ -150,8 +145,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
           <GlobalFilters
             filters={filters}
             options={options}
-            getOptionsFor={getOptionsFor}
-            applyFilters={applyFilters}
+            setFilter={setFilter}
             resetFilters={resetFilters}
             onRefresh={reloadDashboard}
           />

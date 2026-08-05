@@ -2,7 +2,9 @@
 
 ## PWA / Hostinger
 
-Keep the previous `dist` zip before upload. To roll back, delete current `public_html` frontend files and extract the previous known-good zip. Verify `/`, `/manifest.webmanifest`, and login.
+Each production workflow retains the built `dist` artifact for 30 days and publishes a single immutable snapshot to `hostinger-deploy`. To roll back, rerun the deployment from a known-good `main` commit or restore its retained artifact, then verify `/`, `/manifest.webmanifest`, `/service-worker.js`, a deep link, and login.
+
+Do not change DNS during an application rollback. `fms.cmll.in` remains on Hostinger; the Azure Static Web App is a secondary validation target.
 
 ## Azure Backend
 

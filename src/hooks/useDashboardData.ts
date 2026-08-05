@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { DashboardOverview } from "../types/dashboard";
 import type { Alert, DashboardFilters, IntegrationSource, Report, WhatsAppDeliveryLog, WhatsAppReportSchedule } from "../types/fleet";
 import type { FleetVehicleRow } from "../services/fleetService";
@@ -10,7 +10,6 @@ import { alertService } from "../services/alertService";
 import { integrationService } from "../services/integrationService";
 import { reportService } from "../services/reportService";
 import { whatsappReportService } from "../services/whatsappReportService";
-import { invalidatePortalDataCache } from "../services/dataAccess";
 
 export interface DashboardDataState {
   overview: DashboardOverview | null;
@@ -27,7 +26,6 @@ export interface DashboardDataState {
 }
 
 export function useDashboardData(filters: DashboardFilters, refreshKey: number) {
-  const previousRefreshKey = useRef(refreshKey);
   const [state, setState] = useState<DashboardDataState>({
     overview: null,
     fleetRows: [],
@@ -44,11 +42,6 @@ export function useDashboardData(filters: DashboardFilters, refreshKey: number) 
 
   useEffect(() => {
     let mounted = true;
-
-    if (previousRefreshKey.current !== refreshKey) {
-      invalidatePortalDataCache();
-      previousRefreshKey.current = refreshKey;
-    }
 
     setState((current) => ({ ...current, loading: true, error: null }));
 

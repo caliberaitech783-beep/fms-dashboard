@@ -18,6 +18,11 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `USERS_TABLE_NAME`
 - `AUDIT_TABLE_NAME`
 - `PASSWORD_HISTORY_TABLE_NAME`
+- `AUTO_SEED_USERS`: keep `false` in production; production users must never be created from repository seed files
+- `SECURITY_MIGRATION_BACKUP_TABLE_NAME`
+- `SECURITY_RECOVERY_ADMIN_USER_ID`
+- `SECURITY_RECOVERY_ADMIN_NAME`
+- `SECURITY_RECOVERY_TEMP_PASSWORD`: one-time, randomly generated recovery credential; rotate or remove it after the migration is verified
 - `TRACKING_API_BASE_URL`
 - `TRACKING_API_USERNAME`
 - `TRACKING_API_PASSWORD`
@@ -117,7 +122,8 @@ See `docs/scania-live-integration.md` for Scania setup, mappings, report behavio
 
 Use GitHub Secrets for deployment automation and signed release builds:
 
-- Azure publish profile or federated Azure credentials
+- `AZURE_STATIC_WEB_APPS_API_TOKEN_CMLL_FMS_WEB`
+- Azure Function publish profile or federated Azure credentials when backend deployment automation is enabled
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`
 - `WHATSAPP_ACCESS_TOKEN`

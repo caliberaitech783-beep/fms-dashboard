@@ -44,14 +44,14 @@ const hemmTypes: AssetType[] = ["Excavator", "Loader", "Grader", "Crane", "Other
 const statuses: VehicleStatus[] = ["running", "idle", "stopped", "offline", "maintenance"];
 const trackerProviders = ["Wialon", "Teltonika", "Trimble", "OEM Cloud", "MineTrack"];
 const drivers = [
-  { id: "driver-001", name: "Amit Sharma", mobile: "7709972657" },
-  { id: "driver-002", name: "Chandan Tiwari", mobile: "6306416709" },
-  { id: "driver-003", name: "Rohit Singh Parihar", mobile: "9977327762" },
-  { id: "driver-004", name: "Kishor Dhandre", mobile: "9423604667" },
-  { id: "driver-005", name: "Ashish Thakur", mobile: "9850396090" },
-  { id: "driver-006", name: "Gulnawaz", mobile: "7587552827" },
-  { id: "driver-007", name: "Farukh Khan", mobile: "9753109222" },
-  { id: "driver-008", name: "Vivek Khadilkar", mobile: "7875447101" },
+  { id: "driver-001", name: "Demo Driver 001", mobile: "0000000001" },
+  { id: "driver-002", name: "Demo Driver 002", mobile: "0000000002" },
+  { id: "driver-003", name: "Demo Driver 003", mobile: "0000000003" },
+  { id: "driver-004", name: "Demo Driver 004", mobile: "0000000004" },
+  { id: "driver-005", name: "Demo Driver 005", mobile: "0000000005" },
+  { id: "driver-006", name: "Demo Driver 006", mobile: "0000000006" },
+  { id: "driver-007", name: "Demo Driver 007", mobile: "0000000007" },
+  { id: "driver-008", name: "Demo Driver 008", mobile: "0000000008" },
 ];
 
 const companyModels: Record<Company, { truck: string[]; hemm: string[] }> = {
