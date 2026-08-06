@@ -536,6 +536,9 @@ async function loadDriverStandstillReport(request) {
     shiftName: shift,
     driverMap: new Map([...fallbackDriverMap, ...driverNameMap(driverDirectory)]),
     now: new Date(),
+    // A truck may report multiple drivers during one shift. The report is a
+    // fleet view, so combine those intervals into one exact row per Volvo VIN.
+    groupByVehicle: true,
   });
   let statuses = [];
   let rows = [];

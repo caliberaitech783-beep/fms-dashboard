@@ -86,6 +86,70 @@ test("calculates Volvo driver standstill metrics from accumulated counter deltas
   assert.equal(rows[0].aboveEconomyPercent, null);
 });
 
+test("groups driver changes into one exact row per Volvo vehicle", () => {
+  const makeStatus = (at, driverId, values) => {
+    const value = status(at, values);
+    value.Driver1Id.OemDriverIdentification.OemDriverIdentification = driverId;
+    return value;
+  };
+  const rows = buildDriverStandstillRows({
+    vehicles: [{
+      trackerId: "VIN-1",
+      vehicleNumber: "V 590",
+      siteName: "Sasti OCM",
+    }],
+    statuses: [
+      makeStatus("2026-08-06T00:00:00Z", "DRIVER-A", {
+        distanceMetres: 1_000_000,
+        engineHours: 100,
+        fuelMillilitres: 500_000,
+        runningSeconds: 10_000,
+        standstillSeconds: 4_000,
+        coastingSeconds: 1_000,
+        lowLoadSeconds: 4_000,
+        highLoadSeconds: 1_000,
+      }),
+      makeStatus("2026-08-06T01:00:00Z", "DRIVER-A", {
+        distanceMetres: 1_010_000,
+        engineHours: 101,
+        fuelMillilitres: 510_000,
+        runningSeconds: 13_600,
+        standstillSeconds: 4_000,
+        coastingSeconds: 1_360,
+        lowLoadSeconds: 4_900,
+        highLoadSeconds: 1_900,
+      }),
+      makeStatus("2026-08-06T02:00:00Z", "DRIVER-B", {
+        distanceMetres: 1_015_000,
+        engineHours: 102,
+        fuelMillilitres: 520_000,
+        runningSeconds: 13_600,
+        standstillSeconds: 7_600,
+        coastingSeconds: 1_360,
+        lowLoadSeconds: 5_800,
+        highLoadSeconds: 2_800,
+      }),
+    ],
+    shiftStart: "2026-08-06T00:00:00Z",
+    shiftEnd: "2026-08-06T08:00:00Z",
+    shiftName: "A",
+    driverMap: new Map([
+      ["DRIVER-A", "Driver A"],
+      ["DRIVER-B", "Driver B"],
+    ]),
+    now: new Date("2026-08-06T08:00:00Z"),
+    groupByVehicle: true,
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].vehicle, "V 590");
+  assert.equal(rows[0].driver, "Driver A, Driver B");
+  assert.equal(rows[0].totalTime, "2:00");
+  assert.equal(rows[0].drivingKm, 15);
+  assert.equal(rows[0].fuelLitres, 20);
+  assert.equal(rows[0].standstillPercent, 50);
+});
+
 test("accepts Scania RFMS wheelbased accumulated counter names", () => {
   const first = status("2026-07-31T23:00:00Z", {
     distanceMetres: 1_000_000,
