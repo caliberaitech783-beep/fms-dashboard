@@ -6,6 +6,8 @@ import { applyFleetFilterChange } from "../src/utils/filterState.ts";
 const selectedVolvoFilters: DashboardFilters = {
   dateFrom: "2026-06-01",
   dateTo: "2026-06-30",
+  timeFrom: "00:00",
+  timeTo: "23:59",
   shift: "All",
   siteId: "site-wcl-gauri-pauni",
   contractType: "Coal",

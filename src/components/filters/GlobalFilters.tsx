@@ -5,6 +5,7 @@ import type { FilterOptions } from "../../hooks/useFleetFilters";
 import { SHIFT_OPTIONS } from "../../constants/shifts";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
+import { TimePeriodPicker } from "./TimePeriodPicker";
 
 interface GlobalFiltersProps {
   filters: DashboardFilters;
@@ -38,8 +39,18 @@ export function GlobalFilters({
         </div>
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-9">
-        <FilterInput label="From" type="date" value={filters.dateFrom} onChange={(value) => setFilter("dateFrom", value)} />
-        <FilterInput label="To" type="date" value={filters.dateTo} onChange={(value) => setFilter("dateTo", value)} />
+        <TimePeriodPicker
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          timeFrom={filters.timeFrom}
+          timeTo={filters.timeTo}
+          onApply={(period) => {
+            setFilter("dateFrom", period.dateFrom);
+            setFilter("dateTo", period.dateTo);
+            setFilter("timeFrom", period.timeFrom);
+            setFilter("timeTo", period.timeTo);
+          }}
+        />
         <FilterSelect label="Shift" value={filters.shift} options={SHIFT_OPTIONS.map((shift) => ({ value: shift.value, label: shift.label }))} onChange={(value) => setFilter("shift", value as DashboardFilters["shift"])} />
         <SiteDrilldownSelect value={filters.siteId} options={options.sites} onChange={(value) => setFilter("siteId", value)} />
         <FilterSelect label="Types of work" value={filters.contractType} options={withAll(options.contracts, "All Work Types")} onChange={(value) => setFilter("contractType", value as DashboardFilters["contractType"])} />

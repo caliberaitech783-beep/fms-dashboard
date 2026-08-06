@@ -15,6 +15,8 @@ import { uniqueSorted } from "../utils/filters";
 export const defaultFilters: DashboardFilters = {
   dateFrom: MOCK_DATE_FROM,
   dateTo: MOCK_DATE_TO,
+  timeFrom: "00:00",
+  timeTo: "23:59",
   shift: "All",
   siteId: "All",
   contractType: "All",

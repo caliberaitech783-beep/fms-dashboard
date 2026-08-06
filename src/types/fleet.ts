@@ -204,6 +204,8 @@ export interface WhatsAppDeliveryLog {
 export interface DashboardFilters {
   dateFrom: string;
   dateTo: string;
+  timeFrom: string;
+  timeTo: string;
   shift: ShiftCode | "All";
   siteId: string;
   contractType: ContractType | "All";

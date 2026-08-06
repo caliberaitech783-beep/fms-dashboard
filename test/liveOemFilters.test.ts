@@ -6,6 +6,8 @@ import { filterTelemetryRecords, isLiveOemSource } from "../src/utils/filters.ts
 const filters = {
   dateFrom: "2026-06-01",
   dateTo: "2026-06-30",
+  timeFrom: "00:00",
+  timeTo: "23:59",
   siteId: "All",
   contractType: "All",
   assetCategory: "All",
@@ -39,4 +41,22 @@ test("recognizes Volvo and Scania as live OEM sources", () => {
 test("keeps live Volvo and Scania snapshots outside the historical demo date range", () => {
   const filtered = filterTelemetryRecords(records, vehicles, filters);
   assert.deepEqual(filtered.map((record) => record.id), ["volvo-record", "scania-record"]);
+});
+
+test("applies the selected start and end times to historical telemetry", () => {
+  const timeFilters: DashboardFilters = {
+    ...filters,
+    dateFrom: "2026-06-10",
+    dateTo: "2026-06-10",
+    timeFrom: "09:00",
+    timeTo: "10:00",
+  };
+  const historicalRecords = [
+    { id: "before-window", vehicleId: "mock-1", source: "MOCK", timestamp: "2026-06-10T08:59:00", shift: "A" },
+    { id: "inside-window", vehicleId: "mock-1", source: "MOCK", timestamp: "2026-06-10T09:30:00", shift: "A" },
+    { id: "after-window", vehicleId: "mock-1", source: "MOCK", timestamp: "2026-06-10T10:01:00", shift: "A" },
+  ] as FleetTelemetryRecord[];
+
+  const filtered = filterTelemetryRecords(historicalRecords, vehicles, timeFilters);
+  assert.deepEqual(filtered.map((record) => record.id), ["inside-window"]);
 });

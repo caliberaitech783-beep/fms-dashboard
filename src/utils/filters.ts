@@ -44,8 +44,8 @@ export function filterTelemetryRecords(
   filters: DashboardFilters,
 ): FleetTelemetryRecord[] {
   const vehicleIds = new Set(filterVehicles(vehicles, filters).map((vehicle) => vehicle.id));
-  const from = new Date(`${filters.dateFrom}T00:00:00`);
-  const to = new Date(`${filters.dateTo}T23:59:59`);
+  const from = new Date(`${filters.dateFrom}T${filters.timeFrom || "00:00"}:00`);
+  const to = new Date(`${filters.dateTo}T${filters.timeTo || "23:59"}:59`);
 
   return records.filter((record) => {
     const timestamp = new Date(record.timestamp);
