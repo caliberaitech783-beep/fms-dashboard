@@ -33,10 +33,12 @@ function parseDriverPage(payload) {
   const drivers = wrapped.drivers || wrapped.Drivers || root.drivers || root.Drivers;
   const moreDataAvailable = root.moreDataAvailable ?? root.MoreDataAvailable
     ?? wrapped.moreDataAvailable ?? wrapped.MoreDataAvailable ?? false;
+  const requestServerDateTime = root.requestServerDateTime || root.RequestServerDateTime
+    || wrapped.requestServerDateTime || wrapped.RequestServerDateTime || null;
   if (!Array.isArray(drivers)) {
     throw Object.assign(new Error("Volvo driver response has an unexpected structure."), { statusCode: 502 });
   }
-  return { drivers, moreDataAvailable: Boolean(moreDataAvailable) };
+  return { drivers, moreDataAvailable: Boolean(moreDataAvailable), requestServerDateTime };
 }
 
 function parseDriverTimePage(payload) {
@@ -54,6 +56,35 @@ function parseDriverTimePage(payload) {
   return { driverTimes, moreDataAvailable: Boolean(moreDataAvailable), requestServerDateTime };
 }
 
+function normalizedIdType(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function driverProfileIdentifiers(driver) {
+  const identifications = driver?.oemDriverIdentifications
+    || driver?.OemDriverIdentifications
+    || [];
+  return (Array.isArray(identifications) ? identifications : [])
+    .map((item) => ({
+      idType: item?.idType || item?.IdType || null,
+      value: item?.oemDriverIdentification || item?.OemDriverIdentification || null,
+    }))
+    .filter((item) => String(item.value || "").trim());
+}
+
+function driverProfileCursor(driver, driverIdType) {
+  const identifiers = driverProfileIdentifiers(driver);
+  const requestedType = normalizedIdType(driverIdType);
+  const matching = identifiers.find((item) => normalizedIdType(item.idType) === requestedType);
+  return String(matching?.value || identifiers[0]?.value || "").trim() || null;
+}
+
+function driverTimeCursor(driverTime) {
+  const driverId = driverTime?.driverId || driverTime?.DriverId || {};
+  const oem = driverId.oemDriverIdentification || driverId.OemDriverIdentification || {};
+  return String(oem.oemDriverIdentification || oem.OemDriverIdentification || "").trim() || null;
+}
+
 class VolvoDriverClient {
   constructor(options = {}) {
     this.driversUrl = requiredValue("VOLVO_DRIVERS_URL", options.driversUrl);
@@ -62,10 +93,11 @@ class VolvoDriverClient {
     this.password = requiredValue("VOLVO_DRIVER_API_PASSWORD", options.password);
     this.acceptDrivers = requiredValue("VOLVO_ACCEPT_DRIVERS", options.acceptDrivers);
     this.acceptDriverTimes = requiredValue("VOLVO_ACCEPT_DRIVER_TIMES", options.acceptDriverTimes);
-    this.driverIdType = String(options.driverIdType || "Tacho").trim() || "Tacho";
+    this.driverIdType = String(options.driverIdType || "pin").trim() || "pin";
     this.fetchFn = options.fetchFn || globalThis.fetch;
     this.timeoutMs = Number(options.timeoutMs || 30_000);
     this.retries = Number(options.retries ?? 2);
+    this.maxPages = Math.max(1, Number(options.maxPages || 100));
     this.sleepFn = options.sleepFn || sleep;
     this.randomFn = options.randomFn || Math.random;
     if (typeof this.fetchFn !== "function") throw new Error("A fetch implementation is required.");
@@ -132,33 +164,118 @@ class VolvoDriverClient {
     throw lastError || Object.assign(new Error("Volvo driver API request failed."), { statusCode: 502 });
   }
 
-  async fetchDrivers() {
-    return parseDriverPage(await this.request(this.driversUrl, {
-      driverIdType: this.driverIdType,
-    }, this.acceptDrivers));
+  async fetchDrivers(options = {}) {
+    const driverIdType = String(options.driverIdType || this.driverIdType).trim() || this.driverIdType;
+    const maxPages = Math.max(1, Number(options.maxPages || this.maxPages));
+    const driversById = new Map();
+    const anonymousDrivers = [];
+    const seenCursors = new Set();
+    let lastDriverId = "";
+    let requestServerDateTime = null;
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const parsed = parseDriverPage(await this.request(this.driversUrl, {
+        driverIdType,
+        lastDriverId,
+      }, this.acceptDrivers));
+      requestServerDateTime = parsed.requestServerDateTime || requestServerDateTime;
+      for (const driver of parsed.drivers) {
+        const identifiers = driverProfileIdentifiers(driver).map((item) => String(item.value).trim());
+        const key = identifiers[0] || null;
+        if (key) driversById.set(key.toUpperCase(), driver);
+        else anonymousDrivers.push(driver);
+      }
+      if (!parsed.moreDataAvailable) {
+        return {
+          drivers: [...driversById.values(), ...anonymousDrivers],
+          moreDataAvailable: false,
+          requestServerDateTime,
+          pagesFetched: page,
+        };
+      }
+
+      const cursor = driverProfileCursor(parsed.drivers.at(-1), driverIdType);
+      if (!cursor) {
+        throw Object.assign(new Error("Volvo driver response did not provide a pagination cursor."), { statusCode: 502 });
+      }
+      const cursorKey = cursor.toUpperCase();
+      if (seenCursors.has(cursorKey)) {
+        throw Object.assign(new Error("Volvo driver pagination cursor repeated."), { statusCode: 502 });
+      }
+      seenCursors.add(cursorKey);
+      lastDriverId = cursor;
+    }
+
+    throw Object.assign(new Error("Volvo driver response exceeded the configured page limit."), { statusCode: 502 });
   }
 
-  async fetchLatestDriverTimes() {
-    return parseDriverTimePage(await this.request(this.driverTimesUrl, {
-      datetype: "received",
-      driverIdType: this.driverIdType,
-      latestOnly: true,
-    }, this.acceptDriverTimes));
+  async fetchLatestDriverTimes(options = {}) {
+    const driverIdType = String(options.driverIdType || this.driverIdType).trim() || this.driverIdType;
+    const maxPages = Math.max(1, Number(options.maxPages || this.maxPages));
+    const driverTimesById = new Map();
+    const anonymousDriverTimes = [];
+    const seenCursors = new Set();
+    let lastDriverId = "";
+    let requestServerDateTime = null;
+
+    for (let page = 1; page <= maxPages; page += 1) {
+      const parsed = parseDriverTimePage(await this.request(this.driverTimesUrl, {
+        datetype: "received",
+        driverIdType,
+        latestOnly: true,
+        lastDriverId,
+      }, this.acceptDriverTimes));
+      requestServerDateTime = parsed.requestServerDateTime || requestServerDateTime;
+      for (const driverTime of parsed.driverTimes) {
+        const identifier = driverTimeCursor(driverTime);
+        if (identifier) driverTimesById.set(identifier.toUpperCase(), driverTime);
+        else anonymousDriverTimes.push(driverTime);
+      }
+      if (!parsed.moreDataAvailable) {
+        return {
+          driverTimes: [...driverTimesById.values(), ...anonymousDriverTimes],
+          moreDataAvailable: false,
+          requestServerDateTime,
+          pagesFetched: page,
+        };
+      }
+
+      const cursor = driverTimeCursor(parsed.driverTimes.at(-1));
+      if (!cursor) {
+        throw Object.assign(new Error("Volvo driver-time response did not provide a pagination cursor."), { statusCode: 502 });
+      }
+      const cursorKey = cursor.toUpperCase();
+      if (seenCursors.has(cursorKey)) {
+        throw Object.assign(new Error("Volvo driver-time pagination cursor repeated."), { statusCode: 502 });
+      }
+      seenCursors.add(cursorKey);
+      lastDriverId = cursor;
+    }
+
+    throw Object.assign(new Error("Volvo driver-time response exceeded the configured page limit."), { statusCode: 502 });
   }
 }
 
 function createVolvoDriverClientFromEnv(env = process.env, options = {}) {
-  const baseUrl = String(env.VOLVO_DRIVER_API_BASE_URL || DEFAULT_DRIVER_BASE_URL).replace(/\/$/, "");
+  const configuredBaseUrl = env.VOLVO_DRIVER_API_BASE_URL || env.VOLVO_DRIVER_BASE_URL;
+  const baseUrl = String(configuredBaseUrl || DEFAULT_DRIVER_BASE_URL).replace(/\/$/, "");
   return new VolvoDriverClient({
     driversUrl: env.VOLVO_DRIVERS_URL || `${baseUrl}/drivers`,
     driverTimesUrl: env.VOLVO_DRIVER_TIMES_URL || `${baseUrl}/drivertimes`,
-    username: env.VOLVO_DRIVER_API_USERNAME || env.VOLVO_API_USERNAME || env.VOLVO_RFMS_USERNAME,
-    password: env.VOLVO_DRIVER_API_PASSWORD || env.VOLVO_API_PASSWORD || env.VOLVO_RFMS_PASSWORD,
+    username: env.VOLVO_DRIVER_API_USERNAME
+      || env.VOLVO_CLIENT_ID
+      || env.VOLVO_API_USERNAME
+      || env.VOLVO_RFMS_USERNAME,
+    password: env.VOLVO_DRIVER_API_PASSWORD
+      || env.VOLVO_CLIENT_SECRET
+      || env.VOLVO_API_PASSWORD
+      || env.VOLVO_RFMS_PASSWORD,
     acceptDrivers: env.VOLVO_ACCEPT_DRIVERS || DEFAULT_ACCEPT_DRIVERS,
     acceptDriverTimes: env.VOLVO_ACCEPT_DRIVER_TIMES || DEFAULT_ACCEPT_DRIVER_TIMES,
-    driverIdType: env.VOLVO_DRIVER_ID_TYPE || "Tacho",
+    driverIdType: env.VOLVO_DRIVER_ID_TYPE || "pin",
     timeoutMs: env.VOLVO_DRIVER_REQUEST_TIMEOUT_MS || env.VOLVO_REQUEST_TIMEOUT_MS || options.timeoutMs,
     retries: env.VOLVO_DRIVER_REQUEST_RETRIES ?? options.retries,
+    maxPages: env.VOLVO_DRIVER_MAX_PAGES || options.maxPages,
     ...options,
   });
 }
@@ -169,6 +286,8 @@ module.exports = {
   DEFAULT_DRIVER_BASE_URL,
   VolvoDriverClient,
   createVolvoDriverClientFromEnv,
+  driverProfileCursor,
+  driverTimeCursor,
   parseDriverPage,
   parseDriverTimePage,
 };
