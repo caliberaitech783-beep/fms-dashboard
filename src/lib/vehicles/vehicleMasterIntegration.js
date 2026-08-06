@@ -19,12 +19,6 @@ function normalizeVehicleIdentifier(value) {
 function resolveImportedSite(rawSiteName) {
   const normalized = normalizeKey(rawSiteName);
   if (!normalized || normalized === "-") return null;
-  // The 12 active workbook rows labelled exactly "Dhoptala" are assigned to
-  // the operational Gauri Pauni Volvo fleet. Explicit "Dhoptala OCM" records
-  // continue to use the separate Dhoptala dashboard site.
-  if (normalized === "dhoptala") {
-    return { id: "site-wcl-gauri-pauni", name: "Gauri Pauni OCM", group: "WCL", contractType: "Coal" };
-  }
   // The 29 legacy workbook rows labelled exactly "Jayant 2" are part of the
   // DCH East Volvo fleet. The operational Jayant 2 fleet is represented by
   // the separate "Jayant, Jayant East" rows.
