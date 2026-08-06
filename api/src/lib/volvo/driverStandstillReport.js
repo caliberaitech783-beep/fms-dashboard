@@ -102,6 +102,8 @@ function createAccumulator(vehicle, driverId, driverName) {
     vin: vehicle.trackerId,
     driverId,
     driverName,
+    driverIds: new Set(driverId ? [String(driverId)] : []),
+    driverNames: new Set(driverName ? [driverName] : []),
     site: vehicle.siteName || "Site assignment required",
     shift: null,
     totalTimeSeconds: 0,
@@ -203,12 +205,15 @@ function finalizeRow(value, shiftName, shiftDurationHours) {
   const coastingPercent = value.runningSeconds > 0
     ? value.coastingSeconds / value.runningSeconds * 100
     : null;
+  const knownDriverNames = [...value.driverNames].filter((name) => name !== "Unknown");
+  const driverNames = knownDriverNames.length ? knownDriverNames : [...value.driverNames];
+  const driverIds = [...value.driverIds];
 
   return {
     vehicle: value.vehicleNumber,
     vin: value.vin,
-    driverId: value.driverId,
-    driver: value.driverName,
+    driverId: driverIds.length ? driverIds.join(", ") : value.driverId,
+    driver: driverNames.length ? driverNames.join(", ") : value.driverName,
     totalTime: formatHoursMinutes(value.totalTimeSeconds),
     drivingKm: round(value.drivingKm),
     dieselEngineOnPercent: round(engineOnPercent),
@@ -261,9 +266,11 @@ function buildDriverStandstillRows(options) {
 
       const id = driverIdentifier(current) || driverIdentifier(previous);
       const driverKey = String(id || "UNKNOWN").toUpperCase();
-      const key = `${vin}|${driverKey}`;
+      const key = options.groupByVehicle ? vin : `${vin}|${driverKey}`;
       const driverName = options.driverMap.get(driverKey) || (id ? `Driver ${maskDriverId(id)}` : "Unknown");
       const accumulator = accumulators.get(key) || createAccumulator(vehicle, id, driverName);
+      if (id) accumulator.driverIds.add(String(id));
+      if (driverName) accumulator.driverNames.add(driverName);
       addInterval(accumulator, previous, current);
       accumulators.set(key, accumulator);
       previous = current;
