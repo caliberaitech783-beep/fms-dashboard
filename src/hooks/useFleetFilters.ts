@@ -9,6 +9,7 @@ import {
 } from "../constants/modelMake";
 import { sites as seedSites, vehicles as seedVehicles } from "../data/mock/seed";
 import { getPortalData } from "../services/dataAccess";
+import { applyFleetFilterChange } from "../utils/filterState";
 import { uniqueSorted } from "../utils/filters";
 
 export const defaultFilters: DashboardFilters = {
@@ -125,33 +126,7 @@ export function useFleetFilters() {
 
   const setFilter = useCallback(
     <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
-      setFilters((current) => {
-        const next = { ...current, [key]: value };
-
-        if (key === "siteId") {
-          next.contractType = "All";
-          next.assetCategory = "All";
-          next.assetType = "All";
-          next.company = "All";
-          next.modelNumber = "All";
-        } else if (key === "contractType") {
-          next.assetCategory = "All";
-          next.assetType = "All";
-          next.company = "All";
-          next.modelNumber = "All";
-        } else if (key === "assetCategory") {
-          next.assetType = "All";
-          next.company = "All";
-          next.modelNumber = "All";
-        } else if (key === "assetType") {
-          next.company = "All";
-          next.modelNumber = "All";
-        } else if (key === "company") {
-          next.modelNumber = "All";
-        }
-
-        return next;
-      });
+      setFilters((current) => applyFleetFilterChange(current, key, value));
     },
     [],
   );
