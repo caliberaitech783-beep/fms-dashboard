@@ -232,6 +232,30 @@ function finalizeRow(value, shiftName, shiftDurationHours) {
   };
 }
 
+function buildNoDataRow(vehicle, shiftName) {
+  return {
+    vehicle: vehicle.vehicleNumber,
+    vin: vehicle.trackerId,
+    driverId: null,
+    driver: "No shift data",
+    totalTime: null,
+    drivingKm: null,
+    dieselEngineOnPercent: null,
+    averageDieselEngineKmPerLitre: null,
+    fuelLitres: null,
+    standstillPercent: null,
+    standstillTime: null,
+    iShiftPerformanceTimePercent: null,
+    aboveEconomyPercent: null,
+    engineLoadPercent: null,
+    coastingPercent: null,
+    averageDieselLitresPerHour: null,
+    site: vehicle.siteName || "Site assignment required",
+    shift: `Shift ${shiftName}`,
+    dataIntervals: 0,
+  };
+}
+
 function buildDriverStandstillRows(options) {
   const shiftStart = new Date(options.shiftStart);
   const shiftEnd = new Date(options.shiftEnd);
@@ -277,13 +301,23 @@ function buildDriverStandstillRows(options) {
     }
   }
 
-  return [...accumulators.values()]
+  const reportRows = [...accumulators.values()]
     .filter((row) => row.intervalCount > 0 && row.totalTimeSeconds > 0)
     .map((row) => finalizeRow(row, options.shiftName, shiftDurationHours))
     .sort((left, right) => (
       (right.standstillPercent || 0) - (left.standstillPercent || 0)
       || left.vehicle.localeCompare(right.vehicle, undefined, { numeric: true })
     ));
+
+  if (!options.includeVehiclesWithoutData) return reportRows;
+
+  const reportedVins = new Set(reportRows.map((row) => row.vin));
+  const noDataRows = options.vehicles
+    .filter((vehicle) => !reportedVins.has(vehicle.trackerId))
+    .map((vehicle) => buildNoDataRow(vehicle, options.shiftName))
+    .sort((left, right) => left.vehicle.localeCompare(right.vehicle, undefined, { numeric: true }));
+
+  return [...reportRows, ...noDataRows];
 }
 
 async function fetchVehicleScopedHistory(client, vehicles, options = {}) {

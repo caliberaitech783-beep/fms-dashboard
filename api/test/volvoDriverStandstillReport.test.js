@@ -150,6 +150,82 @@ test("groups driver changes into one exact row per Volvo vehicle", () => {
   assert.equal(rows[0].standstillPercent, 50);
 });
 
+test("includes Majri master vehicles without changing telemetry row metrics", () => {
+  const options = {
+    vehicles: [
+      {
+        trackerId: "VIN-1",
+        vehicleNumber: "V 590",
+        siteName: "Majri",
+      },
+      {
+        trackerId: "VIN-2",
+        vehicleNumber: "V 591",
+        siteName: "Majri",
+      },
+    ],
+    statuses: [
+      status("2026-08-06T00:00:00Z", {
+        distanceMetres: 1_000_000,
+        engineHours: 100,
+        fuelMillilitres: 500_000,
+        runningSeconds: 10_000,
+        standstillSeconds: 4_000,
+        coastingSeconds: 1_000,
+        lowLoadSeconds: 4_000,
+        highLoadSeconds: 1_000,
+      }),
+      status("2026-08-06T02:00:00Z", {
+        distanceMetres: 1_015_000,
+        engineHours: 102,
+        fuelMillilitres: 520_000,
+        runningSeconds: 13_600,
+        standstillSeconds: 7_600,
+        coastingSeconds: 1_360,
+        lowLoadSeconds: 5_800,
+        highLoadSeconds: 2_800,
+      }),
+    ],
+    shiftStart: "2026-08-06T00:00:00Z",
+    shiftEnd: "2026-08-06T08:00:00Z",
+    shiftName: "B",
+    driverMap: new Map(),
+    now: new Date("2026-08-06T08:00:00Z"),
+    groupByVehicle: true,
+  };
+
+  const telemetryRows = buildDriverStandstillRows(options);
+  const allFleetRows = buildDriverStandstillRows({
+    ...options,
+    includeVehiclesWithoutData: true,
+  });
+
+  assert.equal(telemetryRows.length, 1);
+  assert.equal(allFleetRows.length, 2);
+  assert.deepEqual(allFleetRows[0], telemetryRows[0]);
+  assert.deepEqual(allFleetRows[1], {
+    vehicle: "V 591",
+    vin: "VIN-2",
+    driverId: null,
+    driver: "No shift data",
+    totalTime: null,
+    drivingKm: null,
+    dieselEngineOnPercent: null,
+    averageDieselEngineKmPerLitre: null,
+    fuelLitres: null,
+    standstillPercent: null,
+    standstillTime: null,
+    iShiftPerformanceTimePercent: null,
+    aboveEconomyPercent: null,
+    engineLoadPercent: null,
+    coastingPercent: null,
+    averageDieselLitresPerHour: null,
+    site: "Majri",
+    shift: "Shift B",
+    dataIntervals: 0,
+  });
+});
+
 test("accepts Scania RFMS wheelbased accumulated counter names", () => {
   const first = status("2026-07-31T23:00:00Z", {
     distanceMetres: 1_000_000,
