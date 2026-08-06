@@ -11,7 +11,8 @@ const {
 
 test("maps workbook site labels to existing dashboard site IDs", () => {
   assert.equal(resolveImportedSite("Sasti").id, "site-wcl-sasti-ocm");
-  assert.equal(resolveImportedSite("Dhoptala").id, "site-wcl-dhoptala-ocm");
+  assert.equal(resolveImportedSite("Dhoptala").id, "site-wcl-gauri-pauni");
+  assert.equal(resolveImportedSite("Dhoptala OCM").id, "site-wcl-dhoptala-ocm");
   assert.equal(resolveImportedSite("Majri").id, "site-wcl-majri-ocm");
   assert.equal(resolveImportedSite("Gouri").id, "site-wcl-gauri-pauni");
   assert.equal(resolveImportedSite("Dudhichua West").id, "site-ncl-dch-west");
@@ -114,6 +115,47 @@ test("keeps the authoritative Volvo fleet count when imported master has extra r
 
   assert.equal(merged.length, 40);
   assert.equal(merged.every((vehicle) => vehicle.importedVehicleMaster?.siteId === "site-wcl-gauri-pauni"), true);
+});
+
+test("keeps 101 Gauri Pauni vehicles by reassigning the 12-row Dhoptala batch", () => {
+  const gauriVehicles = Array.from({ length: 89 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 269,
+    vehicleNumber: `GAURI-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Gouri",
+    vin: `GAURI-VIN-${index + 1}`,
+    serviceStatus: "Active",
+    sourceColumns: {},
+  }));
+  const reassignedVehicles = Array.from({ length: 12 }, (_, index) => prepareImportedVehicle({
+    sourceRow: index + 248,
+    vehicleNumber: `DHOPTALA-BATCH-${index + 1}`,
+    vehicleModel: "Volvo FMXB384R",
+    rawSiteName: "Dhoptala",
+    vin: `DHOPTALA-BATCH-VIN-${index + 1}`,
+    serviceStatus: "Active",
+    sourceColumns: {},
+  }));
+  const importedVehicles = [...gauriVehicles, ...reassignedVehicles];
+  const apiVehicles = importedVehicles.map((vehicle) => ({
+    VIN: vehicle.vin,
+    CustomerVehicleName: vehicle.vehicleNumber,
+    Model: vehicle.vehicleModel,
+    Type: "TRUCK",
+  }));
+
+  const portalVehicles = mergeVolvoVehicleMasters(apiVehicles, importedVehicles, {
+    appendUnmatchedImported: false,
+  }).filter(isImportedVehicleInPortalScope);
+  const gauriPortalVehicles = portalVehicles.filter((vehicle) => (
+    vehicle.importedVehicleMaster?.siteId === "site-wcl-gauri-pauni"
+  ));
+
+  assert.equal(portalVehicles.length, 101);
+  assert.equal(gauriPortalVehicles.length, 101);
+  assert.equal(reassignedVehicles.every((vehicle) => (
+    vehicle.siteId === "site-wcl-gauri-pauni"
+  )), true);
 });
 
 test("keeps 40 Jayant East vehicles and reassigns 29 legacy Jayant 2 rows to DCH East", () => {
