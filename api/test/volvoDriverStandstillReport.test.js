@@ -150,20 +150,13 @@ test("groups driver changes into one exact row per Volvo vehicle", () => {
   assert.equal(rows[0].standstillPercent, 50);
 });
 
-test("includes Majri master vehicles without changing telemetry row metrics", () => {
+test("includes all 93 Majri master vehicles without changing telemetry row metrics", () => {
   const options = {
-    vehicles: [
-      {
-        trackerId: "VIN-1",
-        vehicleNumber: "V 590",
-        siteName: "Majri",
-      },
-      {
-        trackerId: "VIN-2",
-        vehicleNumber: "V 591",
-        siteName: "Majri",
-      },
-    ],
+    vehicles: Array.from({ length: 93 }, (_, index) => ({
+      trackerId: `VIN-${index + 1}`,
+      vehicleNumber: `V ${590 + index}`,
+      siteName: "Majri",
+    })),
     statuses: [
       status("2026-08-06T00:00:00Z", {
         distanceMetres: 1_000_000,
@@ -201,8 +194,9 @@ test("includes Majri master vehicles without changing telemetry row metrics", ()
   });
 
   assert.equal(telemetryRows.length, 1);
-  assert.equal(allFleetRows.length, 2);
+  assert.equal(allFleetRows.length, 93);
   assert.deepEqual(allFleetRows[0], telemetryRows[0]);
+  assert.equal(allFleetRows.filter((row) => row.driver === "No shift data").length, 92);
   assert.deepEqual(allFleetRows[1], {
     vehicle: "V 591",
     vin: "VIN-2",

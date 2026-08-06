@@ -539,7 +539,7 @@ async function loadDriverStandstillReport(request) {
     // A truck may report multiple drivers during one shift. The report is a
     // fleet view, so combine those intervals into one exact row per Volvo VIN.
     groupByVehicle: true,
-    // Majri's report must reconcile to its 91 master-listed Volvo trucks.
+    // Majri's report must reconcile to its 93 master-listed Volvo trucks.
     // Trucks without complete shift intervals are shown with blank metrics so
     // the existing telemetry rows and summary calculations remain unchanged.
     includeVehiclesWithoutData: scheduleSiteName(reportSite) === "Majri",
