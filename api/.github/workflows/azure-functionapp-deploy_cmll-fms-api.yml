@@ -79,9 +79,14 @@ jobs:
           CASE_CUMULATIVE_FUEL_USED_URL: ${{ secrets.CASE_CUMULATIVE_FUEL_USED_URL }}
           CASE_CUMULATIVE_IDLE_HOURS_URL: ${{ secrets.CASE_CUMULATIVE_IDLE_HOURS_URL }}
           CASE_ACCESS_TOKEN: ${{ secrets.CASE_ACCESS_TOKEN }}
+          CASE_REFRESH_TOKEN: ${{ secrets.CASE_REFRESH_TOKEN }}
+          CASE_CLIENT_ID: ${{ secrets.CASE_CLIENT_ID }}
+          CASE_CLIENT_SECRET: ${{ secrets.CASE_CLIENT_SECRET }}
+          CASE_TOKEN_URL: ${{ secrets.CASE_TOKEN_URL }}
+          CASE_AUDIENCE: ${{ secrets.CASE_AUDIENCE }}
           CASE_SUBSCRIPTION_KEY: ${{ secrets.CASE_SUBSCRIPTION_KEY }}
         run: |
-          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
+          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_REFRESH_TOKEN" ] || [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_AUDIENCE" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
             echo "CASE API secrets are not configured."
             exit 1
           fi
@@ -97,6 +102,26 @@ jobs:
             exit 1
           fi
 
+          current_access_token="$(az functionapp config appsettings list \
+            --name cmll-fms-api \
+            --resource-group "$resource_group" \
+            --query "[?name=='CASE_ACCESS_TOKEN'].value | [0]" \
+            --output tsv)"
+          if [ -n "$current_access_token" ]; then
+            CASE_ACCESS_TOKEN="$current_access_token"
+          fi
+          echo "::add-mask::$CASE_ACCESS_TOKEN"
+
+          current_refresh_token="$(az functionapp config appsettings list \
+            --name cmll-fms-api \
+            --resource-group "$resource_group" \
+            --query "[?name=='CASE_REFRESH_TOKEN'].value | [0]" \
+            --output tsv)"
+          if [ -n "$current_refresh_token" ]; then
+            CASE_REFRESH_TOKEN="$current_refresh_token"
+          fi
+          echo "::add-mask::$CASE_REFRESH_TOKEN"
+
           az functionapp config appsettings set \
             --name cmll-fms-api \
             --resource-group "$resource_group" \
@@ -106,6 +131,11 @@ jobs:
               "CASE_CUMULATIVE_FUEL_USED_URL=$CASE_CUMULATIVE_FUEL_USED_URL" \
               "CASE_CUMULATIVE_IDLE_HOURS_URL=$CASE_CUMULATIVE_IDLE_HOURS_URL" \
               "CASE_ACCESS_TOKEN=$CASE_ACCESS_TOKEN" \
+              "CASE_REFRESH_TOKEN=$CASE_REFRESH_TOKEN" \
+              "CASE_CLIENT_ID=$CASE_CLIENT_ID" \
+              "CASE_CLIENT_SECRET=$CASE_CLIENT_SECRET" \
+              "CASE_TOKEN_URL=$CASE_TOKEN_URL" \
+              "CASE_AUDIENCE=$CASE_AUDIENCE" \
               "CASE_SUBSCRIPTION_KEY=$CASE_SUBSCRIPTION_KEY" \
               "CASE_REQUEST_TIMEOUT_MS=20000" \
               "CASE_REQUEST_RETRIES=2" \
