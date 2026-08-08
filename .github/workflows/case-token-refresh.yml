@@ -10,11 +10,23 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: write
   id-token: write
   contents: read
 
 jobs:
+  dispatch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start refresh on the Azure-authorized branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run case-token-refresh.yml --ref azure-functionapp-deploy
+
   refresh:
+    if: github.ref == 'refs/heads/azure-functionapp-deploy'
     runs-on: ubuntu-latest
 
     steps:
