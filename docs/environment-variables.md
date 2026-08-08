@@ -114,17 +114,25 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `SCANIA_TOKEN_TTL_SECONDS`
 - `SCANIA_REPORT_POLL_INTERVAL_MS` and `SCANIA_REPORT_POLL_TIMEOUT_MS`
 - `SCANIA_REPORT_SESSIONS_TABLE_NAME` (optional; defaults to `ScaniaReportSessions`)
-- `CASE_BASE_URL` (use `https://api-data.cnh.com/v1`; the backend appends the confirmed Postman `/equipment` path)
+- `CASE_BASE_URL` (the confirmed Equipment endpoint; `https://api-data.cnh.com/v1/equipment`)
+- `CASE_CUMULATIVE_OPERATING_HOURS_URL` (confirmed Cumulative Operating Hours URL; the backend replaces its VIN, start, end, and page path values)
+- `CASE_CUMULATIVE_FUEL_USED_URL` (confirmed Cumulative Fuel Used URL; the backend replaces its VIN, start, end, and page path values)
+- `CASE_CUMULATIVE_IDLE_HOURS_URL` (confirmed Cumulative Idle Hours URL; the backend replaces its VIN, start, end, and page path values)
 - `CASE_ACCESS_TOKEN` (backend-only Bearer token)
 - `CASE_SUBSCRIPTION_KEY` (backend-only value sent as `Ocp-Apim-Subscription-Key`)
 - `CASE_REQUEST_TIMEOUT_MS` (optional, defaults to `20000`)
+- `CASE_REQUEST_RETRIES` (optional, defaults to `2`; retries transient network, rate-limit, and upstream server failures)
 - `CASE_CACHE_SECONDS` (optional, defaults to `60`)
+- `CASE_REPORT_CACHE_SECONDS` (optional, defaults to `300`)
+- `CASE_METRIC_CONCURRENCY` (optional, defaults to `8`; bounds concurrent CASE time-series calls)
+- `CASE_MAX_METRIC_PAGES` (optional, defaults to `100`)
+- `CASE_REPORT_MAX_DAYS` (optional, defaults to `31`; longer upstream windows are split into supported 30-day segments)
 
 The supplied Postman dotenv names `bearerToken` and `Subscription` are accepted as backend-only compatibility aliases. Prefer `CASE_ACCESS_TOKEN` and `CASE_SUBSCRIPTION_KEY` in deployed settings.
 
 See `docs/volvo-live-vehicle-status.md` for synchronization and rotation procedures. Volvo credentials are Azure-only and must never use a `VITE_` prefix.
 See `docs/scania-live-integration.md` for Scania setup, mappings, report behavior, and acceptance testing. Scania credentials are Azure-only and must never use a `VITE_` prefix.
-CASE credentials are Azure-only and must never use a `VITE_` prefix. The initial integration calls only `GET /equipment`; client credentials are not used by this request when a working access token is supplied.
+CASE credentials and all four CASE endpoint URLs are Azure-only and must never use a `VITE_` prefix. The report uses only the supplied Equipment, Cumulative Fuel Used, Cumulative Operating Hours, and Cumulative Idle Hours endpoints; client credentials are not used when a working access token is supplied.
 
 ## GitHub Secrets
 

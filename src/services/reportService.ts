@@ -27,9 +27,8 @@ import {
   invalidateEicherLiveCache,
 } from "./adapters/eicherLiveService";
 import {
-  fetchCaseEquipmentSnapshot,
+  fetchCaseEquipmentReport,
   invalidateCaseEquipmentCache,
-  type CaseEquipment,
 } from "./adapters/caseEquipmentService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
 import { resolveOperationalShift } from "../utils/shiftResolver";
@@ -228,15 +227,12 @@ const EICHER_REPORT_COLUMNS = [
 ];
 
 const CASE_REPORT_COLUMNS = [
-  "VIN",
-  "Company Name",
-  "Company ID",
-  "Brand",
-  "Model",
-  "Product Line",
-  "Product Type",
-  "Device Type",
-  "Device Serial Number",
+  "Machine",
+  "Total Fuel",
+  "Average fuel per hour",
+  "Working",
+  "Idle",
+  "Utilization",
 ];
 
 const SHIFT_REPORT_COLUMNS = [
@@ -356,18 +352,15 @@ async function buildEicherReport(
   };
 }
 
-function caseValue(value: string | null | undefined): string {
-  return value?.trim() || "--";
+function caseReportTimestamp(date: string, time: string, endOfMinute: boolean): string {
+  const normalizedTime = /^\d{2}:\d{2}$/.test(time)
+    ? `${time}:${endOfMinute ? "59" : "00"}`
+    : time;
+  return new Date(`${date}T${normalizedTime}`).toISOString();
 }
 
-function caseDeviceValues(
-  equipment: CaseEquipment,
-  key: "type" | "serialNumber",
-): string {
-  const values = [...new Set(equipment.devices.map((device) => device[key]).filter(
-    (value): value is string => Boolean(value),
-  ))];
-  return values.length ? values.join(", ") : "--";
+function caseMetricValue(value: number | null): number | string {
+  return roundNullable(value, 2) ?? "--";
 }
 
 async function buildCaseReport(
@@ -378,7 +371,11 @@ async function buildCaseReport(
     invalidateCaseEquipmentCache();
   }
 
-  const snapshot = await fetchCaseEquipmentSnapshot({ forceRefresh: options.forceRefresh });
+  const snapshot = await fetchCaseEquipmentReport({
+    from: caseReportTimestamp(filters.dateFrom, filters.timeFrom || "00:00", false),
+    to: caseReportTimestamp(filters.dateTo, filters.timeTo || "23:59", true),
+    forceRefresh: options.forceRefresh,
+  });
   if (!snapshot) {
     return {
       reportType: "CASE Report",
@@ -387,7 +384,7 @@ async function buildCaseReport(
       rows: [],
       oem: "CASE",
       live: false,
-      source: "CASE_EQUIPMENT_LIVE",
+      source: "CASE_EQUIPMENT_METRICS_LIVE",
       error: {
         kind: "upstream",
         message: "CASE data unavailable",
@@ -398,21 +395,18 @@ async function buildCaseReport(
 
   const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
   const selectedModel = filters.modelNumber === "All" ? "" : filters.modelNumber.trim().toLowerCase();
-  const rows = snapshot.equipment
-    .filter((equipment) => !vehicleSearch || (equipment.vin ?? "").toLowerCase().includes(vehicleSearch))
-    .filter((equipment) => !selectedModel || (equipment.model ?? "").toLowerCase() === selectedModel)
-    .map((equipment) => ({
-      VIN: caseValue(equipment.vin),
-      "Company Name": caseValue(equipment.companyName),
-      "Company ID": caseValue(equipment.companyId),
-      Brand: caseValue(equipment.brand),
-      Model: caseValue(equipment.model),
-      "Product Line": caseValue(equipment.productLine),
-      "Product Type": caseValue(equipment.productType),
-      "Device Type": caseDeviceValues(equipment, "type"),
-      "Device Serial Number": caseDeviceValues(equipment, "serialNumber"),
+  const rows = snapshot.rows
+    .filter((row) => !vehicleSearch || row.machine.toLowerCase().includes(vehicleSearch))
+    .filter((row) => !selectedModel || (row.model ?? "").toLowerCase() === selectedModel)
+    .map((row) => ({
+      Machine: row.machine,
+      "Total Fuel": caseMetricValue(row.totalFuel),
+      "Average fuel per hour": caseMetricValue(row.averageFuelPerHour),
+      Working: caseMetricValue(row.workingHours),
+      Idle: caseMetricValue(row.idleHours),
+      Utilization: caseMetricValue(row.utilization),
     }))
-    .sort((left, right) => left.VIN.localeCompare(right.VIN, undefined, { numeric: true }));
+    .sort((left, right) => left.Machine.localeCompare(right.Machine, undefined, { numeric: true }));
 
   return {
     reportType: "CASE Report",
@@ -422,9 +416,9 @@ async function buildCaseReport(
     oem: "CASE",
     live: true,
     source: snapshot.source,
-    notice: "Generated from the live CASE Equipment API. Missing API values are shown as --; telemetry values are not added because the Equipment response does not provide them.",
+    notice: "Generated from live CASE Equipment, Cumulative Fuel Used, Cumulative Operating Hours and Cumulative Idle Hours APIs. Fuel is in litres, Working and Idle are hours, and Utilization is percent. Missing API values are shown as --.",
     meta: {
-      rawRecordCount: snapshot.equipment.length,
+      rawRecordCount: snapshot.equipmentCount,
       finalFilteredVehicleCount: rows.length,
     },
   };

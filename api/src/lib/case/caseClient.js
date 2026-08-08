@@ -229,11 +229,15 @@ function resetCaseEquipmentCache() {
 
 module.exports = {
   CaseApiError,
+  bearerValue,
   caseConfiguration,
   equipmentUrl,
   fetchCaseEquipment,
   getCaseEquipment,
+  httpFailure,
   normalizeBaseUrl,
   resetCaseEquipmentCache,
+  timeoutMs,
+  validateConfiguration,
   validateEquipmentPayload,
 };

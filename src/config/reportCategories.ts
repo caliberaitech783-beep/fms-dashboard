@@ -281,7 +281,7 @@ export const reportCategories: ReportCategory[] = [
         ...exportableReport,
         id: "case",
         name: "CASE Report",
-        description: "CASE live equipment inventory using the existing secured OEM integration.",
+        description: "CASE live fuel, working, idle and utilization report using the secured OEM integration.",
         route: "/reports/oem/case",
         reportType: "CASE Report",
         categoryId: "oem",
