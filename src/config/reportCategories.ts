@@ -277,6 +277,16 @@ export const reportCategories: ReportCategory[] = [
         categoryId: "oem",
         existingComponent: "EicherReport",
       },
+      {
+        ...exportableReport,
+        id: "case",
+        name: "CASE Report",
+        description: "CASE live equipment inventory using the existing secured OEM integration.",
+        route: "/reports/oem/case",
+        reportType: "CASE Report",
+        categoryId: "oem",
+        existingComponent: "CaseReport",
+      },
     ],
   },
   {
@@ -332,6 +342,7 @@ export const oldReportRouteRedirects: Record<string, string> = {
   "/reports/exceptions": "/reports/alerts-tracker/exceptions",
   "/reports/tracker-health": "/reports/alerts-tracker/tracker-health",
   "/reports/eicher": "/reports/oem/eicher",
+  "/reports/case": "/reports/oem/case",
   "/reports/monthly-management": "/reports/management-delivery/monthly-management",
   "/reports/whatsapp-log": "/reports/management-delivery/whatsapp-log",
 };

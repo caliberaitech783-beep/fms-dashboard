@@ -6,7 +6,7 @@ const OEM_DEFINITIONS = [
   { name: "Eicher", prefix: "EICHER", implemented: true },
   { name: "LiuGong", prefix: "LIUGONG", implemented: false },
   { name: "TataHitachi", prefix: "TATA_HITACHI", implemented: false },
-  { name: "Case", prefix: "CASE", implemented: false },
+  { name: "Case", prefix: "CASE", implemented: true },
   { name: "Komatsu", prefix: "KOMATSU", implemented: false },
 ];
 

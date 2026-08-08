@@ -704,7 +704,7 @@ function ReportPreviewTable({
                 key={column}
                 className="whitespace-nowrap border-b border-coal-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-coal-500"
               >
-                {reportType === "Eicher Report" ? column : titleCase(column)}
+                {reportType === "Eicher Report" || reportType === "CASE Report" ? column : titleCase(column)}
               </th>
             ))}
           </tr>

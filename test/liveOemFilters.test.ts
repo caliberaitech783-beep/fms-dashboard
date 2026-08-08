@@ -32,9 +32,11 @@ const records = [
   { id: "mock-record", vehicleId: "mock-1", source: "MOCK", timestamp: "2026-08-01T06:00:00.000Z", shift: "A" },
 ] as FleetTelemetryRecord[];
 
-test("recognizes Volvo and Scania as live OEM sources", () => {
+test("recognizes each connected OEM as a live source", () => {
   assert.equal(isLiveOemSource("VOLVO_RFMS_LIVE"), true);
   assert.equal(isLiveOemSource("SCANIA_RFMS_LIVE"), true);
+  assert.equal(isLiveOemSource("EICHER_VECV_LIVE"), true);
+  assert.equal(isLiveOemSource("CASE_EQUIPMENT_LIVE"), true);
   assert.equal(isLiveOemSource("MOCK"), false);
 });
 
