@@ -1,0 +1,99 @@
+name: Refresh CASE API token
+
+on:
+  schedule:
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: case-api-token-refresh
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  id-token: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start refresh on the Azure-authorized branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run case-token-refresh.yml --ref azure-functionapp-deploy
+
+  refresh:
+    if: github.ref == 'refs/heads/azure-functionapp-deploy'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D638C37FA2534B1281403CDF82F2D4A2 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_779F58D8528C4159906E481FDF8E8EDD }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E37734F374F045BAAD689AA645BBEAFB }}
+
+      - name: Refresh CASE access token
+        env:
+          CASE_CLIENT_ID: ${{ secrets.CASE_CLIENT_ID }}
+          CASE_CLIENT_SECRET: ${{ secrets.CASE_CLIENT_SECRET }}
+          CASE_TOKEN_URL: ${{ secrets.CASE_TOKEN_URL }}
+          CASE_BOOTSTRAP_REFRESH_TOKEN: ${{ secrets.CASE_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_BOOTSTRAP_REFRESH_TOKEN" ]; then
+            echo "CASE OAuth secrets are not configured."
+            exit 1
+          fi
+
+          resource_group="$(az resource list \
+            --name cmll-fms-api \
+            --resource-type Microsoft.Web/sites \
+            --query '[0].resourceGroup' \
+            --output tsv)"
+
+          if [ -z "$resource_group" ]; then
+            echo "Azure resource group for cmll-fms-api was not found."
+            exit 1
+          fi
+
+          refresh_token="$(az functionapp config appsettings list \
+            --name cmll-fms-api \
+            --resource-group "$resource_group" \
+            --query "[?name=='CASE_REFRESH_TOKEN'].value | [0]" \
+            --output tsv)"
+          if [ -z "$refresh_token" ]; then
+            refresh_token="$CASE_BOOTSTRAP_REFRESH_TOKEN"
+          fi
+          echo "::add-mask::$refresh_token"
+
+          token_response="$(curl --fail-with-body --silent --show-error \
+            --request POST "$CASE_TOKEN_URL" \
+            --header 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "client_id=$CASE_CLIENT_ID" \
+            --data-urlencode "client_secret=$CASE_CLIENT_SECRET" \
+            --data-urlencode 'grant_type=refresh_token' \
+            --data-urlencode "refresh_token=$refresh_token")"
+
+          access_token="$(jq -er '.access_token | select(type == "string" and length > 0)' <<<"$token_response")"
+          next_refresh_token="$(jq -r '.refresh_token // empty' <<<"$token_response")"
+          if [ -z "$next_refresh_token" ]; then
+            next_refresh_token="$refresh_token"
+          fi
+          echo "::add-mask::$access_token"
+          echo "::add-mask::$next_refresh_token"
+
+          az functionapp config appsettings set \
+            --name cmll-fms-api \
+            --resource-group "$resource_group" \
+            --settings \
+              "CASE_ACCESS_TOKEN=$access_token" \
+              "CASE_REFRESH_TOKEN=$next_refresh_token" \
+            --output none
+
+          echo "CASE API token refreshed successfully."
