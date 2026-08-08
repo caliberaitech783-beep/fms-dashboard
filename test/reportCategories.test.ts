@@ -51,6 +51,7 @@ test("redirects shortcuts and legacy report URLs to their canonical routes", () 
     "/reports/fuel-efficiency/daily",
   );
   assert.equal(normalizeReportPath("/reports/eicher/"), "/reports/oem/eicher");
+  assert.equal(normalizeReportPath("/reports/case/"), "/reports/oem/case");
   assert.equal(findReportItem("/reports/idle-time")?.reportType, "Idle Time Report");
 });
 

@@ -72,6 +72,39 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_779F58D8528C4159906E481FDF8E8EDD }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E37734F374F045BAAD689AA645BBEAFB }}
 
+      - name: Configure CASE Equipment API settings
+        env:
+          CASE_BASE_URL: ${{ secrets.CASE_BASE_URL }}
+          CASE_ACCESS_TOKEN: ${{ secrets.CASE_ACCESS_TOKEN }}
+          CASE_SUBSCRIPTION_KEY: ${{ secrets.CASE_SUBSCRIPTION_KEY }}
+        run: |
+          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
+            echo "CASE Equipment API secrets are not configured."
+            exit 1
+          fi
+
+          resource_group="$(az resource list \
+            --name cmll-fms-api \
+            --resource-type Microsoft.Web/sites \
+            --query '[0].resourceGroup' \
+            --output tsv)"
+
+          if [ -z "$resource_group" ]; then
+            echo "Azure resource group for cmll-fms-api was not found."
+            exit 1
+          fi
+
+          az functionapp config appsettings set \
+            --name cmll-fms-api \
+            --resource-group "$resource_group" \
+            --settings \
+              "CASE_BASE_URL=$CASE_BASE_URL" \
+              "CASE_ACCESS_TOKEN=$CASE_ACCESS_TOKEN" \
+              "CASE_SUBSCRIPTION_KEY=$CASE_SUBSCRIPTION_KEY" \
+              "CASE_REQUEST_TIMEOUT_MS=20000" \
+              "CASE_CACHE_SECONDS=60" \
+            --output none
+
       - name: Deploy Azure Function App
         uses: Azure/functions-action@v1
         with:

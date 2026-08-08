@@ -26,6 +26,11 @@ import {
   fetchEicherLiveSnapshot,
   invalidateEicherLiveCache,
 } from "./adapters/eicherLiveService";
+import {
+  fetchCaseEquipmentSnapshot,
+  invalidateCaseEquipmentCache,
+  type CaseEquipment,
+} from "./adapters/caseEquipmentService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
 import { resolveOperationalShift } from "../utils/shiftResolver";
 import {
@@ -47,6 +52,10 @@ export const reportService = {
   ): Promise<ReportPreview> {
     if (reportType === "Eicher Report") {
       return buildEicherReport(filters, options);
+    }
+
+    if (reportType === "CASE Report") {
+      return buildCaseReport(filters, options);
     }
 
     if (reportType === "Shift-wise Fuel Report") {
@@ -218,6 +227,18 @@ const EICHER_REPORT_COLUMNS = [
   "Time Spent in Idling (%)",
 ];
 
+const CASE_REPORT_COLUMNS = [
+  "VIN",
+  "Company Name",
+  "Company ID",
+  "Brand",
+  "Model",
+  "Product Line",
+  "Product Type",
+  "Device Type",
+  "Device Serial Number",
+];
+
 const SHIFT_REPORT_COLUMNS = [
   "Shift",
   "Site",
@@ -331,6 +352,80 @@ async function buildEicherReport(
         "Time Spent in Idling (Min)",
         "Time Spent in Idling (%)",
       ],
+    },
+  };
+}
+
+function caseValue(value: string | null | undefined): string {
+  return value?.trim() || "--";
+}
+
+function caseDeviceValues(
+  equipment: CaseEquipment,
+  key: "type" | "serialNumber",
+): string {
+  const values = [...new Set(equipment.devices.map((device) => device[key]).filter(
+    (value): value is string => Boolean(value),
+  ))];
+  return values.length ? values.join(", ") : "--";
+}
+
+async function buildCaseReport(
+  filters: DashboardFilters,
+  options: { forceRefresh?: boolean },
+): Promise<ReportPreview> {
+  if (options.forceRefresh) {
+    invalidateCaseEquipmentCache();
+  }
+
+  const snapshot = await fetchCaseEquipmentSnapshot({ forceRefresh: options.forceRefresh });
+  if (!snapshot) {
+    return {
+      reportType: "CASE Report",
+      generatedAt: new Date().toISOString(),
+      columns: CASE_REPORT_COLUMNS,
+      rows: [],
+      oem: "CASE",
+      live: false,
+      source: "CASE_EQUIPMENT_LIVE",
+      error: {
+        kind: "upstream",
+        message: "CASE data unavailable",
+        retryable: true,
+      },
+    };
+  }
+
+  const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
+  const selectedModel = filters.modelNumber === "All" ? "" : filters.modelNumber.trim().toLowerCase();
+  const rows = snapshot.equipment
+    .filter((equipment) => !vehicleSearch || (equipment.vin ?? "").toLowerCase().includes(vehicleSearch))
+    .filter((equipment) => !selectedModel || (equipment.model ?? "").toLowerCase() === selectedModel)
+    .map((equipment) => ({
+      VIN: caseValue(equipment.vin),
+      "Company Name": caseValue(equipment.companyName),
+      "Company ID": caseValue(equipment.companyId),
+      Brand: caseValue(equipment.brand),
+      Model: caseValue(equipment.model),
+      "Product Line": caseValue(equipment.productLine),
+      "Product Type": caseValue(equipment.productType),
+      "Device Type": caseDeviceValues(equipment, "type"),
+      "Device Serial Number": caseDeviceValues(equipment, "serialNumber"),
+    }))
+    .sort((left, right) => left.VIN.localeCompare(right.VIN, undefined, { numeric: true }));
+
+  return {
+    reportType: "CASE Report",
+    generatedAt: new Date().toISOString(),
+    columns: CASE_REPORT_COLUMNS,
+    rows,
+    oem: "CASE",
+    live: true,
+    source: snapshot.source,
+    notice: "Generated from the live CASE Equipment API. Missing API values are shown as --; telemetry values are not added because the Equipment response does not provide them.",
+    meta: {
+      rawRecordCount: snapshot.equipment.length,
+      finalFilteredVehicleCount: rows.length,
     },
   };
 }

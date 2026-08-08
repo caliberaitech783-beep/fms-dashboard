@@ -114,9 +114,17 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `SCANIA_TOKEN_TTL_SECONDS`
 - `SCANIA_REPORT_POLL_INTERVAL_MS` and `SCANIA_REPORT_POLL_TIMEOUT_MS`
 - `SCANIA_REPORT_SESSIONS_TABLE_NAME` (optional; defaults to `ScaniaReportSessions`)
+- `CASE_BASE_URL` (use `https://api-data.cnh.com/v1`; the backend appends the confirmed Postman `/equipment` path)
+- `CASE_ACCESS_TOKEN` (backend-only Bearer token)
+- `CASE_SUBSCRIPTION_KEY` (backend-only value sent as `Ocp-Apim-Subscription-Key`)
+- `CASE_REQUEST_TIMEOUT_MS` (optional, defaults to `20000`)
+- `CASE_CACHE_SECONDS` (optional, defaults to `60`)
+
+The supplied Postman dotenv names `bearerToken` and `Subscription` are accepted as backend-only compatibility aliases. Prefer `CASE_ACCESS_TOKEN` and `CASE_SUBSCRIPTION_KEY` in deployed settings.
 
 See `docs/volvo-live-vehicle-status.md` for synchronization and rotation procedures. Volvo credentials are Azure-only and must never use a `VITE_` prefix.
 See `docs/scania-live-integration.md` for Scania setup, mappings, report behavior, and acceptance testing. Scania credentials are Azure-only and must never use a `VITE_` prefix.
+CASE credentials are Azure-only and must never use a `VITE_` prefix. The initial integration calls only `GET /equipment`; client credentials are not used by this request when a working access token is supplied.
 
 ## GitHub Secrets
 
