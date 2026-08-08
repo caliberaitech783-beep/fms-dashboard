@@ -5,6 +5,7 @@ const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const CLIENT_CACHE_MS = 30_000;
 export const CASE_EQUIPMENT_SOURCE = "CASE_EQUIPMENT_LIVE" as const;
+export const CASE_REPORT_SOURCE = "CASE_EQUIPMENT_METRICS_LIVE" as const;
 
 export interface CaseEquipmentDevice {
   type: string | null;
@@ -30,8 +31,31 @@ export interface CaseEquipmentSnapshot {
   integration: IntegrationSource;
 }
 
+export interface CaseEquipmentMetricRow {
+  machine: string;
+  model: string | null;
+  totalFuel: number | null;
+  averageFuelPerHour: number | null;
+  workingHours: number | null;
+  idleHours: number | null;
+  utilization: number | null;
+}
+
+export interface CaseEquipmentReportSnapshot {
+  source: typeof CASE_REPORT_SOURCE;
+  fetchedAt: string;
+  period: {
+    from: string;
+    to: string;
+  };
+  equipmentCount: number;
+  rows: CaseEquipmentMetricRow[];
+}
+
 let cachedSnapshot: { expiresAt: number; value: CaseEquipmentSnapshot } | null = null;
 let pendingSnapshot: Promise<CaseEquipmentSnapshot | null> | null = null;
+const cachedReports = new Map<string, { expiresAt: number; value: CaseEquipmentReportSnapshot }>();
+const pendingReports = new Map<string, Promise<CaseEquipmentReportSnapshot | null>>();
 
 function textValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -43,6 +67,12 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function numberValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function normalizeEquipment(value: unknown): CaseEquipment | null {
@@ -126,6 +156,38 @@ function buildSnapshot(equipment: CaseEquipment[]): CaseEquipmentSnapshot {
   };
 }
 
+function normalizeReportPayload(value: unknown): CaseEquipmentReportSnapshot | null {
+  const payload = objectValue(value);
+  const period = objectValue(payload?.period);
+  if (!payload || payload.source !== CASE_REPORT_SOURCE || !period || !Array.isArray(payload.rows)) {
+    return null;
+  }
+  const from = textValue(period.from);
+  const to = textValue(period.to);
+  if (!from || !to) return null;
+  const rows = payload.rows.flatMap((value) => {
+    const row = objectValue(value);
+    const machine = textValue(row?.machine);
+    if (!row || !machine) return [];
+    return [{
+      machine,
+      model: textValue(row.model),
+      totalFuel: numberValue(row.totalFuel),
+      averageFuelPerHour: numberValue(row.averageFuelPerHour),
+      workingHours: numberValue(row.workingHours),
+      idleHours: numberValue(row.idleHours),
+      utilization: numberValue(row.utilization),
+    }];
+  });
+  return {
+    source: CASE_REPORT_SOURCE,
+    fetchedAt: textValue(payload.fetchedAt) ?? new Date().toISOString(),
+    period: { from, to },
+    equipmentCount: numberValue(payload.equipmentCount) ?? rows.length,
+    rows,
+  };
+}
+
 export function defaultCaseIntegration(): IntegrationSource {
   return {
     id: "live-integration-case",
@@ -179,6 +241,48 @@ export async function fetchCaseEquipmentSnapshot(
 
 export function invalidateCaseEquipmentCache() {
   cachedSnapshot = null;
+  cachedReports.clear();
+}
+
+export async function fetchCaseEquipmentReport(options: {
+  from: string;
+  to: string;
+  forceRefresh?: boolean;
+}): Promise<CaseEquipmentReportSnapshot | null> {
+  const session = getAuthSession();
+  if (!session?.token) return null;
+  const cacheKey = `${options.from}|${options.to}`;
+  const cached = cachedReports.get(cacheKey);
+  if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+  const pending = pendingReports.get(cacheKey);
+  if (pending) return pending;
+
+  const request = (async () => {
+    try {
+      const query = new URLSearchParams({ from: options.from, to: options.to });
+      if (options.forceRefresh) query.set("refresh", "true");
+      const response = await fetch(`${API_BASE_URL}/case/report?${query.toString()}`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${session.token}`,
+        },
+        cache: "no-store",
+      });
+      if (!response.ok) return null;
+      const payload: unknown = await response.json();
+      const snapshot = normalizeReportPayload(payload);
+      if (!snapshot) return null;
+      cachedReports.set(cacheKey, { expiresAt: Date.now() + CLIENT_CACHE_MS, value: snapshot });
+      return snapshot;
+    } catch {
+      return null;
+    } finally {
+      pendingReports.delete(cacheKey);
+    }
+  })();
+  pendingReports.set(cacheKey, request);
+  return request;
 }
 
 export async function refreshCaseEquipmentData(): Promise<void> {

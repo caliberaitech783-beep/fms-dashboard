@@ -6,6 +6,7 @@ loadLocalEnv();
 const authStore = require("../lib/authStore");
 const { safeErrorMessage } = require("../lib/tracking/masking");
 const { getCaseEquipment } = require("../lib/case/caseClient");
+const { getCaseReport } = require("../lib/case/caseReportClient");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
 
@@ -69,13 +70,18 @@ function caseSecrets() {
     process.env.CASE_API_KEY,
     process.env.CASE_CLIENT_ID,
     process.env.CASE_CLIENT_SECRET,
+    process.env.CASE_CUMULATIVE_OPERATING_HOURS_URL,
+    process.env.CASE_CUMULATIVE_FUEL_USED_URL,
+    process.env.CASE_CUMULATIVE_IDLE_HOURS_URL,
   ].filter(Boolean);
 }
 
-function failureResponse(request, context, error) {
-  context.error("[CASE] equipment request failed", safeErrorMessage(error, caseSecrets()));
+function failureResponse(request, context, error, operation = "equipment") {
+  context.error(`[CASE] ${operation} request failed`, safeErrorMessage(error, caseSecrets()));
   const status = error?.isPortalAuth
     ? error.statusCode
+    : error?.kind === "validation"
+      ? 400
     : error?.kind === "configuration" || error?.kind === "rate_limit"
       ? 503
       : error?.kind === "timeout"
@@ -87,6 +93,8 @@ function failureResponse(request, context, error) {
       ? "CASE_AUTHENTICATION"
       : error?.kind === "configuration"
         ? "CASE_CONFIGURATION"
+        : error?.kind === "validation"
+          ? "CASE_VALIDATION"
         : error?.kind === "timeout"
           ? "CASE_TIMEOUT"
           : error?.kind === "rate_limit"
@@ -121,6 +129,24 @@ async function handleEquipment(request, context) {
   }
 }
 
+async function handleReport(request, context) {
+  if (request.method === "OPTIONS") return response(request, 204, null);
+  try {
+    const actor = await requireActor(request);
+    requireLiveRole(actor);
+    const force = String(request.query.get("refresh") || "").toLowerCase() === "true";
+    const payload = await getCaseReport({
+      from: request.query.get("from"),
+      to: request.query.get("to"),
+      force,
+    });
+    context.log(`[CASE] metrics report request succeeded with ${payload.rows.length} records`);
+    return response(request, 200, payload);
+  } catch (error) {
+    return failureResponse(request, context, error, "metrics report");
+  }
+}
+
 app.http("caseEquipment", {
   route: "case/equipment",
   authLevel: "anonymous",
@@ -128,6 +154,14 @@ app.http("caseEquipment", {
   handler: handleEquipment,
 });
 
+app.http("caseReport", {
+  route: "case/report",
+  authLevel: "anonymous",
+  methods: ["GET", "OPTIONS"],
+  handler: handleReport,
+});
+
 module.exports = {
   handleEquipment,
+  handleReport,
 };

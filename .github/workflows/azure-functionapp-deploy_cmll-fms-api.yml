@@ -72,14 +72,17 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_779F58D8528C4159906E481FDF8E8EDD }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E37734F374F045BAAD689AA645BBEAFB }}
 
-      - name: Configure CASE Equipment API settings
+      - name: Configure CASE API settings
         env:
           CASE_BASE_URL: ${{ secrets.CASE_BASE_URL }}
+          CASE_CUMULATIVE_OPERATING_HOURS_URL: ${{ secrets.CASE_CUMULATIVE_OPERATING_HOURS_URL }}
+          CASE_CUMULATIVE_FUEL_USED_URL: ${{ secrets.CASE_CUMULATIVE_FUEL_USED_URL }}
+          CASE_CUMULATIVE_IDLE_HOURS_URL: ${{ secrets.CASE_CUMULATIVE_IDLE_HOURS_URL }}
           CASE_ACCESS_TOKEN: ${{ secrets.CASE_ACCESS_TOKEN }}
           CASE_SUBSCRIPTION_KEY: ${{ secrets.CASE_SUBSCRIPTION_KEY }}
         run: |
-          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
-            echo "CASE Equipment API secrets are not configured."
+          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
+            echo "CASE API secrets are not configured."
             exit 1
           fi
 
@@ -99,10 +102,18 @@ jobs:
             --resource-group "$resource_group" \
             --settings \
               "CASE_BASE_URL=$CASE_BASE_URL" \
+              "CASE_CUMULATIVE_OPERATING_HOURS_URL=$CASE_CUMULATIVE_OPERATING_HOURS_URL" \
+              "CASE_CUMULATIVE_FUEL_USED_URL=$CASE_CUMULATIVE_FUEL_USED_URL" \
+              "CASE_CUMULATIVE_IDLE_HOURS_URL=$CASE_CUMULATIVE_IDLE_HOURS_URL" \
               "CASE_ACCESS_TOKEN=$CASE_ACCESS_TOKEN" \
               "CASE_SUBSCRIPTION_KEY=$CASE_SUBSCRIPTION_KEY" \
               "CASE_REQUEST_TIMEOUT_MS=20000" \
+              "CASE_REQUEST_RETRIES=2" \
               "CASE_CACHE_SECONDS=60" \
+              "CASE_REPORT_CACHE_SECONDS=300" \
+              "CASE_METRIC_CONCURRENCY=8" \
+              "CASE_MAX_METRIC_PAGES=100" \
+              "CASE_REPORT_MAX_DAYS=31" \
             --output none
 
       - name: Deploy Azure Function App
