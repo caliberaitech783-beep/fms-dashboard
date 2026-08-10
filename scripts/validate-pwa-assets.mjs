@@ -10,9 +10,11 @@ const requiredFiles = [
   manifestPath,
   serviceWorkerPath,
   offlinePath,
-  join(root, "public", "icons", "icon-192.png"),
-  join(root, "public", "icons", "icon-512.png"),
-  join(root, "public", "icons", "maskable-512.png"),
+  join(root, "public", "icons", "fms-logo-32.png"),
+  join(root, "public", "icons", "fms-logo-180.png"),
+  join(root, "public", "icons", "fms-logo-192.png"),
+  join(root, "public", "icons", "fms-logo-512.png"),
+  join(root, "public", "icons", "fms-logo-maskable-512.png"),
 ];
 
 const missing = requiredFiles.filter((file) => !existsSync(file));
