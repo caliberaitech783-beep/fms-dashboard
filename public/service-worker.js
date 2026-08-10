@@ -1,12 +1,14 @@
-const CACHE_VERSION = "cmll-fms-v3";
+const CACHE_VERSION = "cmll-fms-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const OFFLINE_URL = "/offline.html";
 const STATIC_ASSETS = [
   OFFLINE_URL,
   "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/maskable-512.png",
+  "/icons/fms-logo-32.png",
+  "/icons/fms-logo-180.png",
+  "/icons/fms-logo-192.png",
+  "/icons/fms-logo-512.png",
+  "/icons/fms-logo-maskable-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -66,8 +68,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "CMLL FMS";
   const options = {
     body: data.body || "You have a new notification.",
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    icon: "/icons/fms-logo-192.png",
+    badge: "/icons/fms-logo-192.png",
     tag: data.tag || data.notificationId || "cmll-fms",
     data: {
       notificationId: data.notificationId || "",
