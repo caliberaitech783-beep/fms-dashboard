@@ -27,24 +27,66 @@ export function LoginForm() {
   };
 
   return (
-    <main className="min-h-screen bg-coal-950 px-4 py-10 text-white">
-      <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <section>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-ore-300">
+    <main className="login-page min-h-screen px-4 py-8 text-white sm:px-6 lg:py-10">
+      <div className="login-page__backdrop" aria-hidden="true">
+        <div className="login-page__glow" />
+        <svg
+          className="login-page__landscape"
+          viewBox="0 0 1600 520"
+          preserveAspectRatio="xMidYMax slice"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id="mine-ridge" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#26353b" stopOpacity="0.9" />
+              <stop offset="1" stopColor="#0b151b" stopOpacity="0.98" />
+            </linearGradient>
+            <linearGradient id="mine-floor" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#17252b" />
+              <stop offset="0.55" stopColor="#101c22" />
+              <stop offset="1" stopColor="#1a292f" />
+            </linearGradient>
+          </defs>
+          <path d="M0 236 176 164l133 44 181-101 158 101 182-52 151 81 182-110 175 56 262-94v431H0Z" fill="url(#mine-ridge)" />
+          <path d="m0 332 195-68 181 30 169-65 178 52 184-54 191 61 181-50 140 42 181-65v295H0Z" fill="url(#mine-floor)" />
+          <g fill="none" stroke="#c8811a" strokeLinecap="round">
+            <path d="M-20 374c203-72 382-60 550-5 206 68 371 61 555 0 197-66 357-57 535-2" opacity="0.2" strokeWidth="2" />
+            <path d="M-26 413c203-72 392-59 565-3 201 65 361 59 541 2 205-65 367-60 556-4" opacity="0.12" />
+          </g>
+          <g transform="translate(1184 300)" fill="#060d11" opacity="0.82">
+            <path d="M0 78h185v44H0zM36 45h96l25 33H17zM72 13h39v33H72z" />
+            <circle cx="42" cy="123" r="24" />
+            <circle cx="145" cy="123" r="24" />
+            <circle cx="42" cy="123" r="9" fill="#34434a" />
+            <circle cx="145" cy="123" r="9" fill="#34434a" />
+            <path d="M109 13h9v35h-9zM114 11h42v5h-42z" />
+          </g>
+          <g fill="#d58a21" opacity="0.85">
+            <circle cx="267" cy="317" r="3" />
+            <circle cx="922" cy="312" r="3" />
+            <circle cx="1368" cy="284" r="3" />
+          </g>
+        </svg>
+      </div>
+
+      <div className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 lg:min-h-[calc(100vh-5rem)] lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="login-page__intro">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#e7a94e] backdrop-blur-sm">
             <ShieldCheck className="h-4 w-4" />
             Secure Access
           </div>
-          <h1 className="mt-5 max-w-2xl text-4xl font-semibold leading-tight lg:text-5xl">
+          <h1 className="mt-5 max-w-2xl text-4xl font-semibold leading-tight tracking-[-0.02em] lg:text-5xl">
             Unified Mining Fleet Fuel Monitoring Portal
           </h1>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-coal-200">
+          <div className="mt-5 h-1 w-16 rounded-full bg-ore-500" aria-hidden="true" />
+          <p className="mt-4 max-w-xl text-sm leading-6 text-coal-200 lg:text-base">
             Login is required for dashboard, fleet, fuel, production, reports, integrations, WhatsApp delivery, master data, settings, and user administration.
           </p>
         </section>
 
-        <section className="rounded-lg border border-white/10 bg-white p-5 text-coal-900 shadow-command">
+        <section className="rounded-xl border border-white/20 bg-white/[0.96] p-5 text-coal-900 shadow-[0_28px_70px_-28px_rgba(0,0,0,0.8)] backdrop-blur-md sm:p-6">
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-ore-600 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ore-600 text-white shadow-sm">
               <LockKeyhole className="h-5 w-5" />
             </div>
             <div>
@@ -71,7 +113,7 @@ export function LoginForm() {
               <input
                 value={userId}
                 onChange={(event) => setUserId(event.target.value)}
-                className="h-11 w-full rounded-md border border-coal-200 px-3 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                className="h-11 w-full rounded-md border border-coal-200 bg-coal-50/60 px-3 text-sm outline-none transition focus:border-ore-600 focus:bg-white focus:ring-2 focus:ring-ore-100"
                 autoComplete="username"
                 inputMode="numeric"
                 required
@@ -85,7 +127,7 @@ export function LoginForm() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type={showPassword ? "text" : "password"}
-                  className="h-11 w-full rounded-md border border-coal-200 px-3 pr-11 text-sm outline-none focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
+                  className="h-11 w-full rounded-md border border-coal-200 bg-coal-50/60 px-3 pr-11 text-sm outline-none transition focus:border-ore-600 focus:bg-white focus:ring-2 focus:ring-ore-100"
                   autoComplete="current-password"
                   required
                 />
