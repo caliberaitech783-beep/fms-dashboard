@@ -84,14 +84,15 @@ export function LoginForm() {
           </p>
         </section>
 
-        <section className="rounded-xl border border-white/20 bg-white/[0.96] p-5 text-coal-900 shadow-[0_28px_70px_-28px_rgba(0,0,0,0.8)] backdrop-blur-md sm:p-6">
+        <section className="login-page__card p-5 text-coal-900 sm:p-6">
+          <div className="login-page__card-accent" aria-hidden="true" />
           <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ore-600 text-white shadow-sm">
+            <div className="login-page__lock flex h-11 w-11 items-center justify-center rounded-lg text-white">
               <LockKeyhole className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Login</h2>
-              <p className="text-sm text-coal-500">Use mobile number as user ID.</p>
+              <h2 className="text-lg font-semibold text-coal-950">Login</h2>
+              <p className="text-sm text-coal-600">Use mobile number as user ID.</p>
             </div>
           </div>
 
@@ -109,11 +110,11 @@ export function LoginForm() {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-coal-500">Mobile Number / User ID</span>
+              <span className="mb-1 block text-xs font-semibold text-coal-600">Mobile Number / User ID</span>
               <input
                 value={userId}
                 onChange={(event) => setUserId(event.target.value)}
-                className="h-11 w-full rounded-md border border-coal-200 bg-coal-50/60 px-3 text-sm outline-none transition focus:border-ore-600 focus:bg-white focus:ring-2 focus:ring-ore-100"
+                className="login-page__field h-11 w-full rounded-md border px-3 text-sm text-coal-900 outline-none transition"
                 autoComplete="username"
                 inputMode="numeric"
                 required
@@ -121,13 +122,13 @@ export function LoginForm() {
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-coal-500">Password</span>
+              <span className="mb-1 block text-xs font-semibold text-coal-600">Password</span>
               <div className="relative">
                 <input
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type={showPassword ? "text" : "password"}
-                  className="h-11 w-full rounded-md border border-coal-200 bg-coal-50/60 px-3 pr-11 text-sm outline-none transition focus:border-ore-600 focus:bg-white focus:ring-2 focus:ring-ore-100"
+                  className="login-page__field h-11 w-full rounded-md border px-3 pr-11 text-sm text-coal-900 outline-none transition"
                   autoComplete="current-password"
                   required
                 />
@@ -136,14 +137,14 @@ export function LoginForm() {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   title={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((current) => !current)}
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-coal-500 hover:bg-coal-100 hover:text-coal-800 focus:outline-none focus:ring-2 focus:ring-ore-100"
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-coal-500 hover:bg-[#eadcc5] hover:text-coal-900 focus:outline-none focus:ring-2 focus:ring-ore-200"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-coal-700">
+            <label className="flex items-center gap-2 text-sm font-medium text-coal-700">
               <input
                 type="checkbox"
                 checked={remember}
@@ -153,7 +154,7 @@ export function LoginForm() {
               Remember user ID
             </label>
 
-            <Button type="submit" variant="primary" className="w-full" disabled={submitting}>
+            <Button type="submit" variant="primary" className="login-page__submit h-11 w-full font-semibold" disabled={submitting}>
               {submitting ? "Signing in..." : "Login"}
             </Button>
           </form>
