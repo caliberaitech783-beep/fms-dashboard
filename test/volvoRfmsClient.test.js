@@ -12,6 +12,7 @@ const {
 } = require("../src/lib/volvo/volvoRfmsClient");
 const {
   fetchFleetHistory,
+  fetchReportHistory,
   fetchVehicleScopedHistory,
 } = require("../src/lib/volvo/driverStandstillReport");
 
@@ -203,6 +204,58 @@ test("fetches a report period in one fleet-scoped Volvo history query", async ()
   assert.equal(calls.length, 1);
   assert.equal(calls[0].vin, undefined);
   assert.deepEqual(statuses.map((status) => status.Vin), ["VIN-1", "VIN-2"]);
+});
+
+test("uses supported per-VIN history directly for a small site such as Dhoptala", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      if (!options.vin) throw new Error("Fleet history must not be requested for a small site");
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-13T08:00:00Z" }];
+    },
+  };
+  const vehicles = Array.from({ length: 12 }, (_, index) => ({ trackerId: `VIN-${index + 1}` }));
+
+  const statuses = await fetchReportHistory(client, vehicles, {
+    concurrency: 3,
+    continueOnError: false,
+    vehicleRequestThreshold: 20,
+    startTime: "2026-08-13T06:30:00.000Z",
+    stopTime: "2026-08-13T09:45:00.000Z",
+  });
+
+  assert.equal(calls.length, 12);
+  assert.ok(calls.every((call) => call.vin));
+  assert.equal(statuses.length, 12);
+});
+
+test("falls back to selected VINs when a large-site fleet query is unavailable", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      if (!options.vin) throw new Error("Fleet history is unavailable");
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-13T08:00:00Z" }];
+    },
+  };
+  const vehicles = [
+    { trackerId: "VIN-1" },
+    { trackerId: "VIN-2" },
+    { trackerId: "VIN-3" },
+  ];
+
+  const statuses = await fetchReportHistory(client, vehicles, {
+    concurrency: 3,
+    continueOnError: false,
+    vehicleRequestThreshold: 2,
+    startTime: "2026-08-13T06:30:00.000Z",
+    stopTime: "2026-08-13T09:45:00.000Z",
+  });
+
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].vin, undefined);
+  assert.deepEqual(statuses.map((status) => status.Vin), ["VIN-1", "VIN-2", "VIN-3"]);
 });
 
 test("does not start slow per-vehicle queries when fleet report history fails", async () => {
