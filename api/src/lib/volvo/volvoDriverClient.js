@@ -62,7 +62,7 @@ class VolvoDriverClient {
     this.password = requiredValue("VOLVO_DRIVER_API_PASSWORD", options.password);
     this.acceptDrivers = requiredValue("VOLVO_ACCEPT_DRIVERS", options.acceptDrivers);
     this.acceptDriverTimes = requiredValue("VOLVO_ACCEPT_DRIVER_TIMES", options.acceptDriverTimes);
-    this.driverIdType = String(options.driverIdType || "Tacho").trim() || "Tacho";
+    this.driverIdType = String(options.driverIdType || "pin").trim() || "pin";
     this.fetchFn = options.fetchFn || globalThis.fetch;
     this.timeoutMs = Number(options.timeoutMs || 30_000);
     this.retries = Number(options.retries ?? 2);
@@ -132,16 +132,16 @@ class VolvoDriverClient {
     throw lastError || Object.assign(new Error("Volvo driver API request failed."), { statusCode: 502 });
   }
 
-  async fetchDrivers() {
+  async fetchDrivers(options = {}) {
     return parseDriverPage(await this.request(this.driversUrl, {
-      driverIdType: this.driverIdType,
+      driverIdType: options.driverIdType || this.driverIdType,
     }, this.acceptDrivers));
   }
 
-  async fetchLatestDriverTimes() {
+  async fetchLatestDriverTimes(options = {}) {
     return parseDriverTimePage(await this.request(this.driverTimesUrl, {
       datetype: "received",
-      driverIdType: this.driverIdType,
+      driverIdType: options.driverIdType || this.driverIdType,
       latestOnly: true,
     }, this.acceptDriverTimes));
   }
@@ -156,7 +156,7 @@ function createVolvoDriverClientFromEnv(env = process.env, options = {}) {
     password: env.VOLVO_DRIVER_API_PASSWORD || env.VOLVO_API_PASSWORD || env.VOLVO_RFMS_PASSWORD,
     acceptDrivers: env.VOLVO_ACCEPT_DRIVERS || DEFAULT_ACCEPT_DRIVERS,
     acceptDriverTimes: env.VOLVO_ACCEPT_DRIVER_TIMES || DEFAULT_ACCEPT_DRIVER_TIMES,
-    driverIdType: env.VOLVO_DRIVER_ID_TYPE || "Tacho",
+    driverIdType: env.VOLVO_DRIVER_ID_TYPE || "pin",
     timeoutMs: env.VOLVO_DRIVER_REQUEST_TIMEOUT_MS || env.VOLVO_REQUEST_TIMEOUT_MS || options.timeoutMs,
     retries: env.VOLVO_DRIVER_REQUEST_RETRIES ?? options.retries,
     ...options,

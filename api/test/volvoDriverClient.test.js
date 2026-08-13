@@ -7,7 +7,9 @@ const {
 } = require("../src/lib/volvo/volvoDriverClient");
 const {
   buildDriverDirectory,
+  clearVolvoDriverCache,
   findDriverDetails,
+  getLiveVolvoDriverDirectory,
 } = require("../src/lib/volvo/volvoDriverService");
 
 function response(status, payload, headers = {}) {
@@ -86,6 +88,25 @@ test("requests both driver endpoints with Basic auth and required media types", 
   assert.equal(requests[0].options.headers.Authorization, "Basic dXNlcjpzZWNyZXQ=");
 });
 
+test("uses PIN driver identities by default to match RFMS assignments", async () => {
+  const requests = [];
+  const client = new VolvoDriverClient({
+    driversUrl: "https://api.example.test/driver/drivers",
+    driverTimesUrl: "https://api.example.test/driver/drivertimes",
+    username: "user",
+    password: "secret",
+    acceptDrivers: "drivers-v1",
+    acceptDriverTimes: "driver-times-v1",
+    fetchFn: async (url) => {
+      requests.push(String(url));
+      return response(200, driverPayload);
+    },
+  });
+
+  await client.fetchDrivers();
+  assert.equal(new URL(requests[0]).searchParams.get("driverIdType"), "pin");
+});
+
 test("joins live names, contacts and driver-time counts by OEM identifier", () => {
   const directory = buildDriverDirectory(
     parseDriverPage(driverPayload),
@@ -101,6 +122,41 @@ test("joins live names, contacts and driver-time counts by OEM identifier", () =
   assert.equal(byUsb, byPin);
   assert.equal(directory.driverCount, 1);
   assert.equal(directory.driverTimeCount, 1);
+});
+
+test("loads PIN and tachograph identities into one exact driver-name directory", async () => {
+  clearVolvoDriverCache();
+  const calls = [];
+  const client = {
+    driverIdType: "Tacho",
+    async fetchDrivers({ driverIdType }) {
+      calls.push(`drivers:${driverIdType}`);
+      return {
+        drivers: [{
+          firstName: driverIdType === "pin" ? "Dhoptala" : "Backup",
+          lastName: "Driver",
+          oemDriverIdentifications: [{
+            oemDriverIdentification: driverIdType === "pin" ? "4983542958" : "TACHO-7",
+          }],
+        }],
+      };
+    },
+    async fetchLatestDriverTimes({ driverIdType }) {
+      calls.push(`times:${driverIdType}`);
+      return { driverTimes: [] };
+    },
+  };
+
+  const directory = await getLiveVolvoDriverDirectory({
+    client,
+    driverIdTypes: ["Tacho"],
+    force: true,
+  });
+
+  assert.equal(findDriverDetails(directory, "4983542958").name, "Dhoptala Driver");
+  assert.equal(findDriverDetails(directory, "tacho-7").name, "Backup Driver");
+  assert.deepEqual(calls.sort(), ["drivers:Tacho", "drivers:pin", "times:Tacho", "times:pin"]);
+  clearVolvoDriverCache();
 });
 
 test("masks Volvo driver credentials from upstream errors", async () => {

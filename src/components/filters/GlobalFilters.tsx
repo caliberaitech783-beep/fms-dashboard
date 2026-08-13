@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { ChevronDown, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 import type { DashboardFilters } from "../../types/fleet";
 import type { FilterOptions } from "../../hooks/useFleetFilters";
@@ -11,6 +12,7 @@ interface GlobalFiltersProps {
   filters: DashboardFilters;
   options: FilterOptions;
   setFilter: <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => void;
+  setFilters: Dispatch<SetStateAction<DashboardFilters>>;
   resetFilters: () => void;
   onRefresh: () => void;
 }
@@ -19,6 +21,7 @@ export function GlobalFilters({
   filters,
   options,
   setFilter,
+  setFilters,
   resetFilters,
   onRefresh,
 }: GlobalFiltersProps) {
@@ -45,10 +48,7 @@ export function GlobalFilters({
           timeFrom={filters.timeFrom}
           timeTo={filters.timeTo}
           onApply={(period) => {
-            setFilter("dateFrom", period.dateFrom);
-            setFilter("dateTo", period.dateTo);
-            setFilter("timeFrom", period.timeFrom);
-            setFilter("timeTo", period.timeTo);
+            setFilters((current) => ({ ...current, ...period }));
           }}
         />
         <FilterSelect label="Shift" value={filters.shift} options={SHIFT_OPTIONS.map((shift) => ({ value: shift.value, label: shift.label }))} onChange={(value) => setFilter("shift", value as DashboardFilters["shift"])} />

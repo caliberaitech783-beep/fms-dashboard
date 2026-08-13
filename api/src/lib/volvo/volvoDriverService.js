@@ -12,6 +12,21 @@ function textValue(value) {
   return normalized || null;
 }
 
+function driverIdentifierTypes(client, options = {}) {
+  const configured = options.driverIdTypes
+    || process.env.VOLVO_DRIVER_ID_TYPES
+    || client?.driverIdType
+    || process.env.VOLVO_DRIVER_ID_TYPE
+    || "pin";
+  const values = Array.isArray(configured) ? configured : String(configured).split(",");
+  const byKey = new Map();
+  for (const value of ["pin", ...values]) {
+    const type = String(value || "").trim();
+    if (type) byKey.set(type.toLowerCase(), type);
+  }
+  return [...byKey.values()];
+}
+
 function driverIdentifiers(driver) {
   const identifications = driver?.oemDriverIdentifications
     || driver?.OemDriverIdentifications
@@ -98,10 +113,33 @@ async function getLiveVolvoDriverDirectory(options = {}) {
 
   pendingDirectory = (async () => {
     const client = options.client || createVolvoDriverClientFromEnv();
-    const [driverPage, driverTimePage] = await Promise.all([
-      client.fetchDrivers(),
-      client.fetchLatestDriverTimes(),
-    ]);
+    const identifierTypes = driverIdentifierTypes(client, options);
+    const results = await Promise.allSettled(identifierTypes.map(async (driverIdType) => {
+      const driverPage = await client.fetchDrivers({ driverIdType });
+      const driverTimePage = await client.fetchLatestDriverTimes({ driverIdType })
+        .catch(() => ({ driverTimes: [], moreDataAvailable: false }));
+      return { driverPage, driverTimePage };
+    }));
+    const successful = results
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value);
+    if (!successful.length) {
+      throw results.find((result) => result.status === "rejected")?.reason
+        || new Error("Volvo driver details are unavailable.");
+    }
+    const driverPage = {
+      drivers: successful.flatMap((result) => result.driverPage.drivers || []),
+      moreDataAvailable: successful.some((result) => result.driverPage.moreDataAvailable),
+    };
+    const driverTimePage = {
+      driverTimes: successful.flatMap((result) => result.driverTimePage.driverTimes || []),
+      moreDataAvailable: successful.some((result) => result.driverTimePage.moreDataAvailable),
+      requestServerDateTime: successful
+        .map((result) => result.driverTimePage.requestServerDateTime)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || null,
+    };
     const value = buildDriverDirectory(driverPage, driverTimePage);
     cachedDirectory = { cachedAt: Date.now(), value };
     return value;
@@ -134,6 +172,7 @@ function driverNameMap(directory) {
 module.exports = {
   buildDriverDirectory,
   clearVolvoDriverCache,
+  driverIdentifierTypes,
   driverIdentifiers,
   driverNameMap,
   driverTimeIdentifier,
