@@ -338,10 +338,22 @@ async function fetchFleetHistory(client, vehicles, options = {}) {
   }
 }
 
+async function fetchReportHistory(client, vehicles, options = {}) {
+  const vehicleRequestThreshold = Math.max(0, Number(options.vehicleRequestThreshold ?? 20));
+  if (vehicles.length <= vehicleRequestThreshold) {
+    return fetchVehicleScopedHistory(client, vehicles, options);
+  }
+  return fetchFleetHistory(client, vehicles, {
+    ...options,
+    fallbackToVehicleRequests: true,
+  });
+}
+
 module.exports = {
   buildDriverStandstillRows,
   driverIdentifier,
   fetchFleetHistory,
+  fetchReportHistory,
   fetchVehicleScopedHistory,
   parseDriverMap,
   resolveRecentReportDate,
