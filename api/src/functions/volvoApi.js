@@ -10,7 +10,7 @@ const {
 } = require("../lib/volvo/volvoRfmsClient");
 const {
   buildDriverStandstillRows,
-  fetchFleetHistory,
+  fetchReportHistory,
   parseDriverMap,
   resolveRecentReportDate,
 } = require("../lib/volvo/driverStandstillReport");
@@ -584,9 +584,9 @@ async function loadDriverStandstillReport(request) {
     : getShiftWindow(scheduleSiteName(reportSite), earliestDate, shift);
   const queryStart = new Date(new Date(earliestWindow.shiftStart).getTime() - 60 * 60_000);
   if (selectedVehicles.length && selectedQueryStop > queryStart) {
-    statuses = await fetchFleetHistory(client, selectedVehicles, {
+    statuses = await fetchReportHistory(client, selectedVehicles, {
       ...historyOptions,
-      fallbackToVehicleRequests: false,
+      vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
       startTime: queryStart.toISOString(),
       stopTime: selectedQueryStop.toISOString(),
     });

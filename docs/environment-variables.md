@@ -69,6 +69,7 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `VOLVO_DRIVER_CACHE_MS` (optional, defaults to `300000`)
 - `VOLVO_DRIVER_REQUEST_TIMEOUT_MS` (optional, defaults to `30000`)
 - `VOLVO_DRIVER_REQUEST_RETRIES` (optional, defaults to `2`)
+- `VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT` (optional, defaults to `20`; smaller sites use supported per-VIN RFMS history requests while larger sites try fleet history first and safely fall back)
 - `VOLVO_SCORES_URL` (defaults to `https://api.volvotrucks.com/score/scores`)
 - `VOLVO_SCORES_API_USERNAME` and `VOLVO_SCORES_API_PASSWORD` (optional dedicated credentials; the backend falls back to the existing Volvo credentials)
 - `VOLVO_SCORES_DRIVER_ID_TYPE` (defaults to `pin`)

@@ -110,6 +110,7 @@
     "VOLVO_RFMS_DRIVER_MAP_JSON": "{}",
     "VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY": "1",
     "VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS": "750",
+    "VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT": "20",
     "CASE_BASE_URL": "https://api-data.cnh.com/v1/equipment",
     "CASE_CUMULATIVE_OPERATING_HOURS_URL": "https://api-data.cnh.com/v1/Fleet/Equipment/{vin}/CumulativeOperatingHours/{from}/{to}/1",
     "CASE_CUMULATIVE_FUEL_USED_URL": "https://api-data.cnh.com/v1/Fleet/Equipment/{vin}/CumulativeFuelUsed/{from}/{to}/1",
