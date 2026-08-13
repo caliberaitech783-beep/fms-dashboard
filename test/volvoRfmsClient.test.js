@@ -10,7 +10,10 @@ const {
   normalizeVolvoVehicle,
   parseVolvoSiteMap,
 } = require("../src/lib/volvo/volvoRfmsClient");
-const { fetchVehicleScopedHistory } = require("../src/lib/volvo/driverStandstillReport");
+const {
+  fetchFleetHistory,
+  fetchVehicleScopedHistory,
+} = require("../src/lib/volvo/driverStandstillReport");
 
 function jsonResponse(status, body) {
   return {
@@ -174,6 +177,77 @@ test("fetches report history only for the selected vehicle VINs", async () => {
   assert.equal(activeRequests.maximum, 2);
   assert.equal(events.length, 3);
   assert.ok(calls.every((call) => call.startTime === "2026-07-16T23:00:00Z"));
+});
+
+test("fetches a report period in one fleet-scoped Volvo history query", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      return [
+        { Vin: "VIN-1", CreatedDateTime: "2026-08-13T00:00:00Z" },
+        { Vin: "VIN-2", CreatedDateTime: "2026-08-13T00:01:00Z" },
+      ];
+    },
+  };
+
+  const statuses = await fetchFleetHistory(client, [
+    { trackerId: "VIN-1" },
+    { trackerId: "VIN-2" },
+  ], {
+    startTime: "2026-08-12T22:40:00.000Z",
+    stopTime: "2026-08-13T05:05:00.000Z",
+    maxPages: 120,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].vin, undefined);
+  assert.deepEqual(statuses.map((status) => status.Vin), ["VIN-1", "VIN-2"]);
+});
+
+test("does not start slow per-vehicle queries when fleet report history fails", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      throw new Error("Fleet history is unavailable");
+    },
+  };
+
+  await assert.rejects(
+    fetchFleetHistory(client, [{ trackerId: "VIN-1" }], {
+      fallbackToVehicleRequests: false,
+      startTime: "2026-08-12T22:40:00.000Z",
+      stopTime: "2026-08-13T05:05:00.000Z",
+    }),
+    /Fleet history is unavailable/,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].vin, undefined);
+});
+
+test("falls back to per-vehicle queries when fleet history is unavailable", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      if (!options.vin) throw new Error("Fleet history is not supported");
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-13T00:00:00Z" }];
+    },
+  };
+
+  const statuses = await fetchFleetHistory(client, [
+    { trackerId: "VIN-1" },
+    { trackerId: "VIN-2" },
+  ], {
+    concurrency: 2,
+    continueOnError: false,
+    startTime: "2026-08-12T22:40:00.000Z",
+    stopTime: "2026-08-13T05:05:00.000Z",
+  });
+
+  assert.equal(calls.length, 3);
+  assert.deepEqual(statuses.map((status) => status.Vin), ["VIN-1", "VIN-2"]);
 });
 
 test("masks Volvo credentials from transport failures", async () => {
