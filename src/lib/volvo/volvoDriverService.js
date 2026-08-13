@@ -30,12 +30,38 @@ function driverIdentifierTypes(client, options = {}) {
 function driverIdentifiers(driver) {
   const identifications = driver?.oemDriverIdentifications
     || driver?.OemDriverIdentifications
+    || driver?.driverIdentifications
+    || driver?.DriverIdentifications
     || [];
-  return (Array.isArray(identifications) ? identifications : [])
-    .map((item) => normalizedIdentifier(
-      item?.oemDriverIdentification || item?.OemDriverIdentification,
-    ))
-    .filter(Boolean);
+  const values = [];
+  const collect = (value) => {
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (typeof value !== "object") {
+      const identifier = normalizedIdentifier(value);
+      if (identifier) values.push(identifier);
+      return;
+    }
+    const fields = [
+      value.oemDriverIdentification,
+      value.OemDriverIdentification,
+      value.tachoDriverIdentification,
+      value.TachoDriverIdentification,
+      value.driverIdentification,
+      value.DriverIdentification,
+      value.driverId,
+      value.DriverId,
+      value.value,
+      value.Value,
+    ].filter((candidate) => candidate !== undefined && candidate !== null && candidate !== value);
+    fields.forEach(collect);
+  };
+  collect(identifications);
+  collect(driver?.driverId || driver?.DriverId);
+  return [...new Set(values)];
 }
 
 function driverTimeIdentifier(driverTime) {
@@ -45,10 +71,22 @@ function driverTimeIdentifier(driverTime) {
 }
 
 function driverDisplayName(driver) {
-  return [driver?.firstName || driver?.FirstName, driver?.lastName || driver?.LastName]
+  const nested = driver?.name || driver?.Name || driver?.driverName || driver?.DriverName
+    || driver?.person || driver?.Person || {};
+  const fullName = typeof nested === "string"
+    ? nested
+    : driver?.displayName || driver?.DisplayName || driver?.fullName || driver?.FullName
+      || nested?.displayName || nested?.DisplayName || nested?.fullName || nested?.FullName;
+  const composed = [
+    driver?.firstName || driver?.FirstName || driver?.givenName || driver?.GivenName
+      || nested?.firstName || nested?.FirstName || nested?.givenName || nested?.GivenName,
+    driver?.lastName || driver?.LastName || driver?.familyName || driver?.FamilyName
+      || nested?.lastName || nested?.LastName || nested?.familyName || nested?.FamilyName,
+  ]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
-    .join(" ") || null;
+    .join(" ");
+  return textValue(composed || fullName);
 }
 
 function driverPhone(driver) {
@@ -85,7 +123,15 @@ function buildDriverDirectory(driverPage, driverTimePage, fetchedAt = new Date()
     };
     for (const identifier of identifiers) {
       details.driverTime = details.driverTime || driverTimeDetails(timesById.get(identifier));
-      byId.set(identifier, details);
+      const existing = byId.get(identifier);
+      byId.set(identifier, existing ? {
+        ...existing,
+        ...details,
+        name: details.name || existing.name,
+        phone: details.phone || existing.phone,
+        driverTime: details.driverTime || existing.driverTime,
+        identifiers: [...new Set([...existing.identifiers, ...details.identifiers])],
+      } : details);
     }
   }
 
