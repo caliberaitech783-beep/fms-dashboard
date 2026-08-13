@@ -30,7 +30,7 @@ const {
   clearVolvoScoresCache,
   getVolvoScores,
 } = require("../lib/volvo/volvoScoresService");
-const { getShiftWindow } = require("../lib/tracking/shiftResolver");
+const { getReportWindow, getShiftWindow } = require("../lib/tracking/shiftResolver");
 const { listVehicles: listImportedVehicles } = require("../lib/vehicles/vehicleStore");
 const {
   importedSiteAssignment,
@@ -469,6 +469,9 @@ function scheduleSiteName(value) {
   if (!normalized || normalized === "all") return "Gauri";
   if (normalized.includes("sasti")) return "Sasti";
   if (normalized.includes("dhoptala")) return "Dhoptala";
+  if ((normalized.includes("dch") || normalized.includes("dudhichua")) && normalized.includes("east")) return "DCH East";
+  if ((normalized.includes("dch") || normalized.includes("dudhichua")) && normalized.includes("west")) return "DCH West";
+  if (normalized.includes("dch") || normalized.includes("dudhichua")) return "Dudhichua";
   if (normalized.includes("lalpeth")) return "Sasti";
   if (normalized.includes("gauri") || normalized.includes("gouri")) return "Gauri";
   if (normalized.includes("majri")) return "Majri";
@@ -491,24 +494,41 @@ async function loadDriverStandstillReport(request) {
   const requestedDate = String(request.query.get("date") || currentKolkataDate()).trim();
   const shift = String(request.query.get("shift") || "A").trim().toUpperCase();
   const requestedSite = String(request.query.get("site") || "Gauri").trim();
+  const requestedStartTime = String(request.query.get("startTime") || "").trim();
+  const requestedStopTime = String(request.query.get("stopTime") || "").trim();
   const reportSite = requestedSite.toLowerCase() === "all" ? "Gauri" : requestedSite;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || !["A", "B", "C"].includes(shift)) {
     throw Object.assign(new Error("A valid date and Shift A, B, or C are required."), { statusCode: 400 });
   }
 
-  const dateResolution = resolveRecentReportDate(
-    requestedDate,
-    currentKolkataDate(),
-    Number(process.env.VOLVO_RFMS_REPORT_HISTORY_DAYS || 13),
-  );
+  const hasCustomTimeRange = Boolean(requestedStartTime || requestedStopTime);
+  const dateResolution = hasCustomTimeRange
+    ? {
+      date: requestedDate,
+      requestedDate,
+      fallbackApplied: false,
+    }
+    : resolveRecentReportDate(
+      requestedDate,
+      currentKolkataDate(),
+      Number(process.env.VOLVO_RFMS_REPORT_HISTORY_DAYS || 13),
+    );
   let date = dateResolution.date;
 
-  let window = getShiftWindow(scheduleSiteName(reportSite), date, shift);
+  let window = getReportWindow(
+    scheduleSiteName(reportSite),
+    date,
+    shift,
+    requestedStartTime,
+    requestedStopTime,
+  );
   if (!window.active) {
-    throw Object.assign(new Error("The selected site does not have a configured shift schedule."), { statusCode: 400 });
+    throw Object.assign(new Error(
+      window.validationError || "The selected site does not have a configured shift schedule.",
+    ), { statusCode: 400 });
   }
 
-  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}`;
+  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${window.shiftStart}|${window.shiftEnd}`;
   const cacheMilliseconds = Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000);
   const cached = driverReportCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMilliseconds) {
@@ -544,7 +564,9 @@ async function loadDriverStandstillReport(request) {
   let rows = [];
   let availabilityFallbackApplied = false;
   const client = createVolvoClientFromEnv();
-  const fallbackDays = Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
+  const fallbackDays = window.customTimeRange
+    ? 0
+    : Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
   const historyOptions = {
     maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
     concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
@@ -557,7 +579,9 @@ async function loadDriverStandstillReport(request) {
     Date.now() + 5 * 60_000,
   ));
   const earliestDate = subtractCalendarDays(dateResolution.date, fallbackDays);
-  const earliestWindow = getShiftWindow(scheduleSiteName(reportSite), earliestDate, shift);
+  const earliestWindow = window.customTimeRange
+    ? window
+    : getShiftWindow(scheduleSiteName(reportSite), earliestDate, shift);
   const queryStart = new Date(new Date(earliestWindow.shiftStart).getTime() - 60 * 60_000);
   if (selectedVehicles.length && selectedQueryStop > queryStart) {
     statuses = await fetchVehicleScopedHistory(client, selectedVehicles, {
@@ -567,7 +591,9 @@ async function loadDriverStandstillReport(request) {
     });
     for (let dayOffset = 0; dayOffset <= fallbackDays; dayOffset += 1) {
       const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
-      const candidateWindow = getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift);
+      const candidateWindow = window.customTimeRange
+        ? window
+        : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift);
       rows = buildRows(statuses, candidateWindow);
       if (!rows.length) continue;
       date = candidateDate;
@@ -633,12 +659,15 @@ async function loadDriverStandstillReport(request) {
       start: window.shiftStart,
       end: window.shiftEnd,
       timezone: window.timezone,
+      customTimeRange: window.customTimeRange,
     },
     siteFilterApplied,
     driverSource: liveDriverConnected ? "VOLVO_GROUP_DRIVER_API" : "MASKED_IDENTIFIER_FALLBACK",
     driverRecords: driverDirectory.driverCount,
     driverTimes: driverDirectory.driverTimeCount,
     historyRecords: statuses.length,
+    siteVehicleCount: selectedVehicles.length,
+    reportedVehicleCount: reportRows.length,
     notice: notices.length ? notices.join(" ") : null,
     unsupportedMetrics: {
       iShiftPerformanceTimePercent: "Requires a Volvo Connect analytics field or formula; it is not in standard RFMS 2.1 accumulated data.",
