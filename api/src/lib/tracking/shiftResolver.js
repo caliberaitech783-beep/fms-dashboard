@@ -4,7 +4,7 @@ const KOLKATA_OFFSET = "+05:30";
 const SITE_GROUPS = [
   {
     name: "Sasti/Dhoptala/Dudhichua/Gauri",
-    sites: ["sasti", "dhoptala", "dudhichua", "gauri"],
+    sites: ["sasti", "dhoptala", "dudhichua", "dch", "dhc", "gauri"],
     shifts: [
       { name: "A", startMinute: 5 * 60, endMinute: 13 * 60 },
       { name: "B", startMinute: 13 * 60, endMinute: 21 * 60 },
@@ -208,7 +208,62 @@ function getShiftWindow(siteName, shiftDate, shiftName) {
   };
 }
 
+function getReportWindow(siteName, shiftDate, shiftName, startTime, stopTime) {
+  const scheduledWindow = getShiftWindow(siteName, shiftDate, shiftName);
+  const normalizedStart = String(startTime || "").trim();
+  const normalizedStop = String(stopTime || "").trim();
+  const customTimeRange = Boolean(normalizedStart || normalizedStop);
+
+  if (!scheduledWindow.active || !customTimeRange) {
+    return {
+      ...scheduledWindow,
+      customTimeRange,
+      validationError: null,
+    };
+  }
+
+  if (!normalizedStart || !normalizedStop) {
+    return {
+      ...scheduledWindow,
+      active: false,
+      customTimeRange: true,
+      validationError: "Both startTime and stopTime are required for a custom report period.",
+    };
+  }
+
+  const start = parseDateTime(normalizedStart);
+  const stop = parseDateTime(normalizedStop);
+  const scheduledStart = parseDateTime(scheduledWindow.shiftStart);
+  const scheduledEnd = parseDateTime(scheduledWindow.shiftEnd);
+  if (!start || !stop || start >= stop) {
+    return {
+      ...scheduledWindow,
+      active: false,
+      customTimeRange: true,
+      validationError: "The custom report start and stop times are invalid.",
+    };
+  }
+
+  if (start < scheduledStart || stop > scheduledEnd) {
+    return {
+      ...scheduledWindow,
+      active: false,
+      customTimeRange: true,
+      validationError: "The custom report period must fall within the selected shift.",
+    };
+  }
+
+  return {
+    ...scheduledWindow,
+    shiftStart: start.toISOString(),
+    shiftEnd: stop.toISOString(),
+    customTimeRange: true,
+    validationError: null,
+  };
+}
+
 module.exports = {
+  getReportWindow,
   getShiftWindow,
   resolveShift,
   TIME_ZONE,

@@ -1,6 +1,7 @@
 import { getAuthSession } from "../auth/sessionService";
 import type { DashboardFilters } from "../types/fleet";
 import type { ReportPreview } from "../types/reports";
+import { buildVolvoDriverReportQuery } from "../utils/volvoDriverReportQuery";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -33,11 +34,7 @@ export async function fetchVolvoDriverStandstillReport(
   const session = getAuthSession();
   if (!session?.token) return errorPreview("Dashboard authentication is required.");
 
-  const query = new URLSearchParams({
-    date: filters.dateTo,
-    shift: ["A", "B", "C"].includes(filters.shift) ? filters.shift : "A",
-    site: !filters.siteId || filters.siteId === "All" ? "Gauri" : filters.siteId,
-  });
+  const query = buildVolvoDriverReportQuery(filters);
   const cacheKey = query.toString();
   if (options.forceRefresh) {
     reportCache.delete(cacheKey);
