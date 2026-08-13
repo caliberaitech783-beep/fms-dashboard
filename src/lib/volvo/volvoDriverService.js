@@ -12,6 +12,12 @@ function textValue(value) {
   return normalized || null;
 }
 
+function driverNameOnly(value) {
+  const normalized = textValue(value);
+  if (!normalized) return null;
+  return textValue(normalized.replace(/^\d+\s+/, ""));
+}
+
 function driverIdentifierTypes(client, options = {}) {
   const configured = options.driverIdTypes
     || process.env.VOLVO_DRIVER_ID_TYPES
@@ -86,7 +92,7 @@ function driverDisplayName(driver) {
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" ");
-  return textValue(composed || fullName);
+  return driverNameOnly(composed || fullName);
 }
 
 function driverPhone(driver) {
@@ -220,6 +226,7 @@ module.exports = {
   clearVolvoDriverCache,
   driverIdentifierTypes,
   driverIdentifiers,
+  driverNameOnly,
   driverNameMap,
   driverTimeIdentifier,
   emptyDriverDirectory,
