@@ -189,6 +189,27 @@ test("joins nested Volvo driver identities and name envelopes without losing nam
   assert.equal(findDriverDetails(directory, "4983549333").name, "Exact Operator");
 });
 
+test("removes only a leading numeric employee code from Volvo driver names", () => {
+  const directory = buildDriverDirectory({
+    drivers: [{
+      firstName: "7234 BALASANI",
+      lastName: "SRINIVAS",
+      oemDriverIdentifications: [{ oemDriverIdentification: "DRIVER-7234" }],
+    }, {
+      name: "12654 MANTU KUMAR",
+      oemDriverIdentifications: [{ oemDriverIdentification: "DRIVER-12654" }],
+    }, {
+      firstName: "DILIP",
+      lastName: "KUMAR SAW",
+      oemDriverIdentifications: [{ oemDriverIdentification: "DRIVER-NO-CODE" }],
+    }],
+  }, { driverTimes: [] });
+
+  assert.equal(findDriverDetails(directory, "DRIVER-7234").name, "BALASANI SRINIVAS");
+  assert.equal(findDriverDetails(directory, "DRIVER-12654").name, "MANTU KUMAR");
+  assert.equal(findDriverDetails(directory, "DRIVER-NO-CODE").name, "DILIP KUMAR SAW");
+});
+
 test("loads PIN and tachograph identities into one exact driver-name directory", async () => {
   clearVolvoDriverCache();
   const calls = [];
