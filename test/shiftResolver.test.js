@@ -1,6 +1,11 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { getShiftWindow, resolveShift, TIME_ZONE } = require("../src/lib/tracking/shiftResolver");
+const {
+  getReportWindow,
+  getShiftWindow,
+  resolveShift,
+  TIME_ZONE,
+} = require("../src/lib/tracking/shiftResolver");
 
 function expectShift(site, timestamp, expected) {
   const actual = resolveShift(site, timestamp);
@@ -115,4 +120,41 @@ test("builds explicit shift windows for portal site labels", () => {
     timezone: TIME_ZONE,
   });
   assert.equal(getShiftWindow("Jayant 2", "2026-07-14", "C").shiftEnd, "2026-07-15T04:00:00+05:30");
+});
+
+test("recognizes DCH East portal labels and site identifiers", () => {
+  for (const site of ["DCH East", "NCL / DCH East", "site-ncl-dch-east"]) {
+    const window = getShiftWindow(site, "2026-08-13", "A");
+    assert.equal(window.active, true);
+    assert.equal(window.shiftStart, "2026-08-13T05:00:00+05:30");
+    assert.equal(window.shiftEnd, "2026-08-13T13:00:00+05:30");
+  }
+});
+
+test("uses the requested DCH East time period when it is inside Shift A", () => {
+  const window = getReportWindow(
+    "site-ncl-dch-east",
+    "2026-08-13",
+    "A",
+    "2026-08-13T05:10:00+05:30",
+    "2026-08-13T10:30:00+05:30",
+  );
+
+  assert.equal(window.active, true);
+  assert.equal(window.customTimeRange, true);
+  assert.equal(window.shiftStart, "2026-08-12T23:40:00.000Z");
+  assert.equal(window.shiftEnd, "2026-08-13T05:00:00.000Z");
+});
+
+test("rejects a custom report period outside the selected shift", () => {
+  const window = getReportWindow(
+    "DCH East",
+    "2026-08-13",
+    "A",
+    "2026-08-13T04:30:00+05:30",
+    "2026-08-13T10:30:00+05:30",
+  );
+
+  assert.equal(window.active, false);
+  assert.equal(window.validationError, "The custom report period must fall within the selected shift.");
 });
