@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   VolvoDriverClient,
+  driverCursor,
   parseDriverPage,
   parseDriverTimePage,
 } = require("../src/lib/volvo/volvoDriverClient");
@@ -73,7 +74,7 @@ test("requests both driver endpoints with Basic auth and required media types", 
     fetchFn: async (url, options) => {
       requests.push({ url: String(url), options });
       return requests.length === 1
-        ? response(200, driverPayload)
+        ? response(200, { ...driverPayload, moreDataAvailable: false })
         : response(200, driverTimePayload);
     },
   });
@@ -88,6 +89,51 @@ test("requests both driver endpoints with Basic auth and required media types", 
   assert.equal(requests[0].options.headers.Authorization, "Basic dXNlcjpzZWNyZXQ=");
 });
 
+test("loads every Volvo driver-directory page before resolving names", async () => {
+  const requests = [];
+  const client = new VolvoDriverClient({
+    driversUrl: "https://api.example.test/driver/drivers",
+    driverTimesUrl: "https://api.example.test/driver/drivertimes",
+    username: "user",
+    password: "secret",
+    acceptDrivers: "drivers-v1",
+    acceptDriverTimes: "driver-times-v1",
+    fetchFn: async (url) => {
+      requests.push(String(url));
+      return requests.length === 1
+        ? response(200, {
+          driverResponse: { drivers: driverPayload.driverResponse.drivers },
+          moreDataAvailable: true,
+          moreDataAvailableLink: "/driver/drivers?driverIdType=pin&lastDriverId=driver-01",
+        })
+        : response(200, {
+          driverResponse: {
+            drivers: [{
+              firstName: "Second",
+              lastName: "Driver",
+              oemDriverIdentifications: [{ idType: "pin", oemDriverIdentification: "driver-02" }],
+            }],
+          },
+          moreDataAvailable: false,
+        });
+    },
+  });
+
+  const page = await client.fetchDrivers();
+  assert.equal(page.drivers.length, 2);
+  assert.equal(page.pagesFetched, 2);
+  assert.equal(new URL(requests[1]).searchParams.get("lastDriverId"), "driver-01");
+});
+
+test("derives a pagination cursor from nested Volvo identifier envelopes", () => {
+  assert.equal(driverCursor({
+    oemDriverIdentifications: [{
+      idType: "pin",
+      oemDriverIdentification: { oemDriverIdentification: "4983549333" },
+    }],
+  }, "pin"), "4983549333");
+});
+
 test("uses PIN driver identities by default to match RFMS assignments", async () => {
   const requests = [];
   const client = new VolvoDriverClient({
@@ -99,7 +145,7 @@ test("uses PIN driver identities by default to match RFMS assignments", async ()
     acceptDriverTimes: "driver-times-v1",
     fetchFn: async (url) => {
       requests.push(String(url));
-      return response(200, driverPayload);
+      return response(200, { ...driverPayload, moreDataAvailable: false });
     },
   });
 
@@ -122,6 +168,25 @@ test("joins live names, contacts and driver-time counts by OEM identifier", () =
   assert.equal(byUsb, byPin);
   assert.equal(directory.driverCount, 1);
   assert.equal(directory.driverTimeCount, 1);
+});
+
+test("joins nested Volvo driver identities and name envelopes without losing names", () => {
+  const directory = buildDriverDirectory({
+    drivers: [{
+      name: { givenName: "Exact", familyName: "Operator" },
+      oemDriverIdentifications: [{
+        idType: "pin",
+        oemDriverIdentification: { oemDriverIdentification: "4983549333" },
+      }],
+    }, {
+      oemDriverIdentifications: [{
+        idType: "Tacho",
+        oemDriverIdentification: { oemDriverIdentification: "4983549333" },
+      }],
+    }],
+  }, { driverTimes: [] });
+
+  assert.equal(findDriverDetails(directory, "4983549333").name, "Exact Operator");
 });
 
 test("loads PIN and tachograph identities into one exact driver-name directory", async () => {
