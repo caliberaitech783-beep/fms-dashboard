@@ -324,9 +324,24 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
   return deduplicateEvents(eventBatches.flat());
 }
 
+async function fetchFleetHistory(client, vehicles, options = {}) {
+  try {
+    return await client.fetchHistoricalVehicleStatuses({
+      startTime: options.startTime,
+      stopTime: options.stopTime,
+      contentFilter: options.contentFilter,
+      maxPages: options.maxPages,
+    });
+  } catch (error) {
+    if (options.fallbackToVehicleRequests === false) throw error;
+    return fetchVehicleScopedHistory(client, vehicles, options);
+  }
+}
+
 module.exports = {
   buildDriverStandstillRows,
   driverIdentifier,
+  fetchFleetHistory,
   fetchVehicleScopedHistory,
   parseDriverMap,
   resolveRecentReportDate,

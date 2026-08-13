@@ -72,7 +72,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
     message: string;
   } | null>(null);
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
-  const { filters, setFilter, resetFilters, options } = useFleetFilters();
+  const { filters, setFilter, setFilters, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
   const showGlobalFilters = !["users", "notifications", "admin-notifications", "diesel"].includes(activeSection);
   const allowedItems = useMemo(
@@ -161,6 +161,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
             filters={filters}
             options={options}
             setFilter={setFilter}
+            setFilters={setFilters}
             resetFilters={resetFilters}
             onRefresh={reloadDashboard}
           />
