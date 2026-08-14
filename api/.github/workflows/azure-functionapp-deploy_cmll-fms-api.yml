@@ -1,4 +1,4 @@
-name: Build and deploy Node.js project to Azure Function App - cmll-fms-api
+name: Build and deploy Node.js project to Azure Function App - cmll-fms-api-783
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: azure-functionapp-cmll-fms-api
+  group: azure-functionapp-cmll-fms-api-783
   cancel-in-progress: false
 
 env:
@@ -68,9 +68,9 @@ jobs:
       - name: Sign in to Azure with OIDC
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D638C37FA2534B1281403CDF82F2D4A2 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_779F58D8528C4159906E481FDF8E8EDD }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E37734F374F045BAAD689AA645BBEAFB }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_A2D43B1FDFA0427A91B4128BD4970864 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5A13C6D439A449DCAFDBC77D4DC75AB4 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9B3ECC08B4B04DBFB2CFA4155249F5EE }}
 
       - name: Configure CASE API settings
         env:
@@ -92,18 +92,18 @@ jobs:
           fi
 
           resource_group="$(az resource list \
-            --name cmll-fms-api \
+            --name cmll-fms-api-783 \
             --resource-type Microsoft.Web/sites \
             --query '[0].resourceGroup' \
             --output tsv)"
 
           if [ -z "$resource_group" ]; then
-            echo "Azure resource group for cmll-fms-api was not found."
+            echo "Azure resource group for cmll-fms-api-783 was not found."
             exit 1
           fi
 
           current_access_token="$(az functionapp config appsettings list \
-            --name cmll-fms-api \
+            --name cmll-fms-api-783 \
             --resource-group "$resource_group" \
             --query "[?name=='CASE_ACCESS_TOKEN'].value | [0]" \
             --output tsv)"
@@ -113,7 +113,7 @@ jobs:
           echo "::add-mask::$CASE_ACCESS_TOKEN"
 
           current_refresh_token="$(az functionapp config appsettings list \
-            --name cmll-fms-api \
+            --name cmll-fms-api-783 \
             --resource-group "$resource_group" \
             --query "[?name=='CASE_REFRESH_TOKEN'].value | [0]" \
             --output tsv)"
@@ -123,7 +123,7 @@ jobs:
           echo "::add-mask::$CASE_REFRESH_TOKEN"
 
           az functionapp config appsettings set \
-            --name cmll-fms-api \
+            --name cmll-fms-api-783 \
             --resource-group "$resource_group" \
             --settings \
               "CASE_BASE_URL=$CASE_BASE_URL" \
@@ -149,6 +149,6 @@ jobs:
       - name: Deploy Azure Function App
         uses: Azure/functions-action@v1
         with:
-          app-name: cmll-fms-api
+          app-name: cmll-fms-api-783
           slot-name: Production
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
