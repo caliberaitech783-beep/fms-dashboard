@@ -211,6 +211,7 @@ export interface DashboardFilters {
   dateTo: string;
   timeFrom: string;
   timeTo: string;
+  timePeriodMode?: "schedule" | "custom";
   shift: ShiftCode | "All";
   siteId: string;
   contractType: ContractType | "All";

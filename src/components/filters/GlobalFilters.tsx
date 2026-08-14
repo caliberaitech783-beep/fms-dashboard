@@ -7,6 +7,7 @@ import { SHIFT_OPTIONS } from "../../constants/shifts";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { TimePeriodPicker } from "./TimePeriodPicker";
+import { applyFleetTimePeriod } from "../../utils/filterState";
 
 interface GlobalFiltersProps {
   filters: DashboardFilters;
@@ -48,7 +49,7 @@ export function GlobalFilters({
           timeFrom={filters.timeFrom}
           timeTo={filters.timeTo}
           onApply={(period) => {
-            setFilters((current) => ({ ...current, ...period }));
+            setFilters((current) => applyFleetTimePeriod(current, period));
           }}
         />
         <FilterSelect label="Shift" value={filters.shift} options={SHIFT_OPTIONS.map((shift) => ({ value: shift.value, label: shift.label }))} onChange={(value) => setFilter("shift", value as DashboardFilters["shift"])} />

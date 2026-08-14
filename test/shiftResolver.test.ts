@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveOperationalShift } from "../src/utils/shiftResolver.ts";
+import { getOperationalShiftPeriod, resolveOperationalShift } from "../src/utils/shiftResolver.ts";
 
 function kolkataTime(date: string, time: string) {
   return `${date}T${time}:00+05:30`;
@@ -15,13 +15,28 @@ test("resolves Sasti-family shift boundaries", () => {
   assert.equal(resolveOperationalShift("Lalpeth OCM", kolkataTime("2026-07-31", "21:00")), "C");
 });
 
-test("resolves Majri and Jayant shifts with the evening gap", () => {
+test("resolves Majri and Jayant shifts continuously from 20:00", () => {
   assert.equal(resolveOperationalShift("Majri OCM", kolkataTime("2026-07-31", "03:59")), "C");
   assert.equal(resolveOperationalShift("Majri OCM", kolkataTime("2026-07-31", "04:00")), "A");
   assert.equal(resolveOperationalShift("Jayant 1", kolkataTime("2026-07-31", "12:00")), "B");
-  assert.equal(resolveOperationalShift("Jayant 2", kolkataTime("2026-07-31", "20:00")), "UNKNOWN");
-  assert.equal(resolveOperationalShift("Jayant 2", kolkataTime("2026-07-31", "20:59")), "UNKNOWN");
+  assert.equal(resolveOperationalShift("Jayant 2", kolkataTime("2026-07-31", "20:00")), "C");
+  assert.equal(resolveOperationalShift("Jayant 2", kolkataTime("2026-07-31", "20:59")), "C");
   assert.equal(resolveOperationalShift("Majri OCM", kolkataTime("2026-07-31", "21:00")), "C");
+});
+
+test("returns the exact site-specific display period for each shift", () => {
+  assert.deepEqual(getOperationalShiftPeriod("site-wcl-dhoptala-ocm", "2026-08-14", "A"), {
+    dateFrom: "2026-08-14",
+    dateTo: "2026-08-14",
+    timeFrom: "05:00",
+    timeTo: "13:00",
+  });
+  assert.deepEqual(getOperationalShiftPeriod("site-ncl-jayant-2", "2026-08-14", "C"), {
+    dateFrom: "2026-08-14",
+    dateTo: "2026-08-15",
+    timeFrom: "20:00",
+    timeTo: "04:00",
+  });
 });
 
 test("returns UNKNOWN for an unsupported site or invalid timestamp", () => {

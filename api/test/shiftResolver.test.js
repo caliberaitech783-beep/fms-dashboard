@@ -64,12 +64,12 @@ test("resolves Sasti shift boundaries in Asia/Kolkata", () => {
   });
 });
 
-test("resolves Majri shift boundaries and inactive gap", () => {
+test("resolves Majri shift boundaries continuously from 20:00", () => {
   expectShift("Majri", "2026-07-10T03:59:00+05:30", {
     active: true,
     shiftName: "C",
     shiftDate: "2026-07-09",
-    shiftStart: "2026-07-09T21:00:00+05:30",
+    shiftStart: "2026-07-09T20:00:00+05:30",
     shiftEnd: "2026-07-10T04:00:00+05:30",
   });
   expectShift("Majri", "2026-07-10T04:00:00+05:30", {
@@ -93,14 +93,14 @@ test("resolves Majri shift boundaries and inactive gap", () => {
     shiftDate: "2026-07-10",
   });
   expectShift("Majri", "2026-07-10T20:00:00+05:30", {
-    active: false,
-    shiftName: null,
-    shiftDate: null,
+    active: true,
+    shiftName: "C",
+    shiftDate: "2026-07-10",
   });
   expectShift("Majri", "2026-07-10T20:59:00+05:30", {
-    active: false,
-    shiftName: null,
-    shiftDate: null,
+    active: true,
+    shiftName: "C",
+    shiftDate: "2026-07-10",
   });
   expectShift("Majri", "2026-07-10T21:00:00+05:30", {
     active: true,
@@ -146,7 +146,7 @@ test("uses the requested DCH East time period when it is inside Shift A", () => 
   assert.equal(window.shiftEnd, "2026-08-13T05:00:00.000Z");
 });
 
-test("rejects a custom report period outside the selected shift", () => {
+test("accepts an exact manual report period outside the selected shift", () => {
   const window = getReportWindow(
     "DCH East",
     "2026-08-13",
@@ -155,6 +155,24 @@ test("rejects a custom report period outside the selected shift", () => {
     "2026-08-13T10:30:00+05:30",
   );
 
-  assert.equal(window.active, false);
-  assert.equal(window.validationError, "The custom report period must fall within the selected shift.");
+  assert.equal(window.active, true);
+  assert.equal(window.customTimeRange, true);
+  assert.equal(window.shiftStart, "2026-08-12T23:00:00.000Z");
+  assert.equal(window.shiftEnd, "2026-08-13T05:00:00.000Z");
+  assert.equal(window.validationError, null);
+});
+
+test("treats an explicitly supplied scheduled range as the selected shift", () => {
+  const window = getReportWindow(
+    "Majri",
+    "2026-08-14",
+    "A",
+    "2026-08-14T04:00:00+05:30",
+    "2026-08-14T12:00:00+05:30",
+  );
+
+  assert.equal(window.active, true);
+  assert.equal(window.customTimeRange, false);
+  assert.equal(window.shiftStart, "2026-08-13T22:30:00.000Z");
+  assert.equal(window.shiftEnd, "2026-08-14T06:30:00.000Z");
 });

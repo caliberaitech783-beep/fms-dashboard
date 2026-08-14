@@ -42,3 +42,24 @@ test("uses the configured shift window for the default all-day filter period", (
   assert.equal(query.has("startTime"), false);
   assert.equal(query.has("stopTime"), false);
 });
+
+test("forwards a manually selected full-day period exactly", () => {
+  const query = buildVolvoDriverReportQuery(reportFilters({ timePeriodMode: "custom" }));
+
+  assert.equal(query.get("startTime"), "2026-08-13T00:00:00+05:30");
+  assert.equal(query.get("stopTime"), "2026-08-13T23:59:00+05:30");
+});
+
+test("forwards an overnight scheduled period with the next end date", () => {
+  const query = buildVolvoDriverReportQuery(reportFilters({
+    dateTo: "2026-08-14",
+    timeFrom: "21:00",
+    timeTo: "05:00",
+    shift: "C",
+    timePeriodMode: "schedule",
+  }));
+
+  assert.equal(query.get("date"), "2026-08-13");
+  assert.equal(query.get("startTime"), "2026-08-13T21:00:00+05:30");
+  assert.equal(query.get("stopTime"), "2026-08-14T05:00:00+05:30");
+});
