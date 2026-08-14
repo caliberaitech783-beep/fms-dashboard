@@ -13,6 +13,7 @@ const {
 const {
   fetchFleetHistory,
   fetchReportHistory,
+  fetchReportHistoryCandidates,
   fetchVehicleScopedHistory,
 } = require("../src/lib/volvo/driverStandstillReport");
 
@@ -256,6 +257,79 @@ test("falls back to selected VINs when a large-site fleet query is unavailable",
   assert.equal(calls.length, 4);
   assert.equal(calls[0].vin, undefined);
   assert.deepEqual(statuses.map((status) => status.Vin), ["VIN-1", "VIN-2", "VIN-3"]);
+});
+
+test("queries Majri fallback days separately instead of one combined 33-hour request", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-14T01:00:00Z" }];
+    },
+  };
+  const windows = [{
+    date: "2026-08-14",
+    window: {
+      shiftStart: "2026-08-14T04:00:00+05:30",
+      shiftEnd: "2026-08-14T12:00:00+05:30",
+    },
+  }, {
+    date: "2026-08-13",
+    window: {
+      shiftStart: "2026-08-13T04:00:00+05:30",
+      shiftEnd: "2026-08-13T12:00:00+05:30",
+    },
+  }];
+
+  const result = await fetchReportHistoryCandidates(client, [{ trackerId: "VIN-MAJRI-1" }], {
+    candidates: windows,
+    buildRows: (statuses) => statuses.length ? [{ vehicle: "V 1" }] : [],
+    continueOnError: false,
+    now: new Date("2026-08-14T12:02:00+05:30"),
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].startTime, "2026-08-13T21:30:00.000Z");
+  assert.equal(calls[0].stopTime, "2026-08-14T06:35:00.000Z");
+  assert.equal(result.candidate.date, "2026-08-14");
+});
+
+test("requests the prior Majri shift only when the current shift has no rows", async () => {
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      return [{ Vin: options.vin, CreatedDateTime: options.startTime }];
+    },
+  };
+  const candidates = [{
+    date: "2026-08-14",
+    window: {
+      shiftStart: "2026-08-14T04:00:00+05:30",
+      shiftEnd: "2026-08-14T12:00:00+05:30",
+    },
+  }, {
+    date: "2026-08-13",
+    window: {
+      shiftStart: "2026-08-13T04:00:00+05:30",
+      shiftEnd: "2026-08-13T12:00:00+05:30",
+    },
+  }];
+
+  const result = await fetchReportHistoryCandidates(client, [{ trackerId: "VIN-MAJRI-1" }], {
+    candidates,
+    buildRows: (_statuses, reportWindow) => (
+      reportWindow.shiftStart.startsWith("2026-08-13") ? [{ vehicle: "V 1" }] : []
+    ),
+    continueOnError: false,
+    now: new Date("2026-08-14T12:02:00+05:30"),
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].startTime, "2026-08-12T21:30:00.000Z");
+  assert.equal(calls[1].stopTime, "2026-08-13T06:35:00.000Z");
+  assert.equal(result.candidate.date, "2026-08-13");
+  assert.equal(result.candidateIndex, 1);
 });
 
 test("does not start slow per-vehicle queries when fleet report history fails", async () => {
