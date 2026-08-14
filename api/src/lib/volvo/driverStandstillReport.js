@@ -365,6 +365,26 @@ function reportHistoryRange(reportWindow, now = new Date()) {
   return { startTime: start.toISOString(), stopTime: stop.toISOString() };
 }
 
+function reportHistoryStrategy(siteName, options = {}) {
+  const configuredConcurrency = Math.max(1, Number(options.concurrency || 6));
+  const configuredThreshold = Math.max(0, Number(options.vehicleRequestThreshold ?? 20));
+  const normalizedSite = String(siteName || "").trim().toLowerCase();
+  if (!normalizedSite.includes("majri")) {
+    return {
+      concurrency: configuredConcurrency,
+      vehicleRequestThreshold: configuredThreshold,
+    };
+  }
+  const configuredMajriConcurrency = Number(options.majriConcurrency ?? 12);
+  const majriConcurrency = Number.isFinite(configuredMajriConcurrency)
+    ? Math.max(1, configuredMajriConcurrency)
+    : 12;
+  return {
+    concurrency: Math.max(configuredConcurrency, majriConcurrency),
+    vehicleRequestThreshold: Number.MAX_SAFE_INTEGER,
+  };
+}
+
 async function fetchReportHistoryCandidates(client, vehicles, options = {}) {
   const {
     buildRows,
@@ -401,6 +421,7 @@ module.exports = {
   fetchVehicleScopedHistory,
   parseDriverMap,
   reportHistoryRange,
+  reportHistoryStrategy,
   resolveRecentReportDate,
 };
 const {
