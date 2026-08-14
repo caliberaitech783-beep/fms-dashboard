@@ -10,7 +10,7 @@ const {
 } = require("../lib/volvo/volvoRfmsClient");
 const {
   buildDriverStandstillRows,
-  fetchReportHistory,
+  fetchReportHistoryCandidates,
   parseDriverMap,
   resolveRecentReportDate,
 } = require("../lib/volvo/driverStandstillReport");
@@ -573,34 +573,29 @@ async function loadDriverStandstillReport(request) {
     requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
     continueOnError: true,
   };
-  const selectedShiftEnd = new Date(window.shiftEnd);
-  const selectedQueryStop = new Date(Math.min(
-    selectedShiftEnd.getTime() + 5 * 60_000,
-    Date.now() + 5 * 60_000,
-  ));
-  const earliestDate = subtractCalendarDays(dateResolution.date, fallbackDays);
-  const earliestWindow = window.customTimeRange
-    ? window
-    : getShiftWindow(scheduleSiteName(reportSite), earliestDate, shift);
-  const queryStart = new Date(new Date(earliestWindow.shiftStart).getTime() - 60 * 60_000);
-  if (selectedVehicles.length && selectedQueryStop > queryStart) {
-    statuses = await fetchReportHistory(client, selectedVehicles, {
+  if (selectedVehicles.length) {
+    const candidates = Array.from({ length: fallbackDays + 1 }, (_, dayOffset) => {
+      const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
+      return {
+        date: candidateDate,
+        window: window.customTimeRange
+          ? window
+          : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift),
+      };
+    });
+    const history = await fetchReportHistoryCandidates(client, selectedVehicles, {
       ...historyOptions,
       vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
-      startTime: queryStart.toISOString(),
-      stopTime: selectedQueryStop.toISOString(),
+      candidates,
+      buildRows,
+      now: new Date(),
     });
-    for (let dayOffset = 0; dayOffset <= fallbackDays; dayOffset += 1) {
-      const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
-      const candidateWindow = window.customTimeRange
-        ? window
-        : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift);
-      rows = buildRows(statuses, candidateWindow);
-      if (!rows.length) continue;
-      date = candidateDate;
-      window = candidateWindow;
-      availabilityFallbackApplied = dayOffset > 0;
-      break;
+    statuses = history.statuses;
+    rows = history.rows;
+    if (history.rows.length && history.candidate) {
+      date = history.candidate.date;
+      window = history.candidate.window;
+      availabilityFallbackApplied = history.candidateIndex > 0;
     }
   }
   const columns = [
