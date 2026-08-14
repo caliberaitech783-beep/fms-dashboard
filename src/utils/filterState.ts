@@ -1,11 +1,28 @@
 import type { DashboardFilters } from "../types/fleet";
+import { getOperationalShiftPeriod } from "./shiftResolver.ts";
+
+type FleetTimePeriod = Pick<DashboardFilters, "dateFrom" | "dateTo" | "timeFrom" | "timeTo">;
+
+function withSelectedShiftPeriod(filters: DashboardFilters, shiftDate: string): DashboardFilters {
+  const period = getOperationalShiftPeriod(filters.siteId, shiftDate, filters.shift);
+  return period
+    ? { ...filters, ...period, timePeriodMode: "schedule" }
+    : filters;
+}
+
+export function applyFleetTimePeriod(
+  current: DashboardFilters,
+  period: FleetTimePeriod,
+): DashboardFilters {
+  return { ...current, ...period, timePeriodMode: "custom" };
+}
 
 export function applyFleetFilterChange<K extends keyof DashboardFilters>(
   current: DashboardFilters,
   key: K,
   value: DashboardFilters[K],
 ): DashboardFilters {
-  const next = { ...current, [key]: value };
+  let next = { ...current, [key]: value };
 
   if (key === "siteId") {
     next.contractType = "All";
@@ -26,6 +43,15 @@ export function applyFleetFilterChange<K extends keyof DashboardFilters>(
     next.modelNumber = "All";
   } else if (key === "company") {
     next.modelNumber = "All";
+  }
+
+  if (key === "shift" && ["A", "B", "C"].includes(String(value))) {
+    const shiftDate = ["A", "B", "C"].includes(current.shift)
+      ? current.dateFrom
+      : current.dateTo;
+    next = withSelectedShiftPeriod(next, shiftDate);
+  } else if (key === "siteId" && ["A", "B", "C"].includes(next.shift)) {
+    next = withSelectedShiftPeriod(next, current.dateFrom);
   }
 
   return next;

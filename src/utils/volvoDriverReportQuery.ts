@@ -9,19 +9,22 @@ function localDateTime(date: string, time: string): string {
 }
 
 export function buildVolvoDriverReportQuery(filters: DashboardFilters): URLSearchParams {
-  const hasValidCustomPeriod = DATE_PATTERN.test(filters.dateFrom)
+  const hasValidPeriod = DATE_PATTERN.test(filters.dateFrom)
     && DATE_PATTERN.test(filters.dateTo)
     && TIME_PATTERN.test(filters.timeFrom)
-    && TIME_PATTERN.test(filters.timeTo)
-    && !(filters.timeFrom === "00:00" && filters.timeTo === "23:59");
+    && TIME_PATTERN.test(filters.timeTo);
+  const hasExplicitPeriod = hasValidPeriod && (
+    filters.timePeriodMode === "custom"
+    || !(filters.timeFrom === "00:00" && filters.timeTo === "23:59")
+  );
 
   const query = new URLSearchParams({
-    date: hasValidCustomPeriod ? filters.dateFrom : filters.dateTo,
+    date: hasExplicitPeriod ? filters.dateFrom : filters.dateTo,
     shift: ["A", "B", "C"].includes(filters.shift) ? filters.shift : "A",
     site: !filters.siteId || filters.siteId === "All" ? "Gauri" : filters.siteId,
   });
 
-  if (hasValidCustomPeriod) {
+  if (hasExplicitPeriod) {
     query.set("startTime", localDateTime(filters.dateFrom, filters.timeFrom));
     query.set("stopTime", localDateTime(filters.dateTo, filters.timeTo));
   }

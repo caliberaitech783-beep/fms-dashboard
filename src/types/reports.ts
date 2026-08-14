@@ -86,6 +86,7 @@ export interface ReportPreview {
     date: string;
     requestedDate?: string;
     fallbackApplied?: boolean;
+    customTimeRange?: boolean;
     shift: string;
     site?: string;
     scaniaSite?: string;

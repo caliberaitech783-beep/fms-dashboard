@@ -103,7 +103,7 @@ export function DriverStandstillReportPreview({
         <div className="border-b-2 border-[#213d68] pb-4">
           <h3 className="text-xl font-semibold text-[#213d68]">
             Driverwise Standstill Tracking |{" "}
-            {period.site ?? "All Sites"} | Shift {period.shift}
+            {period.site ?? "All Sites"} | {period.customTimeRange ? "Custom period" : `Shift ${period.shift}`}
           </h3>
           <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-coal-600">
             <span>Date: {formatReportDate(period.date)}</span>

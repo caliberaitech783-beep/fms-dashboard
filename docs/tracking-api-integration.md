@@ -65,18 +65,17 @@ Set `dryRun` to `false` only after the Azure settings are present and a dry run 
 
 All shift calculations use `Asia/Kolkata`, trim site names, and match case-insensitively.
 
-Sasti, Dhoptala, Dudhichua, Gauri:
+Sasti, Dhoptala, Lalpeth, Gauri Pauni, DCH East, DCH West:
 
 - Shift A: 05:00 to 13:00
 - Shift B: 13:00 to 21:00
 - Shift C: 21:00 to next day 05:00
 
-Majri, Jayant:
+Majri, Jayant 1, Jayant 2:
 
 - Shift A: 04:00 to 12:00
 - Shift B: 12:00 to 20:00
-- Shift C: 21:00 to next day 04:00
-- 20:00 to 20:59:59 is no active shift
+- Shift C: 20:00 to next day 04:00
 
 Shift starts are inclusive and ends are exclusive. Shift C rows after midnight use the previous calendar day as the shift date.
 

@@ -17,6 +17,7 @@ export const defaultFilters: DashboardFilters = {
   dateTo: MOCK_DATE_TO,
   timeFrom: "00:00",
   timeTo: "23:59",
+  timePeriodMode: "schedule",
   shift: "All",
   siteId: "All",
   contractType: "All",
