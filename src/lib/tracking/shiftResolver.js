@@ -4,7 +4,7 @@ const KOLKATA_OFFSET = "+05:30";
 const SITE_GROUPS = [
   {
     name: "Sasti/Dhoptala/Dudhichua/Gauri",
-    sites: ["sasti", "dhoptala", "dudhichua", "dch", "dhc", "gauri"],
+    sites: ["sasti", "satsti", "dhoptala", "dudhichua", "dch", "dhc", "gauri", "pauni", "lalpeth"],
     shifts: [
       { name: "A", startMinute: 5 * 60, endMinute: 13 * 60 },
       { name: "B", startMinute: 13 * 60, endMinute: 21 * 60 },
@@ -17,7 +17,7 @@ const SITE_GROUPS = [
     shifts: [
       { name: "A", startMinute: 4 * 60, endMinute: 12 * 60 },
       { name: "B", startMinute: 12 * 60, endMinute: 20 * 60 },
-      { name: "C", startMinute: 21 * 60, endMinute: 4 * 60, crossesMidnight: true },
+      { name: "C", startMinute: 20 * 60, endMinute: 4 * 60, crossesMidnight: true },
     ],
   },
 ];
@@ -244,20 +244,12 @@ function getReportWindow(siteName, shiftDate, shiftName, startTime, stopTime) {
     };
   }
 
-  if (start < scheduledStart || stop > scheduledEnd) {
-    return {
-      ...scheduledWindow,
-      active: false,
-      customTimeRange: true,
-      validationError: "The custom report period must fall within the selected shift.",
-    };
-  }
-
   return {
     ...scheduledWindow,
     shiftStart: start.toISOString(),
     shiftEnd: stop.toISOString(),
-    customTimeRange: true,
+    customTimeRange: start.getTime() !== scheduledStart.getTime()
+      || stop.getTime() !== scheduledEnd.getTime(),
     validationError: null,
   };
 }

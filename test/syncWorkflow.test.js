@@ -67,7 +67,8 @@ test("real sync uses supplied client and writes response id", async () => {
 
   assert.equal(summary.syncedRows, 1);
   assert.equal(summary.results[0].status, "Synced");
-  assert.equal(capturedPayload.shift.active, false);
+  assert.equal(capturedPayload.shift.active, true);
+  assert.equal(capturedPayload.shift.shiftName, "C");
 
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(outputPath);
