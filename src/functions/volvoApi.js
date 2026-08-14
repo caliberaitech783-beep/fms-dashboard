@@ -12,6 +12,7 @@ const {
   buildDriverStandstillRows,
   fetchReportHistoryCandidates,
   parseDriverMap,
+  reportHistoryStrategy,
   resolveRecentReportDate,
 } = require("../lib/volvo/driverStandstillReport");
 const {
@@ -567,9 +568,14 @@ async function loadDriverStandstillReport(request) {
   const fallbackDays = window.customTimeRange
     ? 0
     : Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
+  const historyStrategy = reportHistoryStrategy(reportSite, {
+    concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
+    vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
+    majriConcurrency: Number(process.env.VOLVO_RFMS_MAJRI_REPORT_CONCURRENCY || 12),
+  });
   const historyOptions = {
     maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
-    concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
+    concurrency: historyStrategy.concurrency,
     requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
     continueOnError: true,
   };
@@ -585,7 +591,7 @@ async function loadDriverStandstillReport(request) {
     });
     const history = await fetchReportHistoryCandidates(client, selectedVehicles, {
       ...historyOptions,
-      vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
+      vehicleRequestThreshold: historyStrategy.vehicleRequestThreshold,
       candidates,
       buildRows,
       now: new Date(),
