@@ -15,6 +15,7 @@ const {
   fetchReportHistory,
   fetchReportHistoryCandidates,
   fetchVehicleScopedHistory,
+  reportHistoryStrategy,
 } = require("../src/lib/volvo/driverStandstillReport");
 
 function jsonResponse(status, body) {
@@ -330,6 +331,46 @@ test("requests the prior Majri shift only when the current shift has no rows", a
   assert.equal(calls[1].stopTime, "2026-08-13T06:35:00.000Z");
   assert.equal(result.candidate.date, "2026-08-13");
   assert.equal(result.candidateIndex, 1);
+});
+
+test("uses selected-VIN history with bounded higher concurrency for Majri", async () => {
+  const strategy = reportHistoryStrategy("WCL / Majri OCM", {
+    concurrency: 6,
+    vehicleRequestThreshold: 20,
+    majriConcurrency: 12,
+  });
+  const calls = [];
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls.push(options);
+      assert.ok(options.vin, "Majri must not start an all-fleet history query");
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-14T01:00:00Z" }];
+    },
+  };
+  const vehicles = Array.from({ length: 25 }, (_, index) => ({ trackerId: `MAJRI-${index + 1}` }));
+
+  const statuses = await fetchReportHistory(client, vehicles, {
+    ...strategy,
+    continueOnError: false,
+    startTime: "2026-08-13T21:30:00.000Z",
+    stopTime: "2026-08-14T06:35:00.000Z",
+  });
+
+  assert.equal(strategy.concurrency, 12);
+  assert.equal(strategy.vehicleRequestThreshold, Number.MAX_SAFE_INTEGER);
+  assert.equal(calls.length, 25);
+  assert.equal(statuses.length, 25);
+});
+
+test("keeps the configured fleet-history strategy for non-Majri sites", () => {
+  assert.deepEqual(reportHistoryStrategy("Dhoptala OCM", {
+    concurrency: 6,
+    vehicleRequestThreshold: 20,
+    majriConcurrency: 12,
+  }), {
+    concurrency: 6,
+    vehicleRequestThreshold: 20,
+  });
 });
 
 test("does not start slow per-vehicle queries when fleet report history fails", async () => {
