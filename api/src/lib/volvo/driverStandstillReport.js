@@ -349,13 +349,58 @@ async function fetchReportHistory(client, vehicles, options = {}) {
   });
 }
 
+function reportHistoryRange(reportWindow, now = new Date()) {
+  const shiftStart = new Date(reportWindow?.shiftStart);
+  const shiftEnd = new Date(reportWindow?.shiftEnd);
+  const currentTime = now instanceof Date ? now : new Date(now);
+  if (![shiftStart, shiftEnd, currentTime].every((value) => Number.isFinite(value.getTime()))) {
+    return null;
+  }
+  const start = new Date(shiftStart.getTime() - 60 * 60_000);
+  const stop = new Date(Math.min(
+    shiftEnd.getTime() + 5 * 60_000,
+    currentTime.getTime() + 5 * 60_000,
+  ));
+  if (stop <= start) return null;
+  return { startTime: start.toISOString(), stopTime: stop.toISOString() };
+}
+
+async function fetchReportHistoryCandidates(client, vehicles, options = {}) {
+  const {
+    buildRows,
+    candidates = [],
+    now = new Date(),
+    ...historyOptions
+  } = options;
+  if (typeof buildRows !== "function") {
+    throw new TypeError("A report row builder is required.");
+  }
+
+  let result = { statuses: [], rows: [], candidate: null, candidateIndex: -1 };
+  for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+    const candidate = candidates[candidateIndex];
+    const range = reportHistoryRange(candidate?.window, now);
+    if (!range) continue;
+    const statuses = await fetchReportHistory(client, vehicles, {
+      ...historyOptions,
+      ...range,
+    });
+    const rows = buildRows(statuses, candidate.window);
+    result = { statuses, rows, candidate, candidateIndex };
+    if (rows.length) return result;
+  }
+  return result;
+}
+
 module.exports = {
   buildDriverStandstillRows,
   driverIdentifier,
   fetchFleetHistory,
   fetchReportHistory,
+  fetchReportHistoryCandidates,
   fetchVehicleScopedHistory,
   parseDriverMap,
+  reportHistoryRange,
   resolveRecentReportDate,
 };
 const {
