@@ -1,7 +1,7 @@
 import { getAuthSession } from "../../auth/sessionService";
 import type { IntegrationSource, Vehicle } from "../../types/fleet";
 
-const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
+const DEFAULT_API_BASE_URL = "https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const CLIENT_CACHE_MS = 30_000;
 export const CASE_EQUIPMENT_SOURCE = "CASE_EQUIPMENT_LIVE" as const;

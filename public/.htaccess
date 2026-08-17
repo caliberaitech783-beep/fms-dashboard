@@ -17,7 +17,7 @@
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "camera=(), microphone=(), payment=(), usb=()"
   Header always set Strict-Transport-Security "max-age=31536000"
-  Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cmll-fms-api.azurewebsites.net wss://cmll-fms-api.azurewebsites.net; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
+  Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net wss://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
 
   <FilesMatch "^(index\.html|service-worker\.js|manifest\.webmanifest)$">
     Header always set Cache-Control "no-cache, no-store, must-revalidate"

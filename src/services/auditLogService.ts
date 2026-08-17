@@ -2,7 +2,7 @@ import type { AppUser, AuditAction, AuditLog } from "../types/auth";
 import { getAuthSession } from "../auth/sessionService";
 
 const AUDIT_STORAGE_KEY = "mining.auth.auditLogs.v1";
-const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
+const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api";
 const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_AUTH_API_BASE_URL).replace(/\/$/, "");
 
 function makeId(prefix: string): string {

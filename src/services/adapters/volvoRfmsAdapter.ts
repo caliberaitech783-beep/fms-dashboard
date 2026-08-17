@@ -22,7 +22,7 @@ import {
   refreshScaniaLiveData,
 } from "./scaniaLiveService";
 
-const DEFAULT_API_BASE_URL = "https://cmll-fms-api.azurewebsites.net/api";
+const DEFAULT_API_BASE_URL = "https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const LIVE_SOURCE = "VOLVO_RFMS_LIVE";
 const CLIENT_CACHE_MS = 30_000;

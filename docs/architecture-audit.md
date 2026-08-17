@@ -7,8 +7,8 @@ Date: 2026-07-10
 - Branch at audit start: `feature/tracking-api-integration`
 - Implementation branch created for this work: `feature/cross-platform-notifications`
 - Production web URL used by the app: `https://fms.cmll.in`
-- Production API URL used by the app: `https://cmll-fms-api.azurewebsites.net/api`
-- GitHub remote: `https://github.com/alphalogic905-hub/fms-dashboard.git`
+- Production API URL used by the app: `https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api`
+- GitHub remote: `https://github.com/caliberaitech783-beep/fms-dashboard.git`
 
 ## Frontend Stack
 

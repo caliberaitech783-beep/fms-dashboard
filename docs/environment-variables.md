@@ -5,7 +5,7 @@ Use placeholders in source control only. Real values belong in local `.env`, Azu
 ## Frontend / Hostinger
 
 - `VITE_PUBLIC_SITE_URL`: public web URL, currently `https://fms.cmll.in`
-- `VITE_AUTH_API_BASE_URL`: Azure API base URL, currently `https://cmll-fms-api.azurewebsites.net/api`
+- `VITE_AUTH_API_BASE_URL`: Azure API base URL, currently `https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api`
 - `VITE_VAPID_PUBLIC_KEY`: public Web Push key safe for browser delivery
 
 Hostinger must not receive provider private keys, tracking passwords, WhatsApp tokens, Azure credentials, or signing keys.
