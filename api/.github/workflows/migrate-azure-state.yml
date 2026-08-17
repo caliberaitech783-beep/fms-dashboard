@@ -7,6 +7,14 @@ on:
         description: Type MIGRATE-CMLL-FMS to run the one-time migration
         required: true
         type: string
+      operation:
+        description: Run the full table migration or retry only settings and health validation
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - settings-only
 
 concurrency:
   group: one-time-azure-state-migration
@@ -92,12 +100,14 @@ jobs:
           printf 'SETTINGS_REPORT_PATH=%s\n' "$RUNNER_TEMP/settings-migration-report.json" >> "$GITHUB_ENV"
 
       - name: Stop destination Function App for a consistent migration
+        if: inputs.operation == 'full'
         run: >-
           az functionapp stop
           --name "$DESTINATION_FUNCTION_APP"
           --resource-group "$DESTINATION_RESOURCE_GROUP"
 
       - name: Copy and validate application tables
+        if: inputs.operation == 'full'
         run: node scripts/migrate-azure-tables.mjs
 
       - name: Merge and apply application settings
