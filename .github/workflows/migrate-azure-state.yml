@@ -1,0 +1,34 @@
+name: One-time migrate Azure application state
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type MIGRATE-CMLL-FMS to run the one-time migration
+        required: true
+        type: string
+
+concurrency:
+  group: one-time-azure-state-migration-dispatch
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.confirmation == 'MIGRATE-CMLL-FMS'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start migration on the Azure-authorized branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run migrate-azure-state.yml
+          --repo caliberaitech783-beep/fms-dashboard
+          --ref azure-functionapp-deploy
+          --field confirmation=MIGRATE-CMLL-FMS
