@@ -163,5 +163,4 @@ jobs:
         uses: Azure/functions-action@v1
         with:
           app-name: cmll-fms-api-783
-          slot-name: Production
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
