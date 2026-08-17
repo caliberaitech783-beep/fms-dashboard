@@ -169,3 +169,5 @@ jobs:
         with:
           app-name: cmll-fms-api-783
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          scm-do-build-during-deployment: ""
+          enable-oryx-build: ""
