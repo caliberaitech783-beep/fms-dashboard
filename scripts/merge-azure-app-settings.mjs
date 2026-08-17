@@ -13,6 +13,13 @@ const destinationSettings = JSON.parse(await readFile(destinationPath, "utf8"));
 const source = toMap(sourceSettings);
 const destination = toMap(destinationSettings);
 const merged = new Map(destination);
+const flexIncompatibleSettingNames = new Set([
+  "AZUREWEBJOBSDASHBOARD",
+  "FUNCTIONS_WORKER_RUNTIME",
+  "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+  "WEBSITE_CONTENTSHARE",
+  "WEBSITE_NODE_DEFAULT_VERSION",
+]);
 let copiedFromSource = 0;
 let preservedAtDestination = 0;
 
@@ -27,6 +34,15 @@ for (const [name, value] of source) {
   copiedFromSource += 1;
 }
 
+const excludedForFlexConsumption = [];
+for (const name of merged.keys()) {
+  if (flexIncompatibleSettingNames.has(name.toUpperCase())) {
+    merged.delete(name);
+    excludedForFlexConsumption.push(name);
+  }
+}
+excludedForFlexConsumption.sort((left, right) => left.localeCompare(right));
+
 const output = Object.fromEntries(
   [...merged.entries()].sort(([left], [right]) => left.localeCompare(right)),
 );
@@ -37,6 +53,7 @@ const report = {
   mergedSettingCount: merged.size,
   copiedFromSource,
   preservedAtDestination,
+  excludedForFlexConsumption,
 };
 
 await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, {
@@ -46,7 +63,7 @@ await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, {
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
 console.log(
-  `Prepared ${report.mergedSettingCount} settings: copied ${copiedFromSource} from the source and preserved ${preservedAtDestination} destination-specific values.`,
+  `Prepared ${report.mergedSettingCount} settings: copied ${copiedFromSource} from the source, preserved ${preservedAtDestination} destination-specific values, and excluded ${excludedForFlexConsumption.length} Flex-incompatible platform values.`,
 );
 
 function toMap(settings) {
