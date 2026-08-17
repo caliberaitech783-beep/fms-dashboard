@@ -146,6 +146,19 @@ jobs:
               "CASE_REPORT_MAX_DAYS=31" \
             --output none
 
+          run_from_package="$(az functionapp config appsettings list \
+            --name cmll-fms-api-783 \
+            --resource-group "$resource_group" \
+            --query "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]" \
+            --output tsv)"
+          if [ -n "$run_from_package" ]; then
+            az functionapp config appsettings delete \
+              --name cmll-fms-api-783 \
+              --resource-group "$resource_group" \
+              --setting-names WEBSITE_RUN_FROM_PACKAGE \
+              --output none
+          fi
+
       - name: Deploy Azure Function App
         uses: Azure/functions-action@v1
         with:
