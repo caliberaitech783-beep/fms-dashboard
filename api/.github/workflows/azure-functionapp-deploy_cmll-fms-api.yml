@@ -146,18 +146,23 @@ jobs:
               "CASE_REPORT_MAX_DAYS=31" \
             --output none
 
-          run_from_package="$(az functionapp config appsettings list \
-            --name cmll-fms-api-783 \
-            --resource-group "$resource_group" \
-            --query "[?name=='WEBSITE_RUN_FROM_PACKAGE'].value | [0]" \
-            --output tsv)"
-          if [ -n "$run_from_package" ]; then
-            az functionapp config appsettings delete \
+          for setting_name in \
+            WEBSITE_RUN_FROM_PACKAGE \
+            SCM_DO_BUILD_DURING_DEPLOYMENT \
+            ENABLE_ORYX_BUILD; do
+            setting_value="$(az functionapp config appsettings list \
               --name cmll-fms-api-783 \
               --resource-group "$resource_group" \
-              --setting-names WEBSITE_RUN_FROM_PACKAGE \
-              --output none
-          fi
+              --query "[?name=='$setting_name'].value | [0]" \
+              --output tsv)"
+            if [ -n "$setting_value" ]; then
+              az functionapp config appsettings delete \
+                --name cmll-fms-api-783 \
+                --resource-group "$resource_group" \
+                --setting-names "$setting_name" \
+                --output none
+            fi
+          done
 
       - name: Deploy Azure Function App
         uses: Azure/functions-action@v1
