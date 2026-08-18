@@ -15,6 +15,12 @@ const DEFAULT_METRIC_CONCURRENCY = 8;
 const DEFAULT_REQUEST_RETRIES = 2;
 const DEFAULT_MAX_REPORT_DAYS = 31;
 const MAX_CASE_SEGMENT_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_REPORT_EXCLUDED_VINS = [
+  "HBZN865CCPAF30889",
+  "HBZN865CEPAF30673",
+  "HBZN865CKPAF31559",
+  "HBZN865CPNAF27703",
+];
 
 const METRIC_DEFINITIONS = {
   operating: {
@@ -56,6 +62,14 @@ function metricTemplates(env = process.env) {
     key,
     configuredValue(env, definition.templateNames),
   ]));
+}
+
+function reportExcludedVins(env = process.env) {
+  const configured = String(env.CASE_REPORT_EXCLUDED_VINS || "")
+    .split(",")
+    .map((vin) => vin.trim().toUpperCase())
+    .filter(Boolean);
+  return new Set([...DEFAULT_REPORT_EXCLUDED_VINS, ...configured]);
 }
 
 function normalizedIso(value, label) {
@@ -393,7 +407,11 @@ async function fetchCaseReport(options = {}) {
     fetchImpl: options.fetchImpl,
     force: options.force,
   });
-  const equipment = equipmentPayload.equipment.filter((item) => String(item?.vin || "").trim());
+  const excludedVins = reportExcludedVins(env);
+  const equipment = equipmentPayload.equipment.filter((item) => {
+    const vin = String(item?.vin || "").trim();
+    return vin && !excludedVins.has(vin.toUpperCase());
+  });
   const requestOptions = {
     env,
     configuration,
@@ -466,6 +484,7 @@ module.exports = {
   getCaseReport,
   lastPageNumber,
   metricTemplates,
+  reportExcludedVins,
   resetCaseReportCache,
   splitDateRange,
   validateDateRange,
