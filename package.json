@@ -10,7 +10,7 @@
     "validate:pwa": "node scripts/validate-pwa-assets.mjs",
     "seed:users": "node scripts/seed-users.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "test:reports": "node --experimental-strip-types --test test/shiftResolver.test.ts test/reportCategories.test.ts test/fleetFilterState.test.ts test/volvoDriverReportQuery.test.ts",
+    "test:reports": "node --experimental-strip-types --test test/shiftResolver.test.ts test/reportCategories.test.ts test/fleetFilterState.test.ts test/volvoDriverReportQuery.test.ts test/driverwisePdf.test.ts",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build"
   },

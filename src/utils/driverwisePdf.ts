@@ -8,6 +8,7 @@ export interface DriverwisePdfContext {
 }
 
 interface DriverwisePdfRow {
+  isSummary?: boolean;
   registration: string;
   driver: string;
   engineRunningTime: string;
@@ -99,15 +100,18 @@ export function buildDriverwiseStandstillPdf(
     || preview.columns.includes("Registration number")
     ? "scania"
     : "volvo";
-  const normalizedRows = preview.rows
-    .map(normalizeDriverwiseRow)
+  const sourceRows = preview.rows.map(normalizeDriverwiseRow);
+  const normalizedRows = sourceRows
     .filter((row) => row.engineMinutes === null || row.engineMinutes >= 30)
     .sort((left, right) => (right.idlingPercentValue ?? -Infinity) - (left.idlingPercentValue ?? -Infinity));
   const averages = {
     fuelKmPerLitre: average(normalizedRows.map((row) => row.fuelKmPerLitreValue)),
     fuelLitresPerHour: average(normalizedRows.map((row) => row.fuelLitresPerHourValue)),
   };
-  const pages = chunk(normalizedRows, ROWS_PER_PAGE);
+  const summaryRow = schema === "volvo" && sourceRows.length
+    ? buildVolvoSummaryRow(sourceRows)
+    : null;
+  const pages = paginateDriverwiseRows(normalizedRows, summaryRow);
   if (pages.length === 0) {
     pages.push([]);
   }
@@ -120,6 +124,50 @@ export function buildDriverwiseStandstillPdf(
   ));
 
   return assembleTablePdf(pageContents);
+}
+
+function buildVolvoSummaryRow(rows: DriverwisePdfRow[]): DriverwisePdfRow {
+  const engineMinutes = rows.reduce((sum, row) => sum + (row.engineMinutes ?? 0), 0);
+  const idlingMinutes = rows.reduce((sum, row) => sum + (durationToMinutes(row.idlingTime) ?? 0), 0);
+
+  return {
+    isSummary: true,
+    registration: `Summary (${rows.length})`,
+    driver: `${rows.length} vehicles`,
+    engineRunningTime: durationText(null, engineMinutes),
+    engineMinutes,
+    distanceKm: numberText(average(rows.map((row) => toNumber(row.distanceKm)))),
+    dieselEngineOnPercent: numberText(average(rows.map((row) => row.dieselEngineOnPercentValue))),
+    dieselEngineOnPercentValue: null,
+    fuelKmPerLitre: numberText(average(rows.map((row) => row.fuelKmPerLitreValue))),
+    fuelKmPerLitreValue: null,
+    fuelLitres: numberText(average(rows.map((row) => toNumber(row.fuelLitres)))),
+    fuelLitresPerHour: numberText(average(rows.map((row) => row.fuelLitresPerHourValue))),
+    fuelLitresPerHourValue: null,
+    idlingPercent: numberText(average(rows.map((row) => row.idlingPercentValue))),
+    idlingPercentValue: null,
+    idlingTime: durationText(null, idlingMinutes),
+    engineLoadPercent: numberText(average(rows.map((row) => row.engineLoadPercentValue))),
+    engineLoadPercentValue: null,
+    powerDistanceKm: "-",
+    powerDistanceKmValue: null,
+    powerDistancePercent: "-",
+    powerDistancePercentValue: null,
+    coastingPercent: numberText(average(rows.map((row) => row.coastingPercentValue))),
+    coastingPercentValue: null,
+  };
+}
+
+function paginateDriverwiseRows(rows: DriverwisePdfRow[], summaryRow: DriverwisePdfRow | null) {
+  if (!summaryRow) {
+    return chunk(rows, ROWS_PER_PAGE);
+  }
+
+  const firstPageDetailCount = ROWS_PER_PAGE - 1;
+  return [
+    [summaryRow, ...rows.slice(0, firstPageDetailCount)],
+    ...chunk(rows.slice(firstPageDetailCount), ROWS_PER_PAGE),
+  ];
 }
 
 function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdfRow {
@@ -291,7 +339,6 @@ function buildPageContent(
     headerX += columnWidths[columnIndex];
   });
 
-  commands.push("0 0 0 rg");
   rows.forEach((row, rowIndex) => {
     const values = schema === "scania"
       ? [
@@ -321,9 +368,19 @@ function buildPageContent(
         row.fuelLitresPerHour,
       ];
     const baselineY = tableTopY - HEADER_HEIGHT - rowIndex * ROW_HEIGHT - 8.24;
+    const font = row.isSummary ? 2 : 1;
+    const fontSize = row.isSummary ? 5.1 : 6;
+    const horizontalPadding = row.isSummary ? 3 : 6;
+    commands.push(row.isSummary ? "0.121569 0.305882 0.470588 rg" : "0 0 0 rg");
     let cellX = TABLE_X;
     values.forEach((value, columnIndex) => {
-      commands.push(textCommand(fitText(value, columnWidths[columnIndex] - 7, 6), 1, 6, cellX + 6, baselineY));
+      commands.push(textCommand(
+        fitText(value, columnWidths[columnIndex] - horizontalPadding - 1, fontSize, row.isSummary),
+        font,
+        fontSize,
+        cellX + horizontalPadding,
+        baselineY,
+      ));
       cellX += columnWidths[columnIndex];
     });
   });
@@ -346,6 +403,9 @@ function cellFills(
   averages: { fuelKmPerLitre: number | null; fuelLitresPerHour: number | null },
   schema: PdfSchema,
 ) {
+  if (row.isSummary) {
+    return Array.from({ length: 11 }, () => null);
+  }
   if (schema === "volvo") {
     return [
       null,
@@ -543,12 +603,12 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
-function fitText(value: string, maxWidth: number, fontSize: number) {
-  if (measureText(value, fontSize, false) <= maxWidth) {
+function fitText(value: string, maxWidth: number, fontSize: number, bold = false) {
+  if (measureText(value, fontSize, bold) <= maxWidth) {
     return value;
   }
   let shortened = value;
-  while (shortened.length > 1 && measureText(`${shortened}...`, fontSize, false) > maxWidth) {
+  while (shortened.length > 1 && measureText(`${shortened}...`, fontSize, bold) > maxWidth) {
     shortened = shortened.slice(0, -1);
   }
   return `${shortened}...`;

@@ -1,0 +1,97 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { ReportPreview } from "../src/types/reports.ts";
+import { buildDriverwiseStandstillPdf } from "../src/utils/driverwisePdf.ts";
+
+function volvoPreview(): ReportPreview {
+  return {
+    reportType: "Driverwise Standstill Tracking",
+    generatedAt: "2026-08-18T11:24:00.000Z",
+    oem: "Volvo",
+    columns: [
+      "Vehicles",
+      "Drivers",
+      "Total time (hh:mm)",
+      "Driving (km)",
+      "Diesel engine on (%)",
+      "Avg diesel engine on (km/l)",
+      "Standstill (%)",
+      "Standstill (hh:mm)",
+      "Engine load % time of Total time (%)",
+      "Coasting (%)",
+      "Avg diesel (l/h)",
+    ],
+    rows: [
+      {
+        Vehicles: "V-500",
+        Drivers: "Driver One",
+        "Total time (hh:mm)": "1:30",
+        "Driving (km)": 10,
+        "Diesel engine on (%)": 50,
+        "Avg diesel engine on (km/l)": 0.5,
+        "Standstill (%)": 20,
+        "Standstill (hh:mm)": "0:30",
+        "Engine load % time of Total time (%)": 30,
+        "Coasting (%)": 10,
+        "Avg diesel (l/h)": 20,
+      },
+      {
+        Vehicles: "V-501",
+        Drivers: "Driver Two",
+        "Total time (hh:mm)": "2:15",
+        "Driving (km)": 30,
+        "Diesel engine on (%)": 70,
+        "Avg diesel engine on (km/l)": 0.7,
+        "Standstill (%)": 40,
+        "Standstill (hh:mm)": "1:00",
+        "Engine load % time of Total time (%)": 20,
+        "Coasting (%)": 30,
+        "Avg diesel (l/h)": 10,
+      },
+    ],
+    period: {
+      date: "2026-08-18",
+      shift: "A",
+      site: "Sasti",
+      start: "2026-08-18T05:00:00+05:30",
+      end: "2026-08-18T13:00:00+05:30",
+      timezone: "Asia/Kolkata",
+    },
+  };
+}
+
+function extractTextCommands(pdf: Uint8Array) {
+  const source = new TextDecoder().decode(pdf);
+  return [...source.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
+    .map((match) => match[1].replace(/\\([\\()])/g, "$1"));
+}
+
+test("adds the on-screen Volvo summary row to the PDF", () => {
+  const text = extractTextCommands(buildDriverwiseStandstillPdf(volvoPreview()));
+  const summaryIndex = text.indexOf("Summary (2)");
+
+  assert.notEqual(summaryIndex, -1);
+  assert.deepEqual(text.slice(summaryIndex, summaryIndex + 11), [
+    "Summary (2)",
+    "2 vehicles",
+    "3:45",
+    "20.00",
+    "60.00",
+    "0.60",
+    "30.00",
+    "1:30",
+    "25.00",
+    "20.00",
+    "15.00",
+  ]);
+});
+
+test("keeps the summary row off Scania PDFs", () => {
+  const preview = volvoPreview();
+  preview.oem = "Scania";
+  preview.columns = ["Registration number", ...preview.columns];
+
+  const text = extractTextCommands(buildDriverwiseStandstillPdf(preview));
+
+  assert.equal(text.some((value) => value.startsWith("Summary (")), false);
+});
