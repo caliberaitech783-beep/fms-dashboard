@@ -129,6 +129,7 @@ Hostinger must not receive provider private keys, tracking passwords, WhatsApp t
 - `CASE_METRIC_CONCURRENCY` (optional, defaults to `8`; bounds concurrent CASE time-series calls)
 - `CASE_MAX_METRIC_PAGES` (optional, defaults to `100`)
 - `CASE_REPORT_MAX_DAYS` (optional, defaults to `31`; longer upstream windows are split into supported 30-day segments)
+- `CASE_REPORT_EXCLUDED_VINS` (optional comma-separated list; the four retired CASE machines are excluded by default)
 
 The supplied Postman dotenv names `bearerToken` and `Subscription` are accepted as backend-only compatibility aliases. Prefer `CASE_ACCESS_TOKEN` and `CASE_SUBSCRIPTION_KEY` in deployed settings.
 

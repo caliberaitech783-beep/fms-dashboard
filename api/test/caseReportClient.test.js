@@ -7,6 +7,7 @@ const {
   buildMetricUrl,
   fetchCaseReport,
   lastPageNumber,
+  reportExcludedVins,
   splitDateRange,
   validateDateRange,
 } = require("../src/lib/case/caseReportClient");
@@ -97,6 +98,16 @@ test("accepts only bounded same-origin CASE pagination", () => {
   }] }, template, reportEnv));
 });
 
+test("excludes the four retired CASE machines from reports", () => {
+  const excluded = reportExcludedVins(reportEnv);
+  assert.deepEqual([...excluded].sort(), [
+    "HBZN865CCPAF30889",
+    "HBZN865CEPAF30673",
+    "HBZN865CKPAF31559",
+    "HBZN865CPNAF27703",
+  ].sort());
+});
+
 test("combines equipment and all three live CASE metric responses", async () => {
   resetCaseEquipmentCache();
   const requested = [];
@@ -109,7 +120,13 @@ test("combines equipment and all three live CASE metric responses", async () => 
       requested.push({ url, init });
       let response;
       if (url.endsWith("/equipment")) {
-        response = { equipment: [{ vin: "TEST-VIN", model: "865C", devices: [] }] };
+        response = { equipment: [
+          { vin: "TEST-VIN", model: "865C", devices: [] },
+          { vin: "HBZN865CCPAF30889", model: "865C", devices: [] },
+          { vin: "HBZN865CEPAF30673", model: "865C", devices: [] },
+          { vin: "HBZN865CKPAF31559", model: "865C", devices: [] },
+          { vin: "HBZN865CPNAF27703", model: "865C", devices: [] },
+        ] };
       } else if (url.includes("/CumulativeOperatingHours/")) {
         response = { Links: [], CumulativeOperatingHours: [{ Hour: 100 }, { Hour: 110 }] };
       } else if (url.includes("/CumulativeFuelUsed/")) {
@@ -128,6 +145,7 @@ test("combines equipment and all three live CASE metric responses", async () => 
   });
 
   assert.equal(requested.length, 4);
+  assert.equal(payload.equipmentCount, 1);
   assert.ok(requested.every(({ init }) => init.headers.Authorization === "Bearer test-token"));
   assert.deepEqual(payload.rows, [{
     machine: "TEST-VIN",
