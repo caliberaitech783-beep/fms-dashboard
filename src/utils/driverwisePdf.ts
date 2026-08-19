@@ -136,8 +136,8 @@ function buildVolvoSummaryRow(rows: DriverwisePdfRow[]): DriverwisePdfRow {
     driver: `${rows.length} vehicles`,
     engineRunningTime: durationText(null, engineMinutes),
     engineMinutes,
-    distanceKm: numberText(average(rows.map((row) => toNumber(row.distanceKm)))),
-    dieselEngineOnLitres: numberText(average(rows.map((row) => row.dieselEngineOnLitresValue))),
+    distanceKm: numberText(total(rows.map((row) => toNumber(row.distanceKm)))),
+    dieselEngineOnLitres: numberText(total(rows.map((row) => row.dieselEngineOnLitresValue))),
     dieselEngineOnLitresValue: null,
     fuelKmPerLitre: numberText(average(rows.map((row) => row.fuelKmPerLitreValue))),
     fuelKmPerLitreValue: null,
@@ -594,6 +594,11 @@ function durationText(value: ReportValue | undefined, minutes: number | null) {
 function average(values: Array<number | null>) {
   const available = values.filter((value): value is number => value !== null && Number.isFinite(value));
   return available.length ? available.reduce((sum, value) => sum + value, 0) / available.length : null;
+}
+
+function total(values: Array<number | null>) {
+  const available = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  return available.length ? available.reduce((sum, value) => sum + value, 0) : null;
 }
 
 function chunk<T>(items: T[], size: number) {
