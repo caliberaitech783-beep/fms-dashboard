@@ -560,6 +560,7 @@ async function loadDriverStandstillReport(request) {
     // A truck may report multiple drivers during one shift. The report is a
     // fleet view, so combine those intervals into one exact row per Volvo VIN.
     groupByVehicle: true,
+    metricProfile: "volvo-manager",
   });
   let statuses = [];
   let rows = [];
@@ -609,7 +610,7 @@ async function loadDriverStandstillReport(request) {
     "Drivers",
     "Total time (hh:mm)",
     "Driving (km)",
-    "Diesel engine on (%)",
+    "Diesel engine on (l)",
     "Avg diesel engine on (km/l)",
     "Standstill (%)",
     "Standstill (hh:mm)",
@@ -622,7 +623,7 @@ async function loadDriverStandstillReport(request) {
     "Drivers": row.driver,
     "Total time (hh:mm)": row.totalTime,
     "Driving (km)": row.drivingKm,
-    "Diesel engine on (%)": row.dieselEngineOnPercent,
+    "Diesel engine on (l)": row.dieselEngineOnLitres,
     "Avg diesel engine on (km/l)": row.averageDieselEngineKmPerLitre,
     "Fuel consumed (litres)": row.fuelLitres,
     "Standstill (%)": row.standstillPercent,
