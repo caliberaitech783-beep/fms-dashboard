@@ -29,14 +29,23 @@ function classValues(status, key) {
   return Array.isArray(values) ? values : [];
 }
 
+function classIdentity(item, index) {
+  const from = item.From ?? item.from ?? "";
+  const to = item.To ?? item.to ?? "";
+  const label = item.Label ?? item.label ?? "";
+  return from !== "" || to !== "" || label !== ""
+    ? `${from}|${to}|${label}`
+    : `index:${index}`;
+}
+
 function classSecondsDelta(current, previous, key) {
-  const previousByRange = new Map(classValues(previous, key).map((item) => [
-    `${item.From ?? item.from ?? ""}|${item.To ?? item.to ?? ""}`,
+  const previousByRange = new Map(classValues(previous, key).map((item, index) => [
+    classIdentity(item, index),
     item,
   ]));
 
-  return classValues(current, key).map((item) => {
-    const prior = previousByRange.get(`${item.From ?? item.from ?? ""}|${item.To ?? item.to ?? ""}`) || {};
+  return classValues(current, key).map((item, index) => {
+    const prior = previousByRange.get(classIdentity(item, index)) || {};
     return {
       from: finiteNumber(item.From ?? item.from),
       to: finiteNumber(item.To ?? item.to),
@@ -113,13 +122,14 @@ function createAccumulator(vehicle, driverId, driverName) {
     standstillSeconds: 0,
     runningSeconds: 0,
     coastingSeconds: 0,
+    highEngineLoadSeconds: 0,
     engineLoadWeightedSeconds: 0,
     engineLoadSeconds: 0,
     intervalCount: 0,
   };
 }
 
-function addInterval(target, previous, current) {
+function addInterval(target, previous, current, intervalProportion = 1) {
   const accumulatedCurrent = eventAccumulated(current) || {};
   const accumulatedPrevious = eventAccumulated(previous) || {};
   const currentValue = (...keys) => keys
@@ -162,19 +172,20 @@ function addInterval(target, previous, current) {
   target.drivingKm += difference(
     current.HRTotalVehicleDistance ?? current.hrTotalVehicleDistance,
     previous.HRTotalVehicleDistance ?? previous.hrTotalVehicleDistance,
-  ) / 1000;
+  ) / 1000 * intervalProportion;
   target.engineHours += difference(
     current.TotalEngineHours ?? current.totalEngineHours,
     previous.TotalEngineHours ?? previous.totalEngineHours,
-  );
+  ) * intervalProportion;
   target.fuelLitres += difference(
     current.EngineTotalFuelUsed ?? current.engineTotalFuelUsed,
     previous.EngineTotalFuelUsed ?? previous.engineTotalFuelUsed,
-  ) / 1000;
-  target.runningSeconds += runningSeconds;
-  target.standstillSeconds += standstillSeconds;
-  target.totalTimeSeconds += runningSeconds + standstillSeconds;
-  target.coastingSeconds += coastingClass.reduce((sum, item) => sum + item.seconds, 0);
+  ) / 1000 * intervalProportion;
+  target.runningSeconds += runningSeconds * intervalProportion;
+  target.standstillSeconds += standstillSeconds * intervalProportion;
+  target.totalTimeSeconds += (runningSeconds + standstillSeconds) * intervalProportion;
+  target.coastingSeconds += coastingClass.reduce((sum, item) => sum + item.seconds, 0)
+    * intervalProportion;
 
   for (const item of engineLoadClass) {
     if (item.seconds <= 0) continue;
@@ -183,27 +194,41 @@ function addInterval(target, previous, current) {
       : item.to === null
         ? item.from
         : (item.from + item.to) / 2;
-    if (midpoint === null) continue;
-    target.engineLoadWeightedSeconds += midpoint * item.seconds;
-    target.engineLoadSeconds += item.seconds;
+    if (midpoint !== null) {
+      target.engineLoadWeightedSeconds += midpoint * item.seconds * intervalProportion;
+      target.engineLoadSeconds += item.seconds * intervalProportion;
+    }
+    // Volvo Connect defines engine load as time above 90% of maximum torque.
+    if (item.from !== null && item.from >= 90) {
+      target.highEngineLoadSeconds += item.seconds * intervalProportion;
+    }
   }
   target.intervalCount += 1;
 }
 
-function finalizeRow(value, shiftName, shiftDurationHours) {
-  const standstillPercent = value.totalTimeSeconds > 0
-    ? value.standstillSeconds / value.totalTimeSeconds * 100
+function finalizeRow(value, shiftName, shiftDurationHours, metricProfile) {
+  const managerAlignedMetrics = metricProfile === "volvo-manager";
+  const engineRunningSeconds = managerAlignedMetrics && value.engineHours > 0
+    ? value.engineHours * 3600
+    : value.totalTimeSeconds;
+  const standstillPercent = engineRunningSeconds > 0
+    ? value.standstillSeconds / engineRunningSeconds * 100
     : null;
   const engineOnPercent = shiftDurationHours > 0
     ? value.engineHours / shiftDurationHours * 100
     : null;
   const efficiency = value.fuelLitres > 0 ? value.drivingKm / value.fuelLitres : null;
   const averageFuelRate = value.engineHours > 0 ? value.fuelLitres / value.engineHours : null;
-  const engineLoadPercent = value.engineLoadSeconds > 0
-    ? value.engineLoadWeightedSeconds / value.engineLoadSeconds
-    : null;
-  const coastingPercent = value.runningSeconds > 0
-    ? value.coastingSeconds / value.runningSeconds * 100
+  const engineLoadPercent = managerAlignedMetrics
+    ? engineRunningSeconds > 0
+      ? value.highEngineLoadSeconds / engineRunningSeconds * 100
+      : null
+    : value.engineLoadSeconds > 0
+      ? value.engineLoadWeightedSeconds / value.engineLoadSeconds
+      : null;
+  const coastingDenominator = managerAlignedMetrics ? engineRunningSeconds : value.runningSeconds;
+  const coastingPercent = coastingDenominator > 0
+    ? value.coastingSeconds / coastingDenominator * 100
     : null;
   const knownDriverNames = [...value.driverNames].filter((name) => name !== "Unknown");
   const driverNames = knownDriverNames.length ? knownDriverNames : [...value.driverNames];
@@ -214,9 +239,10 @@ function finalizeRow(value, shiftName, shiftDurationHours) {
     vin: value.vin,
     driverId: driverIds.length ? driverIds.join(", ") : value.driverId,
     driver: driverNames.length ? driverNames.join(", ") : value.driverName,
-    totalTime: formatHoursMinutes(value.totalTimeSeconds),
+    totalTime: formatHoursMinutes(engineRunningSeconds),
     drivingKm: round(value.drivingKm),
     dieselEngineOnPercent: round(engineOnPercent),
+    dieselEngineOnLitres: round(value.fuelLitres),
     averageDieselEngineKmPerLitre: round(efficiency),
     fuelLitres: round(value.fuelLitres),
     standstillPercent: round(standstillPercent),
@@ -237,6 +263,7 @@ function buildDriverStandstillRows(options) {
   const shiftEnd = new Date(options.shiftEnd);
   const effectiveEnd = new Date(Math.min(shiftEnd.getTime(), options.now?.getTime?.() || Date.now()));
   const shiftDurationHours = Math.max(0, (effectiveEnd - shiftStart) / 3_600_000);
+  const managerAlignedMetrics = options.metricProfile === "volvo-manager";
   const vehicleByVin = new Map(options.vehicles.map((vehicle) => [vehicle.trackerId, vehicle]));
   const statusesByVin = new Map();
 
@@ -257,11 +284,34 @@ function buildDriverStandstillRows(options) {
 
     for (const current of ordered) {
       const currentTime = statusTimestamp(current);
-      if (!currentTime || currentTime <= shiftStart) continue;
-      if (currentTime > effectiveEnd) break;
+      if (!currentTime) continue;
+      if (currentTime <= shiftStart) {
+        previous = current;
+        continue;
+      }
       if (!previous) {
         previous = current;
         continue;
+      }
+
+      if (!managerAlignedMetrics && currentTime > effectiveEnd) break;
+
+      const previousTime = statusTimestamp(previous);
+      if (!previousTime || previousTime >= effectiveEnd) break;
+      let intervalProportion = 1;
+      if (managerAlignedMetrics) {
+        // RFMS counters cover the entire interval between events. Prorate an
+        // interval that straddles either shift edge instead of counting it all.
+        const intervalMilliseconds = currentTime.getTime() - previousTime.getTime();
+        const overlapStart = Math.max(previousTime.getTime(), shiftStart.getTime());
+        const overlapEnd = Math.min(currentTime.getTime(), effectiveEnd.getTime());
+        const overlapMilliseconds = Math.max(0, overlapEnd - overlapStart);
+        if (intervalMilliseconds <= 0 || overlapMilliseconds <= 0) {
+          previous = current;
+          if (currentTime >= effectiveEnd) break;
+          continue;
+        }
+        intervalProportion = overlapMilliseconds / intervalMilliseconds;
       }
 
       const id = driverIdentifier(current) || driverIdentifier(previous);
@@ -271,15 +321,18 @@ function buildDriverStandstillRows(options) {
       const accumulator = accumulators.get(key) || createAccumulator(vehicle, id, driverName);
       if (id) accumulator.driverIds.add(String(id));
       if (driverName) accumulator.driverNames.add(driverName);
-      addInterval(accumulator, previous, current);
+      addInterval(accumulator, previous, current, intervalProportion);
       accumulators.set(key, accumulator);
       previous = current;
+      if (currentTime >= effectiveEnd) break;
     }
   }
 
   return [...accumulators.values()]
-    .filter((row) => row.intervalCount > 0 && row.totalTimeSeconds > 0)
-    .map((row) => finalizeRow(row, options.shiftName, shiftDurationHours))
+    .filter((row) => row.intervalCount > 0 && (
+      managerAlignedMetrics ? row.engineHours > 0 || row.totalTimeSeconds > 0 : row.totalTimeSeconds > 0
+    ))
+    .map((row) => finalizeRow(row, options.shiftName, shiftDurationHours, options.metricProfile))
     .sort((left, right) => (
       (right.standstillPercent || 0) - (left.standstillPercent || 0)
       || left.vehicle.localeCompare(right.vehicle, undefined, { numeric: true })

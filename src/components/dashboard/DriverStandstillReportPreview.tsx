@@ -14,7 +14,7 @@ const VEHICLE = "Vehicles";
 const DRIVER = "Drivers";
 const TOTAL_TIME = "Total time (hh:mm)";
 const DRIVING = "Driving (km)";
-const ENGINE_ON = "Diesel engine on (%)";
+const ENGINE_ON = "Diesel engine on (l)";
 const EFFICIENCY = "Avg diesel engine on (km/l)";
 const STANDSTILL = "Standstill (%)";
 const STANDSTILL_TIME = "Standstill (hh:mm)";
@@ -62,7 +62,7 @@ const HEADERS: Record<string, string> = {
   [DRIVER]: "Drivers",
   [TOTAL_TIME]: "Total time (hh:mm)",
   [DRIVING]: "Driving (km)",
-  [ENGINE_ON]: "Diesel engine on (%)",
+  [ENGINE_ON]: "Diesel engine on (l)",
   [EFFICIENCY]: "Avg diesel engine on (km/l)",
   [STANDSTILL]: "Standstill (%)",
   [STANDSTILL_TIME]: "Standstill (hh:mm)",
@@ -93,8 +93,8 @@ export function DriverStandstillReportPreview({
   const displayColumns = driverStandstillColumns(preview);
   const summary = buildSummary(preview.rows);
   const averages = {
-    fuelEconomy: average(preview.rows, "Consumption liquid fuel (km/l)"),
-    litresPerHour: average(preview.rows, "Consumption liquid fuel (litres/h)"),
+    fuelEconomy: average(preview.rows, scania ? "Consumption liquid fuel (km/l)" : EFFICIENCY),
+    litresPerHour: average(preview.rows, scania ? "Consumption liquid fuel (litres/h)" : AVERAGE_DIESEL),
   };
 
   return (
@@ -273,11 +273,15 @@ function metricCellClass(
   averages: { fuelEconomy: number | null; litresPerHour: number | null },
 ): string {
   if (typeof value !== "number") return "";
-  if (column === STANDSTILL && value > 27) return "bg-red-600 text-white";
-  if (column === EFFICIENCY && value < 0.65) return "bg-orange-200";
-  if (column === ENGINE_LOAD && value >= 5) return "bg-orange-200";
-  if (column === COASTING && value >= 2) return "bg-rose-200";
-  if (column === AVERAGE_DIESEL && value >= 18) return "bg-rose-200";
+  if (column === STANDSTILL && value > 28) return "bg-red-600 text-white";
+  if (column === EFFICIENCY && averages.fuelEconomy !== null && value < averages.fuelEconomy) {
+    return "bg-rose-200";
+  }
+  if (column === ENGINE_LOAD && value > 5) return "bg-red-600 text-white";
+  if (column === COASTING && value < 20) return "bg-rose-200";
+  if (column === AVERAGE_DIESEL && averages.litresPerHour !== null && value > averages.litresPerHour) {
+    return "bg-rose-200";
+  }
   if (column === "Idling (% of engine running time)" && value > 28) return "bg-red-600 text-white";
   if (column === "Consumption liquid fuel (km/l)" && averages.fuelEconomy !== null && value < averages.fuelEconomy) {
     return "bg-rose-200";
