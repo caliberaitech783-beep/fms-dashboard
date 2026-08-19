@@ -14,8 +14,8 @@ interface DriverwisePdfRow {
   engineRunningTime: string;
   engineMinutes: number | null;
   distanceKm: string;
-  dieselEngineOnPercent: string;
-  dieselEngineOnPercentValue: number | null;
+  dieselEngineOnLitres: string;
+  dieselEngineOnLitresValue: number | null;
   fuelKmPerLitre: string;
   fuelKmPerLitreValue: number | null;
   fuelLitres: string;
@@ -75,7 +75,7 @@ const VOLVO_SCHEMA: PdfSchemaDefinition = {
     ["Drivers"],
     ["Total time", "(hh:mm)"],
     ["Driving", "(km)"],
-    ["Diesel", "engine on", "(%)"],
+    ["Diesel", "engine on", "(l)"],
     ["Avg diesel", "engine on", "(km/l)"],
     ["Standstill", "(%)"],
     ["Standstill", "(hh:mm)"],
@@ -83,7 +83,7 @@ const VOLVO_SCHEMA: PdfSchemaDefinition = {
     ["Coasting", "(%)"],
     ["Avg diesel", "(l/h)"],
   ],
-  thresholdLineOne: " rows under 00:30 engine time excluded | km/l below fleet average = light red | litres/h above fleet average = light red | standstill > 28% = red |",
+  thresholdLineOne: " rows under 00:30 engine time excluded | km/l below fleet average = light red | litres/h above fleet average = light red | standstill > 28% = red | engine load > 5% = red |",
   thresholdLineTwo: "coasting < 20% = light red | sorted by standstill % descending",
 };
 
@@ -137,8 +137,8 @@ function buildVolvoSummaryRow(rows: DriverwisePdfRow[]): DriverwisePdfRow {
     engineRunningTime: durationText(null, engineMinutes),
     engineMinutes,
     distanceKm: numberText(average(rows.map((row) => toNumber(row.distanceKm)))),
-    dieselEngineOnPercent: numberText(average(rows.map((row) => row.dieselEngineOnPercentValue))),
-    dieselEngineOnPercentValue: null,
+    dieselEngineOnLitres: numberText(average(rows.map((row) => row.dieselEngineOnLitresValue))),
+    dieselEngineOnLitresValue: null,
     fuelKmPerLitre: numberText(average(rows.map((row) => row.fuelKmPerLitreValue))),
     fuelKmPerLitreValue: null,
     fuelLitres: numberText(average(rows.map((row) => toNumber(row.fuelLitres)))),
@@ -233,10 +233,11 @@ function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdf
     "Coasting (%)",
     "coastingPercent",
   ]));
-  const dieselEngineOnPercentValue = toNumber(getValue(row, [
-    "Diesel engine on (%)",
-    "dieselEngineOnPercent",
-    "runningPercentage",
+  const dieselEngineOnLitresValue = toNumber(getValue(row, [
+    "Diesel engine on (l)",
+    "Fuel consumed (litres)",
+    "dieselEngineOnLitres",
+    "fuelLitres",
   ]));
   const engineLoadPercentValue = toNumber(getValue(row, [
     "Engine load % time of Total time (%)",
@@ -255,8 +256,8 @@ function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdf
     engineRunningTime: durationText(engineRunningTimeValue, engineMinutes),
     engineMinutes,
     distanceKm: numberText(distanceValue),
-    dieselEngineOnPercent: numberText(dieselEngineOnPercentValue),
-    dieselEngineOnPercentValue,
+    dieselEngineOnLitres: numberText(dieselEngineOnLitresValue),
+    dieselEngineOnLitresValue,
     fuelKmPerLitre: numberText(fuelKmPerLitreValue),
     fuelKmPerLitreValue,
     fuelLitres: numberText(derivedFuelLitres),
@@ -359,7 +360,7 @@ function buildPageContent(
         row.driver,
         row.engineRunningTime,
         row.distanceKm,
-        row.dieselEngineOnPercent,
+        row.dieselEngineOnLitres,
         row.fuelKmPerLitre,
         row.idlingPercent,
         row.idlingTime,
@@ -418,7 +419,7 @@ function cellFills(
         && row.fuelKmPerLitreValue < averages.fuelKmPerLitre ? "pink" : null,
       row.idlingPercentValue !== null && row.idlingPercentValue > 28 ? "red" : null,
       null,
-      null,
+      row.engineLoadPercentValue !== null && row.engineLoadPercentValue > 5 ? "red" : null,
       row.coastingPercentValue !== null && row.coastingPercentValue < 20 ? "pink" : null,
       row.fuelLitresPerHourValue !== null
         && averages.fuelLitresPerHour !== null
