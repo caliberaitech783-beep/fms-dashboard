@@ -233,12 +233,12 @@ function buildSummary(rows: ReportPreview["rows"]): Record<string, string | numb
     [VEHICLE]: `Summary (${rows.length})`,
     [DRIVER]: `${rows.length} vehicles`,
     [TOTAL_TIME]: sumDurations(rows, TOTAL_TIME),
+    [DRIVING]: sumValues(rows, DRIVING),
+    [ENGINE_ON]: sumValues(rows, ENGINE_ON),
     [STANDSTILL_TIME]: sumDurations(rows, STANDSTILL_TIME),
   };
 
   [
-    DRIVING,
-    ENGINE_ON,
     EFFICIENCY,
     STANDSTILL,
     ENGINE_LOAD,
@@ -249,6 +249,14 @@ function buildSummary(rows: ReportPreview["rows"]): Record<string, string | numb
       summary[column] = average(rows, column);
     });
   return summary;
+}
+
+function sumValues(rows: ReportPreview["rows"], column: string): number | null {
+  const values = rows
+    .map((row) => row[column])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!values.length) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) * 100) / 100;
 }
 
 function average(rows: ReportPreview["rows"], column: string): number | null {
