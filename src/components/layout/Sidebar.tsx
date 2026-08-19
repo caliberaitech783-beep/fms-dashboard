@@ -10,7 +10,7 @@ interface SidebarProps {
 
 export function Sidebar({ active, onChange, items = NAV_ITEMS }: SidebarProps) {
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col bg-coal-950 text-white shadow-command lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col bg-gradient-to-b from-[#0b3a5b] via-[#0c4a6e] to-[#082f49] text-white shadow-command lg:flex">
       <div className="border-b border-white/10 px-5 py-5">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ore-500">Mining Ops</p>
         <h1 className="mt-2 text-lg font-semibold leading-tight">Unified Mining Fleet Fuel Monitoring Portal</h1>
