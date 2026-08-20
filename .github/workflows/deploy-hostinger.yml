@@ -54,3 +54,42 @@ jobs:
           git commit -m "Deploy ${SOURCE_SHA}"
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
           git push --force origin hostinger-deploy
+
+      - name: Deploy production files to Hostinger over restricted SFTP
+        env:
+          HOSTINGER_SFTP_HOST: ${{ secrets.HOSTINGER_SFTP_HOST }}
+          HOSTINGER_SFTP_KNOWN_HOSTS: ${{ secrets.HOSTINGER_SFTP_KNOWN_HOSTS }}
+          HOSTINGER_SFTP_PATH: ${{ secrets.HOSTINGER_SFTP_PATH }}
+          HOSTINGER_SFTP_PORT: ${{ secrets.HOSTINGER_SFTP_PORT }}
+          HOSTINGER_SFTP_PRIVATE_KEY: ${{ secrets.HOSTINGER_SFTP_PRIVATE_KEY }}
+          HOSTINGER_SFTP_USER: ${{ secrets.HOSTINGER_SFTP_USER }}
+        run: |
+          set -euo pipefail
+          key_file="${RUNNER_TEMP}/hostinger_sftp_key"
+          known_hosts_file="${RUNNER_TEMP}/hostinger_known_hosts"
+          batch_file="${RUNNER_TEMP}/hostinger_sftp_batch"
+          trap 'rm -f "${key_file}" "${known_hosts_file}" "${batch_file}"' EXIT
+
+          printf '%s\n' "${HOSTINGER_SFTP_PRIVATE_KEY}" > "${key_file}"
+          chmod 600 "${key_file}"
+          printf '%s\n' "${HOSTINGER_SFTP_KNOWN_HOSTS}" > "${known_hosts_file}"
+
+          {
+            printf 'cd "%s"\n' "${HOSTINGER_SFTP_PATH}"
+            find dist -mindepth 1 -type d -printf '%P\n' | sort | while IFS= read -r directory; do
+              printf -- '-mkdir "%s"\n' "${directory}"
+            done
+            printf 'lcd dist\n'
+            find dist -type f -printf '%P\n' | sort | while IFS= read -r file; do
+              printf 'put "%s" "%s"\n' "${file}" "${file}"
+            done
+          } > "${batch_file}"
+
+          sftp \
+            -b "${batch_file}" \
+            -i "${key_file}" \
+            -P "${HOSTINGER_SFTP_PORT}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${known_hosts_file}" \
+            "${HOSTINGER_SFTP_USER}@${HOSTINGER_SFTP_HOST}"
