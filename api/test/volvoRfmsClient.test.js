@@ -232,6 +232,51 @@ test("uses supported per-VIN history directly for a small site such as Dhoptala"
   assert.equal(statuses.length, 12);
 });
 
+test("retries a failed VIN instead of dropping it from a completed report", async () => {
+  let calls = 0;
+  const client = {
+    async fetchHistoricalVehicleStatuses(options) {
+      calls += 1;
+      if (calls === 1) throw new Error("temporary Volvo history failure");
+      return [{ Vin: options.vin, CreatedDateTime: "2026-08-18T08:00:00Z" }];
+    },
+  };
+
+  const statuses = await fetchVehicleScopedHistory(client, [{ trackerId: "VIN-1" }], {
+    retryAttempts: 3,
+    retryDelayMs: 0,
+    continueOnError: false,
+    startTime: "2026-08-17T18:30:00.000Z",
+    stopTime: "2026-08-18T18:29:00.000Z",
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].Vin, "VIN-1");
+});
+
+test("rejects a report when a VIN is still unavailable after retries", async () => {
+  let calls = 0;
+  const client = {
+    async fetchHistoricalVehicleStatuses() {
+      calls += 1;
+      throw new Error("persistent Volvo history failure");
+    },
+  };
+
+  await assert.rejects(
+    fetchVehicleScopedHistory(client, [{ trackerId: "VIN-1" }], {
+      retryAttempts: 3,
+      retryDelayMs: 0,
+      continueOnError: false,
+      startTime: "2026-08-17T18:30:00.000Z",
+      stopTime: "2026-08-18T18:29:00.000Z",
+    }),
+    /persistent Volvo history failure/,
+  );
+  assert.equal(calls, 3);
+});
+
 test("falls back to selected VINs when a large-site fleet query is unavailable", async () => {
   const calls = [];
   const client = {

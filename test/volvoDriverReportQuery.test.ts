@@ -50,6 +50,14 @@ test("forwards a manually selected full-day period exactly", () => {
   assert.equal(query.get("stopTime"), "2026-08-13T23:59:00+05:30");
 });
 
+test("forwards the All Day shift as an exact full-day period", () => {
+  const query = buildVolvoDriverReportQuery(reportFilters({ shift: "ALL_DAY" }));
+
+  assert.equal(query.get("shift"), "A");
+  assert.equal(query.get("startTime"), "2026-08-13T00:00:00+05:30");
+  assert.equal(query.get("stopTime"), "2026-08-13T23:59:00+05:30");
+});
+
 test("forwards an overnight scheduled period with the next end date", () => {
   const query = buildVolvoDriverReportQuery(reportFilters({
     dateTo: "2026-08-14",

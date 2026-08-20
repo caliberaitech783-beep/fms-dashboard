@@ -262,6 +262,9 @@ export function ReportsDashboard({
     }
 
     setExplorerState((current) => {
+      if (preview?.frozen) {
+        return { ...current, sortColumn: "", thenSortColumn: "" };
+      }
       if (current.sortColumn && explorerColumns.includes(current.sortColumn)) {
         return current;
       }
@@ -276,7 +279,7 @@ export function ReportsDashboard({
         ? { ...current, sortColumn, sortDirection: "desc" }
         : current;
     });
-  }, [explorerColumns, filters.company, preview?.rows, previewLoading, selectedReport]);
+  }, [explorerColumns, filters.company, preview?.frozen, preview?.rows, previewLoading, selectedReport]);
 
   const activeExplorerState = useMemo(
     () => normalizeReportExplorerState(explorerState, explorerColumns),

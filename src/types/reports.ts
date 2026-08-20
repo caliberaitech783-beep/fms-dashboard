@@ -50,8 +50,10 @@ export interface ReportPreview {
   generatedAt: string;
   rows: Record<string, string | number | null>[];
   columns: string[];
+  summary?: Record<string, string | number | null>;
   oem?: string;
   live?: boolean;
+  frozen?: boolean;
   source?: string;
   notice?: string | null;
   error?: {

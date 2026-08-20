@@ -15,6 +15,7 @@ const {
   reportHistoryStrategy,
   resolveRecentReportDate,
 } = require("../lib/volvo/driverStandstillReport");
+const { findFrozenDriverReport } = require("../lib/volvo/frozenDriverReports");
 const {
   clearVolvoLiveCache,
   getLiveVolvoSnapshot,
@@ -529,6 +530,42 @@ async function loadDriverStandstillReport(request) {
     ), { statusCode: 400 });
   }
 
+  const frozenReport = findFrozenDriverReport({
+    date,
+    site: scheduleSiteName(reportSite),
+    window,
+  });
+  if (frozenReport) {
+    return {
+      reportType: "Driverwise Standstill Tracking",
+      generatedAt: frozenReport.generatedAt,
+      oem: "Volvo",
+      columns: frozenReport.columns,
+      rows: frozenReport.rows,
+      summary: frozenReport.summary,
+      live: false,
+      frozen: true,
+      source: "VOLVO_CONNECT_FROZEN_REPORT",
+      period: {
+        date,
+        requestedDate,
+        fallbackApplied: false,
+        shift,
+        site: frozenReport.site,
+        start: window.shiftStart,
+        end: window.shiftEnd,
+        timezone: window.timezone,
+        customTimeRange: true,
+      },
+      siteFilterApplied: true,
+      driverSource: "FROZEN_COMPLETED_REPORT",
+      historyRecords: null,
+      siteVehicleCount: frozenReport.rows.length,
+      reportedVehicleCount: frozenReport.rows.length,
+      notice: "Completed Volvo report frozen after the full-day period. These values will not change.",
+    };
+  }
+
   const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${window.shiftStart}|${window.shiftEnd}`;
   const cacheMilliseconds = Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000);
   const cached = driverReportCache.get(cacheKey);
@@ -578,7 +615,11 @@ async function loadDriverStandstillReport(request) {
     maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
     concurrency: historyStrategy.concurrency,
     requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
-    continueOnError: true,
+    retryAttempts: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_ATTEMPTS || 3),
+    retryDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_DELAY_MS || 250),
+    // A missing VIN makes fleet totals incorrect. Fail the request after retries
+    // instead of caching and presenting a partial historical report.
+    continueOnError: false,
   };
   if (selectedVehicles.length) {
     const candidates = Array.from({ length: fallbackDays + 1 }, (_, dayOffset) => {
