@@ -18,6 +18,8 @@ const ENGINE_ON = "Diesel engine on (l)";
 const EFFICIENCY = "Avg diesel engine on (km/l)";
 const STANDSTILL = "Standstill (%)";
 const STANDSTILL_TIME = "Standstill (hh:mm)";
+const I_SHIFT_PERFORMANCE = "I-Shift Performance % time of Total time (%)";
+const ABOVE_ECONOMY = "Above economy % time of Total time (%)";
 const ENGINE_LOAD = "Engine load % time of Total time (%)";
 const COASTING = "Coasting (%)";
 const AVERAGE_DIESEL = "Avg diesel (l/h)";
@@ -52,9 +54,16 @@ export const scaniaStandstillDisplayColumns = [
 ];
 
 export function driverStandstillColumns(preview?: ReportPreview | null) {
-  return isScaniaReport(preview)
-    ? scaniaStandstillDisplayColumns
-    : driverStandstillDisplayColumns;
+  if (isScaniaReport(preview)) return scaniaStandstillDisplayColumns;
+  if (!preview?.columns.includes(I_SHIFT_PERFORMANCE) && !preview?.columns.includes(ABOVE_ECONOMY)) {
+    return driverStandstillDisplayColumns;
+  }
+  return [
+    ...driverStandstillDisplayColumns.slice(0, 8),
+    I_SHIFT_PERFORMANCE,
+    ABOVE_ECONOMY,
+    ...driverStandstillDisplayColumns.slice(8),
+  ];
 }
 
 const HEADERS: Record<string, string> = {
@@ -66,6 +75,8 @@ const HEADERS: Record<string, string> = {
   [EFFICIENCY]: "Avg diesel engine on (km/l)",
   [STANDSTILL]: "Standstill (%)",
   [STANDSTILL_TIME]: "Standstill (hh:mm)",
+  [I_SHIFT_PERFORMANCE]: "I-Shift Performance (%)",
+  [ABOVE_ECONOMY]: "Above economy (%)",
   [ENGINE_LOAD]: "Engine load (%)",
   [COASTING]: "Coasting (%)",
   [AVERAGE_DIESEL]: "Avg diesel (l/h)",
@@ -91,7 +102,7 @@ export function DriverStandstillReportPreview({
   const period = preview.period;
   const scania = isScaniaReport(preview);
   const displayColumns = driverStandstillColumns(preview);
-  const summary = buildSummary(preview.rows);
+  const summary = resolveDriverStandstillSummary(preview);
   const averages = {
     fuelEconomy: average(preview.rows, scania ? "Consumption liquid fuel (km/l)" : EFFICIENCY),
     litresPerHour: average(preview.rows, scania ? "Consumption liquid fuel (litres/h)" : AVERAGE_DIESEL),
@@ -228,7 +239,11 @@ function ReportErrorState({ error }: { error: NonNullable<ReportPreview["error"]
   );
 }
 
-function buildSummary(rows: ReportPreview["rows"]): Record<string, string | number | null> {
+export function resolveDriverStandstillSummary(
+  preview: Pick<ReportPreview, "rows" | "summary">,
+): Record<string, string | number | null> {
+  if (preview.summary) return preview.summary;
+  const rows = preview.rows;
   const summary: Record<string, string | number | null> = {
     [VEHICLE]: `Summary (${rows.length})`,
     [DRIVER]: `${rows.length} vehicles`,

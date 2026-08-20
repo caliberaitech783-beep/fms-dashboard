@@ -24,6 +24,8 @@ interface DriverwisePdfRow {
   idlingPercent: string;
   idlingPercentValue: number | null;
   idlingTime: string;
+  iShiftPerformancePercent: string;
+  aboveEconomyPercent: string;
   engineLoadPercent: string;
   engineLoadPercentValue: number | null;
   powerDistanceKm: string;
@@ -34,7 +36,7 @@ interface DriverwisePdfRow {
   coastingPercentValue: number | null;
 }
 
-type PdfSchema = "scania" | "volvo";
+type PdfSchema = "scania" | "volvo" | "volvo-extended";
 
 interface PdfSchemaDefinition {
   columnWidths: number[];
@@ -86,6 +88,26 @@ const VOLVO_SCHEMA: PdfSchemaDefinition = {
   thresholdLineOne: " rows under 00:30 engine time excluded | km/l below fleet average = light red | litres/h above fleet average = light red | standstill > 28% = red | engine load > 5% = red |",
   thresholdLineTwo: "coasting < 20% = light red | sorted by standstill % descending",
 };
+const VOLVO_EXTENDED_SCHEMA: PdfSchemaDefinition = {
+  columnWidths: [44, 40, 28, 30, 30, 32, 29, 31, 29, 31, 34, 29, 31],
+  headerLines: [
+    ["Vehicles"],
+    ["Drivers"],
+    ["Total time", "(hh:mm)"],
+    ["Driving", "(km)"],
+    ["Diesel", "engine on", "(l)"],
+    ["Avg diesel", "engine on", "(km/l)"],
+    ["Standstill", "(%)"],
+    ["Standstill", "(hh:mm)"],
+    ["I-Shift", "performance", "(%)"],
+    ["Above", "economy", "(%)"],
+    ["Engine load", "% time of", "Total time", "(%)"],
+    ["Coasting", "(%)"],
+    ["Avg diesel", "(l/h)"],
+  ],
+  thresholdLineOne: VOLVO_SCHEMA.thresholdLineOne,
+  thresholdLineTwo: VOLVO_SCHEMA.thresholdLineTwo,
+};
 
 export function isDriverwiseStandstillReport(reportType: string) {
   return reportType === "Driverwise Standstill Tracking" || reportType === "Driver wise Report";
@@ -99,7 +121,9 @@ export function buildDriverwiseStandstillPdf(
   const schema: PdfSchema = oem.toLowerCase().includes("scania")
     || preview.columns.includes("Registration number")
     ? "scania"
-    : "volvo";
+    : preview.columns.includes("I-Shift Performance % time of Total time (%)")
+      ? "volvo-extended"
+      : "volvo";
   const sourceRows = preview.rows.map(normalizeDriverwiseRow);
   const normalizedRows = sourceRows
     .filter((row) => row.engineMinutes === null || row.engineMinutes >= 30)
@@ -108,8 +132,8 @@ export function buildDriverwiseStandstillPdf(
     fuelKmPerLitre: average(normalizedRows.map((row) => row.fuelKmPerLitreValue)),
     fuelLitresPerHour: average(normalizedRows.map((row) => row.fuelLitresPerHourValue)),
   };
-  const summaryRow = schema === "volvo" && sourceRows.length
-    ? buildVolvoSummaryRow(sourceRows)
+  const summaryRow = schema !== "scania" && sourceRows.length
+    ? buildVolvoSummaryRow(sourceRows, preview.summary)
     : null;
   const pages = paginateDriverwiseRows(normalizedRows, summaryRow);
   if (pages.length === 0) {
@@ -126,7 +150,13 @@ export function buildDriverwiseStandstillPdf(
   return assembleTablePdf(pageContents);
 }
 
-function buildVolvoSummaryRow(rows: DriverwisePdfRow[]): DriverwisePdfRow {
+function buildVolvoSummaryRow(
+  rows: DriverwisePdfRow[],
+  explicitSummary?: ReportPreview["summary"],
+): DriverwisePdfRow {
+  if (explicitSummary) {
+    return { ...normalizeDriverwiseRow(explicitSummary), isSummary: true };
+  }
   const engineMinutes = rows.reduce((sum, row) => sum + (row.engineMinutes ?? 0), 0);
   const idlingMinutes = rows.reduce((sum, row) => sum + (durationToMinutes(row.idlingTime) ?? 0), 0);
 
@@ -147,6 +177,8 @@ function buildVolvoSummaryRow(rows: DriverwisePdfRow[]): DriverwisePdfRow {
     idlingPercent: numberText(average(rows.map((row) => row.idlingPercentValue))),
     idlingPercentValue: null,
     idlingTime: durationText(null, idlingMinutes),
+    iShiftPerformancePercent: "-",
+    aboveEconomyPercent: "-",
     engineLoadPercent: numberText(average(rows.map((row) => row.engineLoadPercentValue))),
     engineLoadPercentValue: null,
     powerDistanceKm: "-",
@@ -243,6 +275,14 @@ function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdf
     "Engine load % time of Total time (%)",
     "engineLoadPercent",
   ]));
+  const iShiftPerformancePercent = numberText(getValue(row, [
+    "I-Shift Performance % time of Total time (%)",
+    "iShiftPerformanceTimePercent",
+  ]));
+  const aboveEconomyPercent = numberText(getValue(row, [
+    "Above economy % time of Total time (%)",
+    "aboveEconomyPercent",
+  ]));
 
   return {
     registration: textValue(getValue(row, [
@@ -266,6 +306,8 @@ function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdf
     idlingPercent: numberText(idlingPercentValue),
     idlingPercentValue,
     idlingTime: durationText(idlingTimeValue, derivedIdlingMinutes),
+    iShiftPerformancePercent,
+    aboveEconomyPercent,
     engineLoadPercent: numberText(engineLoadPercentValue),
     engineLoadPercentValue,
     powerDistanceKm: numberText(powerDistanceKmValue),
@@ -286,7 +328,11 @@ function buildPageContent(
   averages: { fuelKmPerLitre: number | null; fuelLitresPerHour: number | null },
   schema: PdfSchema,
 ) {
-  const schemaDefinition = schema === "scania" ? SCANIA_SCHEMA : VOLVO_SCHEMA;
+  const schemaDefinition = schema === "scania"
+    ? SCANIA_SCHEMA
+    : schema === "volvo-extended"
+      ? VOLVO_EXTENDED_SCHEMA
+      : VOLVO_SCHEMA;
   const { columnWidths, headerLines } = schemaDefinition;
   const commands: string[] = [
     "0 0 0 rg",
@@ -355,7 +401,23 @@ function buildPageContent(
         row.powerDistancePercent,
         row.coastingPercent,
       ]
-      : [
+      : schema === "volvo-extended"
+        ? [
+          row.registration,
+          row.driver,
+          row.engineRunningTime,
+          row.distanceKm,
+          row.dieselEngineOnLitres,
+          row.fuelKmPerLitre,
+          row.idlingPercent,
+          row.idlingTime,
+          row.iShiftPerformancePercent,
+          row.aboveEconomyPercent,
+          row.engineLoadPercent,
+          row.coastingPercent,
+          row.fuelLitresPerHour,
+        ]
+        : [
         row.registration,
         row.driver,
         row.engineRunningTime,
@@ -405,7 +467,28 @@ function cellFills(
   schema: PdfSchema,
 ) {
   if (row.isSummary) {
-    return Array.from({ length: 11 }, () => null);
+    return Array.from({ length: schema === "volvo-extended" ? 13 : 11 }, () => null);
+  }
+  if (schema === "volvo-extended") {
+    return [
+      null,
+      null,
+      null,
+      null,
+      null,
+      row.fuelKmPerLitreValue !== null
+        && averages.fuelKmPerLitre !== null
+        && row.fuelKmPerLitreValue < averages.fuelKmPerLitre ? "pink" : null,
+      row.idlingPercentValue !== null && row.idlingPercentValue > 28 ? "red" : null,
+      null,
+      null,
+      null,
+      row.engineLoadPercentValue !== null && row.engineLoadPercentValue > 5 ? "red" : null,
+      row.coastingPercentValue !== null && row.coastingPercentValue < 20 ? "pink" : null,
+      row.fuelLitresPerHourValue !== null
+        && averages.fuelLitresPerHour !== null
+        && row.fuelLitresPerHourValue > averages.fuelLitresPerHour ? "pink" : null,
+    ];
   }
   if (schema === "volvo") {
     return [

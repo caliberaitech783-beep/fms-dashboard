@@ -348,21 +348,38 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
   const requestedConcurrency = Number(options.concurrency || 1);
   const concurrency = Math.min(vins.length, Math.max(1, requestedConcurrency));
   const requestDelayMs = Math.max(0, Number(options.requestDelayMs || 0));
+  const retryAttempts = Math.max(1, Number(options.retryAttempts || 1));
+  const retryDelayMs = Math.max(0, Number(options.retryDelayMs || 0));
   const eventBatches = new Array(vins.length);
   let nextIndex = 0;
+
+  async function fetchVin(vin) {
+    let lastError;
+    for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+      try {
+        return await client.fetchHistoricalVehicleStatuses({
+          startTime: options.startTime,
+          stopTime: options.stopTime,
+          contentFilter: options.contentFilter,
+          maxPages: options.maxPages,
+          vin,
+        });
+      } catch (error) {
+        lastError = error;
+        if (attempt < retryAttempts && retryDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+      }
+    }
+    throw lastError;
+  }
 
   async function worker() {
     while (nextIndex < vins.length) {
       const index = nextIndex;
       nextIndex += 1;
       try {
-        eventBatches[index] = await client.fetchHistoricalVehicleStatuses({
-          startTime: options.startTime,
-          stopTime: options.stopTime,
-          contentFilter: options.contentFilter,
-          maxPages: options.maxPages,
-          vin: vins[index],
-        });
+        eventBatches[index] = await fetchVin(vins[index]);
       } catch (error) {
         if (!options.continueOnError) throw error;
         eventBatches[index] = [];

@@ -95,3 +95,46 @@ test("keeps the summary row off Scania PDFs", () => {
 
   assert.equal(text.some((value) => value.startsWith("Summary (")), false);
 });
+
+test("uses the frozen official summary and extended Volvo metrics in the PDF", () => {
+  const preview = volvoPreview();
+  preview.columns.splice(8, 0,
+    "I-Shift Performance % time of Total time (%)",
+    "Above economy % time of Total time (%)",
+  );
+  preview.summary = {
+    Vehicles: "Summary (9)",
+    Drivers: "9 vehicles",
+    "Total time (hh:mm)": "141:48",
+    "Driving (km)": 1262.88,
+    "Diesel engine on (l)": 2641.64,
+    "Avg diesel engine on (km/l)": 0.48,
+    "Standstill (%)": 21.30,
+    "Standstill (hh:mm)": "30:12",
+    "I-Shift Performance % time of Total time (%)": 0.14,
+    "Above economy % time of Total time (%)": 14.22,
+    "Engine load % time of Total time (%)": 2.39,
+    "Coasting (%)": 4.95,
+    "Avg diesel (l/h)": 18.63,
+  };
+
+  const text = extractTextCommands(buildDriverwiseStandstillPdf(preview));
+  const summaryIndex = text.indexOf("Summary (9)");
+
+  assert.notEqual(summaryIndex, -1);
+  assert.deepEqual(text.slice(summaryIndex, summaryIndex + 13), [
+    "Summary (9)",
+    "9 vehicles",
+    "141:48",
+    "1262.88",
+    "2641.64",
+    "0.48",
+    "21.30",
+    "30:12",
+    "0.14",
+    "14.22",
+    "2.39",
+    "4.95",
+    "18.63",
+  ]);
+});

@@ -15,6 +15,7 @@ export function buildVolvoDriverReportQuery(filters: DashboardFilters): URLSearc
     && TIME_PATTERN.test(filters.timeTo);
   const hasExplicitPeriod = hasValidPeriod && (
     filters.timePeriodMode === "custom"
+    || filters.shift === "ALL_DAY"
     || !(filters.timeFrom === "00:00" && filters.timeTo === "23:59")
   );
 
