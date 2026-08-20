@@ -77,6 +77,5 @@ jobs:
             --request POST \
             --header "X-Deploy-Token: ${HOSTINGER_DEPLOY_TOKEN}" \
             --header "X-Deploy-Sha: ${SOURCE_SHA}" \
-            --header "Content-Type: application/octet-stream" \
-            --data-binary "@${bundle}" \
+            --form "bundle=@${bundle};type=application/zip" \
             "${HOSTINGER_DEPLOY_URL}"
