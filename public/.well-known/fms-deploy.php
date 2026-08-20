@@ -72,6 +72,19 @@ function isSafeArchivePath(string $path): bool
     return true;
 }
 
+function setTreePermissions(string $path): void
+{
+    chmod($path, 0755);
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
+    );
+
+    foreach ($iterator as $item) {
+        chmod($item->getPathname(), $item->isDir() ? 0755 : 0644);
+    }
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     header('Allow: POST');
     respond(405, ['status' => 'method_not_allowed']);
@@ -104,25 +117,41 @@ if (preg_match('/^[0-9a-f]{40}$/', $sourceSha) !== 1) {
 }
 
 $maximumBundleBytes = 25 * 1024 * 1024;
-$contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
-if ($contentLength <= 0 || $contentLength > $maximumBundleBytes) {
-    respond(400, ['status' => 'invalid_bundle']);
-}
+$deleteBundleAfter = false;
 
-$bundlePath = tempnam($buildRoot, 'upload-');
-$inputHandle = fopen('php://input', 'rb');
-$bundleHandle = $bundlePath === false ? false : fopen($bundlePath, 'wb');
-if ($bundlePath === false || $inputHandle === false || $bundleHandle === false) {
-    respond(500, ['status' => 'deployment_unavailable']);
-}
+if (isset($_FILES['bundle']) && is_array($_FILES['bundle'])) {
+    $bundle = $_FILES['bundle'];
+    if (($bundle['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        respond(400, ['status' => 'bundle_upload_failed']);
+    }
 
-$bundleSize = stream_copy_to_stream($inputHandle, $bundleHandle, $maximumBundleBytes + 1);
-fclose($inputHandle);
-fclose($bundleHandle);
-chmod($bundlePath, 0600);
-if ($bundleSize === false || $bundleSize <= 0 || $bundleSize > $maximumBundleBytes) {
-    @unlink($bundlePath);
-    respond(400, ['status' => 'invalid_bundle']);
+    $bundlePath = (string) ($bundle['tmp_name'] ?? '');
+    $bundleSize = (int) ($bundle['size'] ?? 0);
+    if (!is_uploaded_file($bundlePath) || $bundleSize <= 0 || $bundleSize > $maximumBundleBytes) {
+        respond(400, ['status' => 'invalid_bundle']);
+    }
+} else {
+    $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($contentLength <= 0 || $contentLength > $maximumBundleBytes) {
+        respond(400, ['status' => 'invalid_bundle']);
+    }
+
+    $bundlePath = tempnam($buildRoot, 'upload-');
+    $inputHandle = fopen('php://input', 'rb');
+    $bundleHandle = $bundlePath === false ? false : fopen($bundlePath, 'wb');
+    if ($bundlePath === false || $inputHandle === false || $bundleHandle === false) {
+        respond(500, ['status' => 'deployment_unavailable']);
+    }
+
+    $bundleSize = stream_copy_to_stream($inputHandle, $bundleHandle, $maximumBundleBytes + 1);
+    fclose($inputHandle);
+    fclose($bundleHandle);
+    chmod($bundlePath, 0600);
+    $deleteBundleAfter = true;
+    if ($bundleSize === false || $bundleSize <= 0 || $bundleSize > $maximumBundleBytes) {
+        @unlink($bundlePath);
+        respond(400, ['status' => 'invalid_bundle']);
+    }
 }
 
 if (!class_exists(ZipArchive::class)) {
@@ -182,6 +211,8 @@ try {
         throw new RuntimeException('The deployment archive is missing required production files.');
     }
 
+    setTreePermissions($stagingRoot);
+
     removeTree($backupRoot);
     if (!rename($publicRoot, $backupRoot)) {
         throw new RuntimeException('Unable to preserve the current production release.');
@@ -207,12 +238,16 @@ try {
         }
     }
     writeFailure($failureLog, $error->getMessage());
-    @unlink($bundlePath);
+    if ($deleteBundleAfter) {
+        @unlink($bundlePath);
+    }
     respond(500, ['status' => 'deployment_failed']);
 } finally {
     flock($lockHandle, LOCK_UN);
     fclose($lockHandle);
-    @unlink($bundlePath);
+    if ($deleteBundleAfter) {
+        @unlink($bundlePath);
+    }
 }
 
 respond(200, ['status' => 'deployed', 'sha' => $sourceSha]);
