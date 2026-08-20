@@ -59,8 +59,14 @@ jobs:
         env:
           HOSTINGER_DEPLOY_TOKEN: ${{ secrets.HOSTINGER_DEPLOY_TOKEN }}
           HOSTINGER_DEPLOY_URL: ${{ secrets.HOSTINGER_DEPLOY_URL }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          bundle="${RUNNER_TEMP}/hostinger-deploy.zip"
+          (
+            cd dist
+            zip --quiet --recurse-paths "${bundle}" .
+          )
           curl \
             --fail \
             --max-time 180 \
@@ -70,4 +76,7 @@ jobs:
             --silent \
             --request POST \
             --header "X-Deploy-Token: ${HOSTINGER_DEPLOY_TOKEN}" \
+            --header "X-Deploy-Sha: ${SOURCE_SHA}" \
+            --header "Content-Type: application/octet-stream" \
+            --data-binary "@${bundle}" \
             "${HOSTINGER_DEPLOY_URL}"
