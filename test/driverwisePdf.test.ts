@@ -66,6 +66,16 @@ function extractTextCommands(pdf: Uint8Array) {
     .map((match) => match[1].replace(/\\([\\()])/g, "$1"));
 }
 
+function extractPositionedTextCommands(pdf: Uint8Array) {
+  const source = new TextDecoder().decode(pdf);
+  return [...source.matchAll(
+    /BT \/F\d+ [\d.]+ Tf 1 0 0 1 ([\d.]+) ([\d.]+) Tm \(((?:\\.|[^\\)])*)\) Tj ET/g,
+  )].map((match) => ({
+    x: Number(match[1]),
+    text: match[3].replace(/\\([\\()])/g, "$1"),
+  }));
+}
+
 test("adds the on-screen Volvo summary row to the PDF", () => {
   const text = extractTextCommands(buildDriverwiseStandstillPdf(volvoPreview()));
   const summaryIndex = text.indexOf("Summary (2)");
@@ -137,4 +147,17 @@ test("uses the frozen official summary and extended Volvo metrics in the PDF", (
     "4.95",
     "18.63",
   ]);
+});
+
+test("aligns every Volvo summary cell with vehicle detail rows", () => {
+  const commands = extractPositionedTextCommands(buildDriverwiseStandstillPdf(volvoPreview()));
+  const summaryIndex = commands.findIndex(({ text }) => text === "Summary (2)");
+  const vehicleIndex = commands.findIndex(({ text }) => text === "V-500");
+
+  assert.notEqual(summaryIndex, -1);
+  assert.notEqual(vehicleIndex, -1);
+  assert.deepEqual(
+    commands.slice(summaryIndex, summaryIndex + 11).map(({ x }) => x),
+    commands.slice(vehicleIndex, vehicleIndex + 11).map(({ x }) => x),
+  );
 });

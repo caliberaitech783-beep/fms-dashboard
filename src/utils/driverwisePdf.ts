@@ -433,14 +433,15 @@ function buildPageContent(
     const baselineY = tableTopY - HEADER_HEIGHT - rowIndex * ROW_HEIGHT - 8.24;
     const font = row.isSummary ? 2 : 1;
     const fontSize = row.isSummary ? 5.1 : 6;
-    const horizontalPadding = row.isSummary ? 3 : 6;
+    const horizontalPadding = 6;
     commands.push(row.isSummary ? "0.121569 0.305882 0.470588 rg" : "0 0 0 rg");
     let cellX = TABLE_X;
     values.forEach((value, columnIndex) => {
+      const cellFontSize = row.isSummary && columnIndex === 0 ? 4.5 : fontSize;
       commands.push(textCommand(
-        fitText(value, columnWidths[columnIndex] - horizontalPadding - 1, fontSize, row.isSummary),
+        fitText(value, columnWidths[columnIndex] - horizontalPadding - 1, cellFontSize, row.isSummary),
         font,
-        fontSize,
+        cellFontSize,
         cellX + horizontalPadding,
         baselineY,
       ));
