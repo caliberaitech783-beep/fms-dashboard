@@ -12,6 +12,8 @@ const TOKEN_URL = "https://partnerapi.vecv.net/service-gateway/secure/genrateTok
 const LOCATION_URL = "https://partnerapi.vecv.net/service-gateway/vehicle/v1/getlivedata/location";
 const FUEL_URL = "https://partnerapi.vecv.net/service-gateway/vehicle/v1/getlivedata/fuelData";
 const DEFAULT_CACHE_MS = 60_000;
+const DEFAULT_FUEL_CACHE_MS = 15 * 60_000;
+const DEFAULT_FUEL_RETRY_MS = 5 * 60_000;
 const DEFAULT_TOKEN_TTL_MS = 55 * 60_000;
 const DEFAULT_TIMEOUT_MS = 20_000;
 const RUNNING_SPEED_KPH = 3;
@@ -22,6 +24,7 @@ let bearerCache = null;
 let snapshotCache = null;
 let pendingSnapshot = null;
 let lastSuccessfulSnapshot = null;
+let fuelPayloadCache = null;
 
 class EicherApiError extends Error {
   constructor(message, options = {}) {
@@ -67,6 +70,11 @@ function resetEicherCaches() {
   snapshotCache = null;
   pendingSnapshot = null;
   lastSuccessfulSnapshot = null;
+  fuelPayloadCache = null;
+}
+
+function resetEicherSnapshotCache() {
+  snapshotCache = null;
 }
 
 async function getEicherSnapshot(options = {}) {
@@ -113,6 +121,7 @@ async function loadEicherSnapshot(options = {}) {
       env,
       fetchImpl: options.fetchImpl,
       forceToken: Boolean(options.forceToken),
+      forceFuel: Boolean(options.forceFuel),
     });
     const fuelRecordsAvailable = extractLocationRecords(payloads.fuelPayload).length > 0;
     if (!fuelRecordsAvailable) {
@@ -179,10 +188,11 @@ async function loadPersistedSnapshot(options = {}) {
 async function fetchLivePayloads(options = {}) {
   let token = await getBearerToken(options);
   let results = await requestLivePayloads(options, token);
-  if (results.some((result) => result.status === 401)) {
+  if (results.some((result) => [401, 403].includes(result.status))) {
+    const forceFuel = [401, 403].includes(results[1]?.status);
     resetBearerToken();
     token = await getBearerToken({ ...options, forceToken: true });
-    results = await requestLivePayloads(options, token);
+    results = await requestLivePayloads({ ...options, forceFuel }, token);
   }
 
   const [locationResult, fuelResult] = results;
@@ -213,7 +223,10 @@ async function getBearerToken(options = {}) {
 
   const env = options.env || process.env;
   const apiKey = getApiKey(env);
-  const configuredToken = !options.forceToken ? getPreconfiguredBearerToken(env) : "";
+  const canonicalApiKey = String(env.EICHER_API_KEY || "").trim();
+  const configuredToken = !options.forceToken && !canonicalApiKey
+    ? getPreconfiguredBearerToken(env)
+    : "";
   if (configuredToken) {
     bearerCache = {
       token: configuredToken,
@@ -259,8 +272,36 @@ async function getBearerToken(options = {}) {
 async function requestLivePayloads(options, token) {
   return Promise.all([
     requestLiveEndpoint(LOCATION_URL, options, token),
-    requestLiveEndpoint(FUEL_URL, options, token),
+    requestFuelPayload(options, token),
   ]);
+}
+
+async function requestFuelPayload(options, token) {
+  const now = Date.now();
+  if (!options.forceFuel && fuelPayloadCache?.expiresAt > now) {
+    return fuelPayloadCache.result;
+  }
+
+  const result = await requestLiveEndpoint(FUEL_URL, options, token);
+  const env = options.env || process.env;
+  const hasRecords = result.ok && extractLocationRecords(result.body).length > 0;
+  const successMs = Math.max(
+    60,
+    Number(env.EICHER_FUEL_CACHE_SECONDS || DEFAULT_FUEL_CACHE_MS / 1000),
+  ) * 1000;
+  const retryMs = Math.max(
+    30,
+    Number(env.EICHER_FUEL_RETRY_SECONDS || DEFAULT_FUEL_RETRY_MS / 1000),
+  ) * 1000;
+  const cacheMs = hasRecords ? successMs : result.status === 429 ? retryMs : 0;
+
+  if (cacheMs > 0) {
+    fuelPayloadCache = {
+      expiresAt: now + cacheMs,
+      result,
+    };
+  }
+  return result;
 }
 
 async function requestLiveEndpoint(url, options, token) {
@@ -436,6 +477,7 @@ function normalizeEicherLocationPayload(payload, options = {}) {
       recordsSyncedToday: allTelemetry.length,
       mappedColumnsCount: fieldsReceived.length,
       unmappedColumnsCount: 0,
+      errorMessage: options.apiErrors?.[0] || null,
     },
     meta: {
       tokenEndpoint: TOKEN_URL,
@@ -1062,4 +1104,5 @@ module.exports = {
   parseTimestamp,
   resetBearerToken,
   resetEicherCaches,
+  resetEicherSnapshotCache,
 };

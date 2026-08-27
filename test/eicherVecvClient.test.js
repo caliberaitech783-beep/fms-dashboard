@@ -217,6 +217,100 @@ test("uses EICHER_API_KEY only on backend token, location, and fuel requests", a
   assert.equal(calls.length, 3);
 });
 
+test("prefers a generated token over a legacy seeded token when EICHER_API_KEY is configured", async () => {
+  resetEicherCaches();
+  const calls = [];
+  const env = {
+    EICHER_API_KEY: "backend-secret-key",
+    EICHER_TOKEN: "legacy-location-only-token",
+    EICHER_CACHE_SECONDS: "60",
+  };
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, authorization: options.headers.Authorization || null });
+    if (url === TOKEN_URL) return jsonResponse(200, { token: "generated-fuel-token", expiresIn: 3600 });
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { locationData: [{ chassisNo: firstVin, vehicleSpeed: 0 }] });
+    }
+    return jsonResponse(200, {
+      fuelData: [{
+        chassisNo: firstVin,
+        lifeTimeFuelConsumtion: "500.0",
+        engineOperatingHours: 100,
+      }],
+    });
+  };
+
+  const snapshot = await getEicherSnapshot({ env, fetchImpl, force: true });
+
+  assert.equal(calls.filter((call) => call.url === TOKEN_URL).length, 1);
+  assert.equal(calls.find((call) => call.url === LOCATION_URL).authorization, "Bearer generated-fuel-token");
+  assert.equal(calls.find((call) => call.url === FUEL_URL).authorization, "Bearer generated-fuel-token");
+  assert.equal(snapshot.telemetry[0].fuelConsumedLitres, 500);
+});
+
+test("reuses a successful fuel payload while forced refreshes update location", async () => {
+  resetEicherCaches();
+  const calls = [];
+  const env = {
+    EICHER_API_KEY: "backend-secret-key",
+    EICHER_CACHE_SECONDS: "5",
+    EICHER_FUEL_CACHE_SECONDS: "900",
+  };
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url === TOKEN_URL) return jsonResponse(200, { token: "cached-fuel-token", expiresIn: 3600 });
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { locationData: [{ chassisNo: firstVin, vehicleSpeed: 4 }] });
+    }
+    return jsonResponse(200, {
+      fuelData: [{
+        chassisNo: firstVin,
+        lifeTimeFuelConsumtion: "750.0",
+        engineOperatingHours: 125,
+      }],
+    });
+  };
+
+  await getEicherSnapshot({ env, fetchImpl, force: true });
+  const refreshed = await getEicherSnapshot({ env, fetchImpl, force: true });
+
+  assert.equal(calls.filter((url) => url === TOKEN_URL).length, 1);
+  assert.equal(calls.filter((url) => url === LOCATION_URL).length, 2);
+  assert.equal(calls.filter((url) => url === FUEL_URL).length, 1);
+  assert.equal(refreshed.telemetry[0].fuelConsumedLitres, 750);
+  assert.equal(refreshed.telemetry[0].engineHours, 125);
+});
+
+test("honors a cooldown after the VECV fuel endpoint returns 429", async () => {
+  resetEicherCaches();
+  const calls = [];
+  const env = {
+    EICHER_API_KEY: "backend-secret-key",
+    EICHER_CACHE_SECONDS: "5",
+    EICHER_FUEL_RETRY_SECONDS: "300",
+  };
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url === TOKEN_URL) return jsonResponse(200, { token: "rate-limited-token", expiresIn: 3600 });
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { locationData: [{ chassisNo: firstVin, vehicleSpeed: 0 }] });
+    }
+    return jsonResponse(429, { message: "too many requests" });
+  };
+
+  const first = await getEicherSnapshot({ env, fetchImpl, force: true });
+  const second = await getEicherSnapshot({ env, fetchImpl, force: true });
+
+  assert.equal(calls.filter((url) => url === LOCATION_URL).length, 2);
+  assert.equal(calls.filter((url) => url === FUEL_URL).length, 1);
+  assert.equal(first.integration.status, "delayed");
+  assert.equal(first.integration.errorMessage, "Eicher API rate limit was reached.");
+  assert.equal(second.integration.errorMessage, "Eicher API rate limit was reached.");
+});
+
 test("accepts vendor APIKEY alias and seeded Eicher bearer token", async () => {
   resetEicherCaches();
   const calls = [];
@@ -340,7 +434,12 @@ test("keeps the last fuel counters when the fuel endpoint fails later", async ()
   };
 
   const first = await getEicherSnapshot({ env, fetchImpl: successFetch, force: true });
-  const second = await getEicherSnapshot({ env, fetchImpl: fuelFailureFetch, force: true });
+  const second = await getEicherSnapshot({
+    env,
+    fetchImpl: fuelFailureFetch,
+    force: true,
+    forceFuel: true,
+  });
 
   assert.equal(first.telemetry[0].fuelConsumedLitres, 500);
   assert.equal(second.telemetry[0].fuelConsumedLitres, 500);
