@@ -7,7 +7,7 @@ const authStore = require("../lib/authStore");
 const { safeErrorMessage } = require("../lib/tracking/masking");
 const {
   getEicherSnapshot,
-  resetEicherCaches,
+  resetEicherSnapshotCache,
 } = require("../lib/eicher/vecvClient");
 
 const LIVE_ROLES = new Set(["Super Admin", "Management", "Fleet Manager"]);
@@ -155,7 +155,7 @@ async function handleLocations(request, context) {
 
 async function handleRefresh(request, context) {
   return withLiveActor(request, context, "refresh", async () => {
-    resetEicherCaches();
+    resetEicherSnapshotCache();
     const snapshot = await getEicherSnapshot({ force: true });
     return response(request, 200, {
       ok: true,
