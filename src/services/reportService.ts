@@ -32,6 +32,7 @@ import {
 } from "./adapters/caseEquipmentService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
 import { resolveOperationalShift } from "../utils/shiftResolver";
+import { buildEicherReportRow, EICHER_REPORT_COLUMNS } from "../utils/eicherReport";
 import {
   buildDriverwiseStandstillPdf,
   isDriverwiseStandstillReport,
@@ -203,29 +204,6 @@ export const reportService = {
   },
 };
 
-const EICHER_REPORT_COLUMNS = [
-  "Registration Number",
-  "Chassis Number",
-  "Model",
-  "Vehicle Status",
-  "Total Distance Travelled",
-  "Latitude",
-  "Longitude",
-  "Speed (Km/h)",
-  "Vehicle Direction",
-  "Device ID",
-  "Current Location",
-  "GPS Timestamp",
-  "Last Successful Update",
-  "Total Engine Hours (Hr)",
-  "Fuel Efficiency (Km/L)",
-  "Total Fuel Consumed (L)",
-  "Fuel Consumed in Idling (L or Kg)",
-  "Fuel Consumed in Idling (%)",
-  "Time Spent in Idling (Min)",
-  "Time Spent in Idling (%)",
-];
-
 const CASE_REPORT_COLUMNS = [
   "Machine",
   "Total Fuel",
@@ -282,49 +260,9 @@ async function buildEicherReport(
     .filter((vehicle) => vehicle.source === "EICHER_VECV_LIVE")
     .filter((vehicle) => filters.status === "All" || vehicle.status === filters.status)
     .filter((vehicle) => !vehicleSearch || vehicle.vehicleNumber.toLowerCase().includes(vehicleSearch))
-    .map((vehicle) => {
-      const record = latestByVehicle.get(vehicle.id);
-      const raw = record?.rawMetrics ?? {};
-      const distance = numberMetric(raw, "lifetimeOdometerKm")
-        ?? numberMetric(raw, "odometerKm")
-        ?? record?.odometerKm
-        ?? null;
-      const engineHours = numberMetric(raw, "engineHours") ?? record?.engineHours ?? null;
-      const fuelConsumed = numberMetric(raw, "fuelConsumedLitres") ?? record?.fuelConsumedLitres ?? null;
-      const idleFuel = numberMetric(raw, "idleFuelConsumedLitres")
-        ?? numberMetric(raw, "fuelConsumedInIdling")
-        ?? null;
-      const idleMinutes = numberMetric(raw, "idleMinutes")
-        ?? numberMetric(raw, "timeSpentInIdlingMinutes")
-        ?? (record?.idleHours !== null && record?.idleHours !== undefined ? record.idleHours * 60 : null);
-
-      return {
-        "Registration Number": stringMetric(raw, "registrationNumber") ?? vehicle.vehicleNumber,
-        "Chassis Number": stringMetric(raw, "chassisNumber") ?? vehicle.trackerId,
-        Model: vehicle.modelNumber ?? stringMetric(raw, "model") ?? null,
-        "Vehicle Status": stringMetric(raw, "vehicleStatus") ?? record?.status ?? vehicle.status,
-        "Total Distance Travelled": roundNullable(distance),
-        Latitude: roundNullable(numberMetric(raw, "latitude"), 6),
-        Longitude: roundNullable(numberMetric(raw, "longitude"), 6),
-        "Speed (Km/h)": roundNullable(numberMetric(raw, "speedKph")),
-        "Vehicle Direction": roundNullable(numberMetric(raw, "vehicleDirection") ?? numberMetric(raw, "heading")),
-        "Device ID": stringMetric(raw, "deviceId"),
-        "Current Location": stringMetric(raw, "currentLocation") ?? record?.location ?? null,
-        "GPS Timestamp": stringMetric(raw, "gpsTimestamp") ?? record?.timestamp ?? null,
-        "Last Successful Update": stringMetric(raw, "lastSuccessfulUpdate"),
-        "Total Engine Hours (Hr)": roundNullable(engineHours),
-        "Fuel Efficiency (Km/L)": fuelConsumed !== null && fuelConsumed > 0 && distance !== null
-          ? roundNullable(distance / fuelConsumed)
-          : null,
-        "Total Fuel Consumed (L)": roundNullable(fuelConsumed),
-        "Fuel Consumed in Idling (L or Kg)": roundNullable(idleFuel),
-        "Fuel Consumed in Idling (%)": fuelConsumed && idleFuel !== null ? roundNullable(idleFuel / fuelConsumed * 100) : null,
-        "Time Spent in Idling (Min)": roundNullable(idleMinutes),
-        "Time Spent in Idling (%)": engineHours && idleMinutes !== null ? roundNullable(idleMinutes / 60 / engineHours * 100) : null,
-      };
-    })
-    .sort((left, right) => String(left["Registration Number"]).localeCompare(
-      String(right["Registration Number"]),
+    .map((vehicle) => buildEicherReportRow(vehicle, latestByVehicle.get(vehicle.id)))
+    .sort((left, right) => String(left.regNo ?? left.chassisNo).localeCompare(
+      String(right.regNo ?? right.chassisNo),
       undefined,
       { numeric: true },
     ));
@@ -337,16 +275,10 @@ async function buildEicherReport(
     oem: "Eicher",
     live: true,
     source: snapshot.source,
-    notice: "Generated from Eicher VECV live location and fuel data. Idling consumption and duration remain blank because VECV does not supply those counters in this feed.",
+    notice: "Generated from the Eicher VECV vehicle fuel-data payload.",
     meta: {
       rawRecordCount: snapshot.meta?.rawRecordCount ?? snapshot.telemetry.length,
       finalFilteredVehicleCount: rows.length,
-      unavailableFields: [
-        "Fuel Consumed in Idling (L or Kg)",
-        "Fuel Consumed in Idling (%)",
-        "Time Spent in Idling (Min)",
-        "Time Spent in Idling (%)",
-      ],
     },
   };
 }
@@ -641,21 +573,6 @@ function roundNullable(value: number | null | undefined, digits = 2): number | n
   return value === null || value === undefined || !Number.isFinite(value)
     ? null
     : roundNumber(value, digits);
-}
-
-function stringMetric(metrics: Record<string, unknown>, key: string): string | null {
-  const value = metrics[key];
-  const text = value === null || value === undefined ? "" : String(value).trim();
-  return text || null;
-}
-
-function numberMetric(metrics: Record<string, unknown>, key: string): number | null {
-  const value = metrics[key];
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
 }
 
 function rowsToCsv(rows: Record<string, string | number | null>[], columns: string[]) {

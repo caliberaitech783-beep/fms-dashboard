@@ -96,6 +96,7 @@ test("merges VECV fuel records by chassis and maps cumulative fuel counters", ()
         fuelType: "Diesel",
         vehicleStatus: "STOPPED",
         lastUpdated: 20260827121841,
+        epochTime: 1787813321,
         vehicleSpeed: 0,
         odometer: 242876,
         fuelLevelInPer: 81.6,
@@ -117,6 +118,9 @@ test("merges VECV fuel records by chassis and maps cumulative fuel counters", ()
   assert.equal(telemetry.fuelLevelPercent, 81.6);
   assert.equal(telemetry.truckEfficiencyKmPerLitre, 242876 / 195873);
   assert.equal(telemetry.rawMetrics.defLevelLitres, 47.8);
+  assert.equal(telemetry.rawMetrics.sourceLastUpdated, 20260827121841);
+  assert.equal(telemetry.rawMetrics.sourceEpochTime, 1787813321);
+  assert.equal(telemetry.rawMetrics.speedKph, 0);
   assert.equal(telemetry.rawMetrics.deviceId, "EICHER-DEVICE-01");
   assert.equal(telemetry.rawMetrics.vehicleDirection, 92);
   assert.equal(telemetry.rawMetrics.eventType, "EICHER_FUEL_LOCATION");
