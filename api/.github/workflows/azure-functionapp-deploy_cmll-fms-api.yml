@@ -72,8 +72,9 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5A13C6D439A449DCAFDBC77D4DC75AB4 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9B3ECC08B4B04DBFB2CFA4155249F5EE }}
 
-      - name: Configure CASE API settings
+      - name: Configure backend API settings
         env:
+          EICHER_API_KEY: ${{ secrets.EICHER_API_KEY }}
           CASE_BASE_URL: ${{ secrets.CASE_BASE_URL }}
           CASE_CUMULATIVE_OPERATING_HOURS_URL: ${{ secrets.CASE_CUMULATIVE_OPERATING_HOURS_URL }}
           CASE_CUMULATIVE_FUEL_USED_URL: ${{ secrets.CASE_CUMULATIVE_FUEL_USED_URL }}
@@ -86,10 +87,12 @@ jobs:
           CASE_AUDIENCE: ${{ secrets.CASE_AUDIENCE }}
           CASE_SUBSCRIPTION_KEY: ${{ secrets.CASE_SUBSCRIPTION_KEY }}
         run: |
-          if [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_REFRESH_TOKEN" ] || [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_AUDIENCE" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
-            echo "CASE API secrets are not configured."
+          if [ -z "$EICHER_API_KEY" ] || [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_REFRESH_TOKEN" ] || [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_AUDIENCE" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
+            echo "Required backend API secrets are not configured."
             exit 1
           fi
+
+          echo "::add-mask::$EICHER_API_KEY"
 
           resource_group="$(az resource list \
             --name cmll-fms-api-783 \
@@ -126,6 +129,9 @@ jobs:
             --name cmll-fms-api-783 \
             --resource-group "$resource_group" \
             --settings \
+              "EICHER_API_KEY=$EICHER_API_KEY" \
+              "EICHER_REQUEST_TIMEOUT_MS=20000" \
+              "EICHER_CACHE_SECONDS=60" \
               "CASE_BASE_URL=$CASE_BASE_URL" \
               "CASE_CUMULATIVE_OPERATING_HOURS_URL=$CASE_CUMULATIVE_OPERATING_HOURS_URL" \
               "CASE_CUMULATIVE_FUEL_USED_URL=$CASE_CUMULATIVE_FUEL_USED_URL" \
