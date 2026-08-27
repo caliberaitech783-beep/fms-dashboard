@@ -10,6 +10,7 @@ const {
 
 const TOKEN_URL = "https://partnerapi.vecv.net/service-gateway/secure/genrateToken";
 const LOCATION_URL = "https://partnerapi.vecv.net/service-gateway/vehicle/v1/getlivedata/location";
+const FUEL_URL = "https://partnerapi.vecv.net/service-gateway/vehicle/v1/getlivedata/fuelData";
 const DEFAULT_CACHE_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 55 * 60_000;
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -108,14 +109,32 @@ async function loadEicherSnapshot(options = {}) {
   }
 
   try {
-    const payload = await fetchLocationPayload({
+    const payloads = await fetchLivePayloads({
       env,
       fetchImpl: options.fetchImpl,
       forceToken: Boolean(options.forceToken),
     });
-    const snapshot = normalizeEicherLocationPayload(payload, {
+    const fuelRecordsAvailable = extractLocationRecords(payloads.fuelPayload).length > 0;
+    if (!fuelRecordsAvailable) {
+      const fallback = lastSuccessfulSnapshot || await loadPersistedSnapshot(options);
+      if (snapshotHasFuelData(fallback)) {
+        const fuelError = payloads.endpointErrors.find((error) => error.message.includes("fuel"))
+          || new EicherApiError("Eicher fuel response did not contain vehicle records.", {
+            kind: "upstream",
+            statusCode: 502,
+            retryable: true,
+          });
+        return markSnapshotDelayed(fallback, fetchedAt, fuelError);
+      }
+    }
+    const apiErrors = fuelRecordsAvailable
+      ? payloads.apiErrors
+      : [...payloads.apiErrors, "Eicher fuel data did not contain vehicle records."];
+    const snapshot = normalizeEicherLocationPayload(payloads.locationPayload, {
       fetchedAt,
-      integrationStatus: "connected",
+      fuelPayload: payloads.fuelPayload,
+      integrationStatus: apiErrors.length ? "delayed" : "connected",
+      apiErrors,
     });
     await rememberSuccessfulSnapshot(snapshot, options);
     return snapshot;
@@ -157,20 +176,33 @@ async function loadPersistedSnapshot(options = {}) {
   }
 }
 
-async function fetchLocationPayload(options = {}) {
+async function fetchLivePayloads(options = {}) {
   let token = await getBearerToken(options);
-  let result = await requestLocation(options, token);
-  if (result.status === 401) {
+  let results = await requestLivePayloads(options, token);
+  if (results.some((result) => result.status === 401)) {
     resetBearerToken();
     token = await getBearerToken({ ...options, forceToken: true });
-    result = await requestLocation(options, token);
+    results = await requestLivePayloads(options, token);
   }
 
-  if (!result.ok) {
-    throw httpFailure("Eicher location request failed.", result.status);
+  const [locationResult, fuelResult] = results;
+  const failures = [];
+  if (!locationResult.ok) {
+    failures.push(httpFailure("Eicher location request failed.", locationResult.status));
+  }
+  if (!fuelResult.ok) {
+    failures.push(httpFailure("Eicher fuel request failed.", fuelResult.status));
+  }
+  if (failures.length === results.length) {
+    throw failures.find((error) => error.kind === "authentication") || failures[0];
   }
 
-  return result.body;
+  return {
+    locationPayload: locationResult.ok ? locationResult.body : null,
+    fuelPayload: fuelResult.ok ? fuelResult.body : null,
+    apiErrors: failures.map(publicErrorMessage),
+    endpointErrors: failures,
+  };
 }
 
 async function getBearerToken(options = {}) {
@@ -224,10 +256,17 @@ async function getBearerToken(options = {}) {
   return token;
 }
 
-async function requestLocation(options, token) {
+async function requestLivePayloads(options, token) {
+  return Promise.all([
+    requestLiveEndpoint(LOCATION_URL, options, token),
+    requestLiveEndpoint(FUEL_URL, options, token),
+  ]);
+}
+
+async function requestLiveEndpoint(url, options, token) {
   const env = options.env || process.env;
   const apiKey = getApiKey(env);
-  return httpJson(LOCATION_URL, {
+  return httpJson(url, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -350,22 +389,18 @@ function configuredTokenExpiry(env, now) {
 
 function normalizeEicherLocationPayload(payload, options = {}) {
   const fetchedAt = options.fetchedAt || new Date().toISOString();
-  const records = extractLocationRecords(payload);
-  const fieldsReceived = collectTopLevelFields(records);
+  const locationRecords = extractLocationRecords(payload);
+  const fuelRecords = extractLocationRecords(options.fuelPayload);
+  const records = mergeLatestLiveRecords(locationRecords, fuelRecords, fetchedAt);
+  const fieldsReceived = collectTopLevelFields([...locationRecords, ...fuelRecords]);
   const registry = listEicherVehicleRegistry();
   const registryByVin = new Map(registry.map((vehicle) => [vehicle.vin, vehicle]));
-  const latestLiveByVin = new Map();
+  const acceptedRecords = records.filter((live) => (
+    live.locationDataAvailable
+    || registryByVin.get(live.vin)?.apiEnabled
+  ));
 
-  records.forEach((record, index) => {
-    const normalized = normalizeLocationRecord(record, { fetchedAt, index });
-    if (!normalized.vin) return;
-    const current = latestLiveByVin.get(normalized.vin);
-    if (!current || normalized.eventTime > current.eventTime) {
-      latestLiveByVin.set(normalized.vin, normalized);
-    }
-  });
-
-  const liveVehicles = [...latestLiveByVin.values()].map((live) => vehicleFromRegistryEntry(
+  const liveVehicles = acceptedRecords.map((live) => vehicleFromRegistryEntry(
     registryByVin.get(live.vin) || {
       vin: live.vin,
       apiEnabled: true,
@@ -387,7 +422,7 @@ function normalizeEicherLocationPayload(payload, options = {}) {
     telemetry: allTelemetry,
     summary: {
       ...summary,
-      apiRecords: records.length,
+      apiRecords: locationRecords.length + fuelRecords.length,
       telemetryRecords: allTelemetry.length,
     },
     registry: eicherRegistrySummary(),
@@ -405,10 +440,14 @@ function normalizeEicherLocationPayload(payload, options = {}) {
     meta: {
       tokenEndpoint: TOKEN_URL,
       locationEndpoint: LOCATION_URL,
+      fuelEndpoint: FUEL_URL,
       fieldsReceived,
-      rawRecordCount: records.length,
+      rawRecordCount: acceptedRecords.length,
+      mergedRawRecordCount: records.length,
+      locationRawRecordCount: locationRecords.length,
+      fuelRawRecordCount: fuelRecords.length,
       lastSuccessfulUpdate: allTelemetry.length ? fetchedAt : null,
-      apiErrors: [],
+      apiErrors: options.apiErrors || [],
     },
   };
 }
@@ -442,8 +481,11 @@ function registryOnlySnapshot(options = {}) {
     meta: {
       tokenEndpoint: TOKEN_URL,
       locationEndpoint: LOCATION_URL,
+      fuelEndpoint: FUEL_URL,
       fieldsReceived: [],
       rawRecordCount: 0,
+      locationRawRecordCount: 0,
+      fuelRawRecordCount: 0,
       lastSuccessfulUpdate: null,
       apiErrors: options.apiErrors || [],
     },
@@ -480,7 +522,9 @@ function vehicleFromRegistryEntry(entry, live) {
     company: "Eicher",
     modelNumber: null,
     capacityM3: null,
-    fuelMeasurementUnit: "Unknown",
+    fuelMeasurementUnit: live?.fuelConsumedLitres !== null && live?.fuelConsumedLitres !== undefined
+      ? "km/L"
+      : "Unknown",
     trackerProvider: apiAccessStatus === "API_ACCESS_PENDING"
       ? "Eicher VECV (API access pending)"
       : "Eicher VECV",
@@ -499,6 +543,11 @@ function vehicleFromRegistryEntry(entry, live) {
 
 function telemetryFromLive(live, vehicle) {
   if (!live) return null;
+  const lifetimeEfficiencyKmPerLitre = live.odometerKm !== null
+    && live.fuelConsumedLitres !== null
+    && live.fuelConsumedLitres > 0
+    ? live.odometerKm / live.fuelConsumedLitres
+    : null;
   return {
     id: `eicher-live-${vehicle.trackerId}-${new Date(live.eventTime).getTime()}`,
     source: EICHER_SOURCE,
@@ -520,22 +569,22 @@ function telemetryFromLive(live, vehicle) {
     location: live.currentLocation,
     odometerKm: live.odometerKm,
     distanceKm: null,
-    engineHours: null,
+    engineHours: live.engineHours,
     runningHours: null,
     idleHours: null,
     stoppedHours: null,
     offlineHours: live.status === "offline" && live.dataAgeSeconds !== null ? live.dataAgeSeconds / 3600 : 0,
     availableHours: null,
-    fuelConsumedLitres: null,
+    fuelConsumedLitres: live.fuelConsumedLitres,
     fuelFilledLitres: null,
-    fuelLevelLitres: null,
-    fuelLevelPercent: null,
+    fuelLevelLitres: live.fuelLevelLitres,
+    fuelLevelPercent: live.fuelLevelPercent,
     trips: null,
     capacityM3: null,
     productionM3: null,
     leadKm: null,
     status: live.status,
-    truckEfficiencyKmPerLitre: null,
+    truckEfficiencyKmPerLitre: lifetimeEfficiencyKmPerLitre,
     hemmFuelRateLitrePerHour: null,
     fuelPerTrip: null,
     fuelPerM3: null,
@@ -549,7 +598,7 @@ function telemetryFromLive(live, vehicle) {
       chassisNumber: live.chassisNumber,
       registrationNumber: live.registrationNumber,
       deviceId: live.deviceId,
-      eventType: "EICHER_LOCATION",
+      eventType: live.fuelDataAvailable ? "EICHER_FUEL_LOCATION" : "EICHER_LOCATION",
       eventTime: live.eventTime,
       receivedTime: live.fetchedAt,
       gpsTimestamp: live.gpsTimestamp,
@@ -568,6 +617,17 @@ function telemetryFromLive(live, vehicle) {
       vehicleDirection: live.heading,
       odometerKm: live.odometerKm,
       lifetimeOdometerKm: live.odometerKm,
+      engineHours: live.engineHours,
+      lifetimeEngineHours: live.engineHours,
+      fuelConsumedLitres: live.fuelConsumedLitres,
+      lifetimeFuelLitres: live.fuelConsumedLitres,
+      lifetimeEfficiencyKmPerLitre,
+      fuelLevelLitres: live.fuelLevelLitres,
+      fuelLevelPercent: live.fuelLevelPercent,
+      fuelPercent: live.fuelLevelPercent,
+      defLevelLitres: live.defLevelLitres,
+      fuelType: live.fuelType,
+      fuelDataAvailable: live.fuelDataAvailable,
       currentLocation: live.currentLocation,
       freshnessState: live.freshnessState,
       freshnessAgeMinutes: live.ageMinutes,
@@ -603,6 +663,37 @@ function normalizeLocationRecord(record, options) {
   const speedKph = numericField(record, ["speedKph", "vehicleSpeed", "speed", "Speed", "GPS_SPEED"]);
   const heading = numericField(record, ["heading", "Heading", "direction", "vehicleDirection", "course"]);
   const odometerKm = numericField(record, ["odometerKm", "odometer", "Odometer", "totalOdometer", "distanceTravelled"]);
+  const engineHours = numericField(record, [
+    "engineOperatingHours",
+    "engineHours",
+    "totalEngineHours",
+    "lifetimeEngineHours",
+  ]);
+  const fuelConsumedLitres = numericField(record, [
+    "lifeTimeFuelConsumtion",
+    "lifeTimeFuelConsumption",
+    "lifetimeFuelConsumption",
+    "lifetimeFuelConsumed",
+    "totalFuelConsumption",
+    "totalFuelConsumed",
+    "fuelConsumedLitres",
+  ]);
+  const fuelLevelPercent = numericField(record, [
+    "fuelLevelInPer",
+    "fuelLevelPercent",
+    "fuelPercent",
+  ]);
+  const fuelLevelLitres = numericField(record, [
+    "fuelLevelInLtr",
+    "fuelLevelLitres",
+    "fuelLevelLtr",
+  ]);
+  const defLevelLitres = numericField(record, [
+    "defLevelInLtr",
+    "defLevelLitres",
+    "adBlueLevelLitres",
+  ]);
+  const fuelType = stringField(record, ["fuelType", "fuel_type"]);
   const deviceId = stringField(record, ["deviceId", "deviceID", "device_id", "imei", "IMEI"]);
   const sourceLastUpdated = stringOrNumberField(record, ["lastUpdated", "last_update", "lastUpdate"]);
   const sourceEpochTime = stringOrNumberField(record, ["epochTime", "epoch_time"]);
@@ -661,6 +752,19 @@ function normalizeLocationRecord(record, options) {
     speedKph,
     heading,
     odometerKm,
+    engineHours,
+    fuelConsumedLitres,
+    fuelLevelPercent,
+    fuelLevelLitres,
+    defLevelLitres,
+    fuelType,
+    fuelDataAvailable: [
+      engineHours,
+      fuelConsumedLitres,
+      fuelLevelPercent,
+      fuelLevelLitres,
+      defLevelLitres,
+    ].some((value) => value !== null),
     vehicleStatus,
     statusText: vehicleStatus,
     ignitionState,
@@ -680,6 +784,7 @@ function extractLocationRecords(payload) {
 
   const preferredKeys = [
     "locationData",
+    "fuelData",
     "vehicles",
     "vehicleData",
     "vehicleDetails",
@@ -706,6 +811,60 @@ function extractLocationRecords(payload) {
   collectObjectArrays(payload, candidates, 0);
   candidates.sort((left, right) => right.length - left.length);
   return candidates[0] || [];
+}
+
+function snapshotHasFuelData(snapshot) {
+  return Boolean(snapshot?.telemetry?.some((record) => (
+    record.fuelConsumedLitres !== null
+    && record.fuelConsumedLitres !== undefined
+  )));
+}
+
+function mergeLatestLiveRecords(locationRecords, fuelRecords, fetchedAt) {
+  const locationByVin = latestNormalizedRecords(locationRecords, fetchedAt);
+  const fuelByVin = latestNormalizedRecords(fuelRecords, fetchedAt);
+  locationByVin.forEach((live) => {
+    live.locationDataAvailable = true;
+  });
+  const vins = new Set([...locationByVin.keys(), ...fuelByVin.keys()]);
+
+  return [...vins].map((vin) => {
+    const location = locationByVin.get(vin);
+    const fuel = fuelByVin.get(vin);
+    if (!location) return fuel;
+    if (!fuel) return location;
+    return fuel.eventTime >= location.eventTime
+      ? mergeNormalizedRecords(location, fuel)
+      : mergeNormalizedRecords(fuel, location);
+  }).filter(Boolean);
+}
+
+function latestNormalizedRecords(records, fetchedAt) {
+  const latestByVin = new Map();
+  records.forEach((record, index) => {
+    const normalized = normalizeLocationRecord(record, { fetchedAt, index });
+    if (!normalized.vin) return;
+    const current = latestByVin.get(normalized.vin);
+    if (!current || normalized.eventTime > current.eventTime) {
+      latestByVin.set(normalized.vin, normalized);
+    }
+  });
+  return latestByVin;
+}
+
+function mergeNormalizedRecords(base, update) {
+  const merged = { ...base };
+  Object.entries(update).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== "") {
+      merged[key] = value;
+    }
+  });
+  merged.fieldsReceived = [...new Set([
+    ...(base.fieldsReceived || []),
+    ...(update.fieldsReceived || []),
+  ])].sort();
+  merged.fuelDataAvailable = Boolean(base.fuelDataAvailable || update.fuelDataAvailable);
+  return merged;
 }
 
 function collectObjectArrays(value, candidates, depth) {
@@ -891,6 +1050,7 @@ function publicErrorMessage(error) {
 module.exports = {
   EICHER_SOURCE,
   EicherApiError,
+  FUEL_URL,
   LOCATION_URL,
   TOKEN_URL,
   extractBearerToken,
