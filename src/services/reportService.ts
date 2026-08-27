@@ -313,7 +313,9 @@ async function buildEicherReport(
         "GPS Timestamp": stringMetric(raw, "gpsTimestamp") ?? record?.timestamp ?? null,
         "Last Successful Update": stringMetric(raw, "lastSuccessfulUpdate"),
         "Total Engine Hours (Hr)": roundNullable(engineHours),
-        "Fuel Efficiency (Km/L)": fuelConsumed && distance !== null ? roundNullable(distance / fuelConsumed) : null,
+        "Fuel Efficiency (Km/L)": fuelConsumed !== null && fuelConsumed > 0 && distance !== null
+          ? roundNullable(distance / fuelConsumed)
+          : null,
         "Total Fuel Consumed (L)": roundNullable(fuelConsumed),
         "Fuel Consumed in Idling (L or Kg)": roundNullable(idleFuel),
         "Fuel Consumed in Idling (%)": fuelConsumed && idleFuel !== null ? roundNullable(idleFuel / fuelConsumed * 100) : null,
@@ -335,14 +337,11 @@ async function buildEicherReport(
     oem: "Eicher",
     live: true,
     source: snapshot.source,
-    notice: "Generated from Eicher VECV live location data. Fuel, engine-hour, and idling columns remain blank where the API does not supply those fields.",
+    notice: "Generated from Eicher VECV live location and fuel data. Idling consumption and duration remain blank because VECV does not supply those counters in this feed.",
     meta: {
       rawRecordCount: snapshot.meta?.rawRecordCount ?? snapshot.telemetry.length,
       finalFilteredVehicleCount: rows.length,
       unavailableFields: [
-        "Total Engine Hours (Hr)",
-        "Fuel Efficiency (Km/L)",
-        "Total Fuel Consumed (L)",
         "Fuel Consumed in Idling (L or Kg)",
         "Fuel Consumed in Idling (%)",
         "Time Spent in Idling (Min)",

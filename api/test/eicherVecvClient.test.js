@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const {
+  FUEL_URL,
   LOCATION_URL,
   TOKEN_URL,
   extractBearerToken,
@@ -73,6 +74,77 @@ test("normalizes VECV location records without assigning a mine site", () => {
   assert.equal(snapshot.meta.fieldsReceived.includes("locationData"), false);
 });
 
+test("merges VECV fuel records by chassis and maps cumulative fuel counters", () => {
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const snapshot = normalizeEicherLocationPayload({
+    locationData: [{
+      chassisNo: firstVin,
+      regNo: "MH34-EICHER-01",
+      deviceId: "EICHER-DEVICE-01",
+      vehicleDirection: 92,
+      currentLocation: "Nagpur Outer Ring Road",
+      lastUpdated: 20260827120000,
+    }],
+  }, {
+    fetchedAt: "2026-08-27T09:00:00.000Z",
+    fuelPayload: {
+      fuelData: [{
+        chassisNo: firstVin,
+        regNo: "",
+        latitude: 20.1132,
+        longitude: 79.02415,
+        fuelType: "Diesel",
+        vehicleStatus: "STOPPED",
+        lastUpdated: 20260827121841,
+        vehicleSpeed: 0,
+        odometer: 242876,
+        fuelLevelInPer: 81.6,
+        fuelLevelInLtr: 257.04,
+        defLevelInLtr: 47.8,
+        lifeTimeFuelConsumtion: "195873.0",
+        engineOperatingHours: 14876,
+      }],
+    },
+  });
+
+  const [vehicle] = snapshot.vehicles;
+  const [telemetry] = snapshot.telemetry;
+  assert.equal(vehicle.vehicleNumber, "MH34-EICHER-01");
+  assert.equal(vehicle.fuelMeasurementUnit, "km/L");
+  assert.equal(telemetry.engineHours, 14876);
+  assert.equal(telemetry.fuelConsumedLitres, 195873);
+  assert.equal(telemetry.fuelLevelLitres, 257.04);
+  assert.equal(telemetry.fuelLevelPercent, 81.6);
+  assert.equal(telemetry.truckEfficiencyKmPerLitre, 242876 / 195873);
+  assert.equal(telemetry.rawMetrics.defLevelLitres, 47.8);
+  assert.equal(telemetry.rawMetrics.deviceId, "EICHER-DEVICE-01");
+  assert.equal(telemetry.rawMetrics.vehicleDirection, 92);
+  assert.equal(telemetry.rawMetrics.eventType, "EICHER_FUEL_LOCATION");
+  assert.equal(snapshot.meta.locationRawRecordCount, 1);
+  assert.equal(snapshot.meta.fuelRawRecordCount, 1);
+  assert.equal(snapshot.meta.rawRecordCount, 1);
+  assert.equal(snapshot.meta.fieldsReceived.includes("lifeTimeFuelConsumtion"), true);
+});
+
+test("does not expose fuel-only vehicles outside the API-enabled Eicher registry", () => {
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const snapshot = normalizeEicherLocationPayload(null, {
+    fetchedAt: "2026-08-27T09:00:00.000Z",
+    fuelPayload: {
+      fuelData: [
+        { chassisNo: firstVin, lifeTimeFuelConsumtion: "500.0", lastUpdated: 20260827120000 },
+        { chassisNo: "MC2UNLISTED000001", lifeTimeFuelConsumtion: "900.0", lastUpdated: 20260827120000 },
+      ],
+    },
+  });
+
+  assert.equal(snapshot.vehicles.length, 1);
+  assert.equal(snapshot.vehicles[0].trackerId, firstVin);
+  assert.equal(snapshot.meta.fuelRawRecordCount, 2);
+  assert.equal(snapshot.meta.mergedRawRecordCount, 2);
+  assert.equal(snapshot.meta.rawRecordCount, 1);
+});
+
 test("does not expose registry-only Eicher VINs as live fleet rows", () => {
   const firstVin = listEicherVehicleRegistry()[0].vin;
   const pendingVin = eicherRegistrySummary().unmappedVins[0];
@@ -94,7 +166,7 @@ test("parses VECV numeric yyyyMMddHHmmss timestamps as Kolkata local time", () =
   assert.equal(parseTimestamp("20260801160530"), "2026-08-01T10:35:30.000Z");
 });
 
-test("uses EICHER_API_KEY only on backend token and location requests", async () => {
+test("uses EICHER_API_KEY only on backend token, location, and fuel requests", async () => {
   resetEicherCaches();
   const calls = [];
   const env = { EICHER_API_KEY: "backend-secret-key", EICHER_CACHE_SECONDS: "60" };
@@ -115,19 +187,34 @@ test("uses EICHER_API_KEY only on backend token and location requests", async ()
         }],
       });
     }
+    if (url === FUEL_URL) {
+      return jsonResponse(200, {
+        fuelData: [{
+          chassisNo: firstVin,
+          odometer: 1000,
+          lifeTimeFuelConsumtion: "500.0",
+          engineOperatingHours: 100,
+          lastUpdated: 20260801160000,
+        }],
+      });
+    }
     throw new Error("Unexpected URL");
   };
 
   const snapshot = await getEicherSnapshot({ env, fetchImpl, force: true });
   assert.equal(snapshot.telemetry.length, 1);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].options.headers["API-KEY"], env.EICHER_API_KEY);
   assert.equal(calls[1].options.headers["API-KEY"], env.EICHER_API_KEY);
   assert.equal(calls[1].options.headers.Authorization, "Bearer opaque-token-12345");
   assert.deepEqual(JSON.parse(calls[1].options.body), { clientId: env.EICHER_API_KEY });
+  assert.equal(calls[2].options.headers["API-KEY"], env.EICHER_API_KEY);
+  assert.equal(calls[2].options.headers.Authorization, "Bearer opaque-token-12345");
+  assert.deepEqual(JSON.parse(calls[2].options.body), { clientId: env.EICHER_API_KEY });
+  assert.equal(snapshot.telemetry[0].fuelConsumedLitres, 500);
 
   await getEicherSnapshot({ env, fetchImpl });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
 });
 
 test("accepts vendor APIKEY alias and seeded Eicher bearer token", async () => {
@@ -141,8 +228,7 @@ test("accepts vendor APIKEY alias and seeded Eicher bearer token", async () => {
   const firstVin = listEicherVehicleRegistry()[0].vin;
   const fetchImpl = async (url, options) => {
     calls.push({ url, options });
-    assert.equal(url, LOCATION_URL);
-    return jsonResponse(200, {
+    if (url === LOCATION_URL) return jsonResponse(200, {
       locationData: [{
         chassisNo: firstVin,
         regNo: "EICHER-ALIAS-1",
@@ -152,14 +238,17 @@ test("accepts vendor APIKEY alias and seeded Eicher bearer token", async () => {
         lastUpdated: 20260801160530,
       }],
     });
+    assert.equal(url, FUEL_URL);
+    return jsonResponse(200, { fuelData: [] });
   };
 
   const snapshot = await getEicherSnapshot({ env, fetchImpl, force: true });
   assert.equal(snapshot.telemetry.length, 1);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].options.headers["API-KEY"], env.APIKEY);
   assert.equal(calls[0].options.headers.Authorization, `Bearer ${env.EICHER_TOKEN}`);
   assert.deepEqual(JSON.parse(calls[0].options.body), { clientId: env.APIKEY });
+  assert.equal(calls[1].options.headers.Authorization, `Bearer ${env.EICHER_TOKEN}`);
 });
 
 test("refreshes the bearer token after a VECV 401 response", async () => {
@@ -178,13 +267,85 @@ test("refreshes the bearer token after a VECV 401 response", async () => {
     if (url === LOCATION_URL && calls.filter((call) => call.url === LOCATION_URL).length === 1) {
       return jsonResponse(401, { message: "expired" });
     }
-    return jsonResponse(200, { data: [{ chassisNo: firstVin, speed: 7, timestamp: "2026-08-01T06:00:00.000Z" }] });
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { data: [{ chassisNo: firstVin, speed: 7, timestamp: "2026-08-01T06:00:00.000Z" }] });
+    }
+    return jsonResponse(200, { fuelData: [] });
   };
 
   const snapshot = await getEicherSnapshot({ env, fetchImpl, force: true });
   assert.equal(snapshot.telemetry.length, 1);
-  assert.equal(calls.map((call) => call.url).join("|"), `${TOKEN_URL}|${LOCATION_URL}|${TOKEN_URL}|${LOCATION_URL}`);
-  assert.equal(calls[3].authorization, "Bearer new-token-12345");
+  assert.equal(
+    calls.map((call) => call.url).join("|"),
+    `${TOKEN_URL}|${LOCATION_URL}|${FUEL_URL}|${TOKEN_URL}|${LOCATION_URL}|${FUEL_URL}`,
+  );
+  assert.equal(calls[4].authorization, "Bearer new-token-12345");
+  assert.equal(calls[5].authorization, "Bearer new-token-12345");
+});
+
+test("keeps mapped fuel data when the location endpoint is temporarily unavailable", async () => {
+  resetEicherCaches();
+  const env = {
+    EICHER_API_KEY: "backend-secret-key",
+    EICHER_TOKEN: "seeded-token-12345",
+    EICHER_CACHE_SECONDS: "5",
+  };
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const fetchImpl = async (url) => {
+    if (url === LOCATION_URL) return jsonResponse(503, { message: "temporary" });
+    return jsonResponse(200, {
+      fuelData: [{
+        chassisNo: firstVin,
+        odometer: 1000,
+        lifeTimeFuelConsumtion: "500.0",
+        engineOperatingHours: 100,
+        lastUpdated: 20260801160000,
+      }],
+    });
+  };
+
+  const snapshot = await getEicherSnapshot({ env, fetchImpl, force: true });
+  assert.equal(snapshot.integration.status, "delayed");
+  assert.equal(snapshot.telemetry.length, 1);
+  assert.equal(snapshot.telemetry[0].fuelConsumedLitres, 500);
+  assert.equal(snapshot.meta.apiErrors.length, 1);
+});
+
+test("keeps the last fuel counters when the fuel endpoint fails later", async () => {
+  resetEicherCaches();
+  const env = {
+    EICHER_API_KEY: "backend-secret-key",
+    EICHER_TOKEN: "seeded-token-12345",
+    EICHER_CACHE_SECONDS: "5",
+  };
+  const firstVin = listEicherVehicleRegistry()[0].vin;
+  const successFetch = async (url) => {
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { locationData: [{ chassisNo: firstVin, vehicleSpeed: 4 }] });
+    }
+    return jsonResponse(200, {
+      fuelData: [{
+        chassisNo: firstVin,
+        odometer: 1000,
+        lifeTimeFuelConsumtion: "500.0",
+        engineOperatingHours: 100,
+      }],
+    });
+  };
+  const fuelFailureFetch = async (url) => {
+    if (url === LOCATION_URL) {
+      return jsonResponse(200, { locationData: [{ chassisNo: firstVin, vehicleSpeed: 7 }] });
+    }
+    return jsonResponse(503, { message: "temporary" });
+  };
+
+  const first = await getEicherSnapshot({ env, fetchImpl: successFetch, force: true });
+  const second = await getEicherSnapshot({ env, fetchImpl: fuelFailureFetch, force: true });
+
+  assert.equal(first.telemetry[0].fuelConsumedLitres, 500);
+  assert.equal(second.telemetry[0].fuelConsumedLitres, 500);
+  assert.equal(second.integration.status, "delayed");
+  assert.equal(second.meta.cacheFallback, true);
 });
 
 test("keeps last successful Eicher data when the location API fails later", async () => {

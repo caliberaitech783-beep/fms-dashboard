@@ -20,6 +20,9 @@ export interface EicherLiveSnapshot {
   meta?: {
     fieldsReceived?: string[];
     rawRecordCount?: number;
+    mergedRawRecordCount?: number;
+    locationRawRecordCount?: number;
+    fuelRawRecordCount?: number;
     lastSuccessfulUpdate?: string | null;
     apiErrors?: string[];
   };
