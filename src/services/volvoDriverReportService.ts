@@ -3,7 +3,7 @@ import type { DashboardFilters } from "../types/fleet";
 import type { ReportPreview } from "../types/reports";
 import { buildVolvoDriverReportQuery } from "../utils/volvoDriverReportQuery";
 
-const DEFAULT_API_BASE_URL = "https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api";
+const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const REPORT_CACHE_MS = 5 * 60_000;
 const reportCache = new Map<string, { expiresAt: number; preview: ReportPreview }>();

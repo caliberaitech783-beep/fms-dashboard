@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_PUBLIC_SITE_URL: https://fms.cmll.in
-      VITE_AUTH_API_BASE_URL: https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api
+      VITE_AUTH_API_BASE_URL: https://cmll-fms-api-b3-783.azurewebsites.net/api
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

@@ -1,4 +1,4 @@
-name: Build and deploy Node.js project to Azure Function App - cmll-fms-api-783
+name: Build and deploy Node.js project to Azure Function App - cmll-fms-api-b3-783
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: azure-functionapp-cmll-fms-api-783
+  group: azure-functionapp-cmll-fms-api-b3-783
   cancel-in-progress: false
 
 env:
@@ -95,18 +95,18 @@ jobs:
           echo "::add-mask::$EICHER_API_KEY"
 
           resource_group="$(az resource list \
-            --name cmll-fms-api-783 \
+            --name cmll-fms-api-b3-783 \
             --resource-type Microsoft.Web/sites \
             --query '[0].resourceGroup' \
             --output tsv)"
 
           if [ -z "$resource_group" ]; then
-            echo "Azure resource group for cmll-fms-api-783 was not found."
+            echo "Azure resource group for cmll-fms-api-b3-783 was not found."
             exit 1
           fi
 
           current_access_token="$(az functionapp config appsettings list \
-            --name cmll-fms-api-783 \
+            --name cmll-fms-api-b3-783 \
             --resource-group "$resource_group" \
             --query "[?name=='CASE_ACCESS_TOKEN'].value | [0]" \
             --output tsv)"
@@ -116,7 +116,7 @@ jobs:
           echo "::add-mask::$CASE_ACCESS_TOKEN"
 
           current_refresh_token="$(az functionapp config appsettings list \
-            --name cmll-fms-api-783 \
+            --name cmll-fms-api-b3-783 \
             --resource-group "$resource_group" \
             --query "[?name=='CASE_REFRESH_TOKEN'].value | [0]" \
             --output tsv)"
@@ -126,7 +126,7 @@ jobs:
           echo "::add-mask::$CASE_REFRESH_TOKEN"
 
           az functionapp config appsettings set \
-            --name cmll-fms-api-783 \
+            --name cmll-fms-api-b3-783 \
             --resource-group "$resource_group" \
             --settings \
               "EICHER_API_KEY=$EICHER_API_KEY" \
@@ -159,13 +159,13 @@ jobs:
             SCM_DO_BUILD_DURING_DEPLOYMENT \
             ENABLE_ORYX_BUILD; do
             setting_value="$(az functionapp config appsettings list \
-              --name cmll-fms-api-783 \
+              --name cmll-fms-api-b3-783 \
               --resource-group "$resource_group" \
               --query "[?name=='$setting_name'].value | [0]" \
               --output tsv)"
             if [ -n "$setting_value" ]; then
               az functionapp config appsettings delete \
-                --name cmll-fms-api-783 \
+                --name cmll-fms-api-b3-783 \
                 --resource-group "$resource_group" \
                 --setting-names "$setting_name" \
                 --output none
@@ -175,7 +175,7 @@ jobs:
       - name: Deploy Azure Function App
         uses: Azure/functions-action@v1
         with:
-          app-name: cmll-fms-api-783
+          app-name: cmll-fms-api-b3-783
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           scm-do-build-during-deployment: ""
           enable-oryx-build: ""

@@ -20,8 +20,8 @@ Before merging to `main`:
 ## Azure Backend
 
 1. Configure all required Azure Function App settings from `docs/environment-variables.md`.
-2. Deploy the API package to `cmll-fms-api-783`.
-3. Verify `https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api/health`.
+2. Deploy the API package to `cmll-fms-api-b3-783`.
+3. Verify `https://cmll-fms-api-b3-783.azurewebsites.net/api/health`.
 4. Verify authenticated notification endpoints using a Super Admin token in staging first.
 5. Confirm logs do not contain secrets.
 6. Configure the Volvo settings documented in `docs/volvo-live-vehicle-status.md`.

@@ -11,7 +11,7 @@ import type {
   WhatsAppConsent,
 } from "../types/notifications";
 
-const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api";
+const DEFAULT_AUTH_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const AUTH_API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_AUTH_API_BASE_URL).replace(/\/$/, "");
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const DEVICE_ID_KEY = "mining.notifications.deviceId.v1";

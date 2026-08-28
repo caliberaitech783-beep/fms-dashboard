@@ -14,7 +14,7 @@
 2. Add WhatsApp product.
 3. Configure the business phone number.
 4. Set callback URL to the Azure endpoint:
-   - `https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net/api/webhooks/whatsapp`
+   - `https://cmll-fms-api-b3-783.azurewebsites.net/api/webhooks/whatsapp`
 5. Set the same verify token in Meta and Azure:
    - `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
 6. Add in Azure:

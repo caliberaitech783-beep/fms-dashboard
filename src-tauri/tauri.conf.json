@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://cmll-fms-api-783-hgadd9fqfdb5a8hq.centralindia-01.azurewebsites.net https://fms.cmll.in; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:"
+      "csp": "default-src 'self'; connect-src 'self' https://cmll-fms-api-b3-783.azurewebsites.net https://fms.cmll.in; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:"
     }
   },
   "bundle": {
