@@ -14,8 +14,8 @@ test("defines exactly the seven required report categories", () => {
   assert.deepEqual(
     reportCategories.map((category) => category.name),
     [
-      "Fuel & Efficiency",
       "Operations & Utilization",
+      "Fuel & Efficiency",
       "Performance Analysis",
       "Site & Fleet",
       "Alerts & Tracker Health",
