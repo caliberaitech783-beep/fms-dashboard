@@ -146,22 +146,25 @@ function ReportCategoryMenu({ onSelect }: { onSelect: (path: string) => void }) 
       {reportCategories.map((category) => {
         const expanded = expandedCategory === category.id;
         return (
-          <section key={category.id}>
+          <section key={category.id} className="relative" onMouseEnter={() => setExpandedCategory(category.id)}>
             <button
               type="button"
               aria-expanded={expanded}
               aria-controls={`report-category-${category.id}`}
-              onClick={() => setExpandedCategory(expanded ? null : category.id)}
+              onClick={() => setExpandedCategory(category.id)}
+              onFocus={() => setExpandedCategory(category.id)}
               className={cx("flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-ore-50 hover:text-ore-700", expanded ? "bg-ore-50 text-ore-700" : "text-coal-800")}
             >
               {category.name}
               <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
             </button>
             {expanded && (
-              <div id={`report-category-${category.id}`} className="absolute left-full top-0 ml-2 max-h-[min(24rem,calc(100dvh-7rem))] w-[19rem] overflow-y-auto rounded-lg border border-coal-200 bg-white p-2 shadow-xl">
+              <div id={`report-category-${category.id}`} className="absolute left-full top-0 w-[19.5rem] pl-2">
+                <div ref={(node) => { if (node) node.style.maxHeight = `${Math.max(80, Math.min(320, window.innerHeight - node.getBoundingClientRect().top - 16))}px`; }} className="overflow-y-auto rounded-lg border border-coal-200 bg-white p-2 shadow-xl">
                 {category.reports.filter((report) => !report.isShortcut).map((report) => (
                   <button key={report.id} type="button" onClick={() => onSelect(report.route)} className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-coal-700 transition-colors hover:bg-ore-50 hover:text-ore-700">{report.name}</button>
                 ))}
+                </div>
               </div>
             )}
           </section>
