@@ -173,3 +173,7 @@ select {
   border-color: #ccd5dc !important;
   box-shadow: 0 16px 30px -22px rgba(9, 16, 22, 0.45) !important;
 }
+@keyframes menu-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
