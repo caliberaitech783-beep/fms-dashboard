@@ -7,7 +7,6 @@ import { showNativeNotification } from "../../services/nativeNotificationService
 import { notificationService } from "../../services/notificationService";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import { ConnectionStatus } from "./ConnectionStatus";
 
 interface TopBarProps {
   user: AppUser;
@@ -76,17 +75,16 @@ export function TopBar({ user, onLogout, onOpenNotifications }: TopBarProps) {
 
   return (
     <div className="border-b border-coal-200 bg-white px-4 py-3 lg:px-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="flex flex-col items-end gap-3 md:flex-row md:items-center md:justify-end">
+        <div className="text-right">
           <p className="text-sm font-semibold text-coal-950">{user.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center justify-end gap-2">
             <Badge tone="info">{user.role}</Badge>
             <span className="text-xs text-coal-500">User ID: {user.userId}</span>
             <span className="text-xs text-coal-500">Version {APP_VERSION}</span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <ConnectionStatus />
+        <div className="flex flex-wrap justify-end gap-2">
           {updateReady && (
             <Button variant="primary" onClick={() => activateWaitingServiceWorker()}>
               New version available — Update now

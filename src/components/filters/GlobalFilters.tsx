@@ -4,7 +4,6 @@ import { ChevronDown, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 import type { DashboardFilters } from "../../types/fleet";
 import type { FilterOptions } from "../../hooks/useFleetFilters";
 import { SHIFT_OPTIONS } from "../../constants/shifts";
-import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { TimePeriodPicker } from "./TimePeriodPicker";
 import { applyFleetTimePeriod } from "../../utils/filterState";
@@ -32,8 +31,6 @@ export function GlobalFilters({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold text-coal-950">Unified Mining Fleet Fuel Monitoring Portal</h1>
-            <Badge tone="good">Dummy Data Mode</Badge>
-            <Badge tone="info">API Ready</Badge>
           </div>
           <p className="mt-1 text-sm text-coal-500">Fleet fuel, utilization, and tracker health command center.</p>
         </div>
