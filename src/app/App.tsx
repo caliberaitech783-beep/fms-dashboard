@@ -10,16 +10,12 @@ import { GlobalFilters } from "../components/filters/GlobalFilters";
 import { MobileNav } from "../components/layout/MobileNav";
 import { Sidebar } from "../components/layout/Sidebar";
 import { TopBar } from "../components/layout/TopBar";
-import { AlertsDashboard } from "../components/dashboard/AlertsDashboard";
 import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
-import { DieselDashboard } from "../components/dashboard/DieselDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
-import { FuelDashboard } from "../components/dashboard/FuelDashboard";
 import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
 import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
 import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
 import { NotificationCenterDashboard } from "../components/dashboard/NotificationCenterDashboard";
-import { ProductionDashboard } from "../components/dashboard/ProductionDashboard";
 import { ReportsDashboard } from "../components/dashboard/ReportsDashboard";
 import { SettingsDashboard } from "../components/dashboard/SettingsDashboard";
 import { UserManagementDashboard } from "../components/dashboard/UserManagementDashboard";
@@ -74,7 +70,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, setFilters, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey);
-  const showGlobalFilters = !["users", "notifications", "admin-notifications", "diesel"].includes(activeSection);
+  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -222,14 +218,6 @@ function renderSection(
       return <ManagementDashboard overview={data.overview} loading={data.loading} />;
     case "fleet":
       return <FleetDashboard rows={data.fleetRows} alerts={data.alerts} loading={data.loading} onReload={onFleetReload} onRefresh={onFleetRefresh} />;
-    case "fuel":
-      return <FuelDashboard summary={data.fuelSummary} loading={data.loading} />;
-    case "diesel":
-      return <DieselDashboard />;
-    case "production":
-      return <ProductionDashboard summary={data.productionSummary} loading={data.loading} />;
-    case "alerts":
-      return <AlertsDashboard alerts={data.alerts} fleetRows={data.fleetRows} loading={data.loading} />;
     case "reports":
       return (
         <ReportsDashboard

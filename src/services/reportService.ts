@@ -1,5 +1,5 @@
 import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
-import type { ReportPreview, ReportType } from "../types/reports";
+import { reportTypes, type ReportPreview, type ReportType } from "../types/reports";
 import { formatDateTime, titleCase } from "../utils/formatters";
 import {
   aggregateByCompany,
@@ -42,7 +42,7 @@ import {
 export const reportService = {
   async getReports() {
     const data = await getPortalData();
-    return data.reports;
+    return data.reports.filter((report) => reportTypes.includes(report.type as ReportType));
   },
 
   async getReportPreview(
@@ -93,15 +93,15 @@ export const reportService = {
     }
 
     if (reportType.includes("Company-wise")) {
-      aggregateByCompany(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
+      aggregateByCompany(filteredRecords, vehicles).forEach((metric) => rows.push({ ...Object.fromEntries(Object.entries(metric).filter(([key]) => key !== "efficiency")) }));
     } else if (reportType.includes("Model-wise")) {
-      aggregateByModel(filteredRecords, vehicles).forEach((metric) => rows.push({ ...metric }));
+      aggregateByModel(filteredRecords, vehicles).forEach((metric) => rows.push({ ...Object.fromEntries(Object.entries(metric).filter(([key]) => key !== "efficiency")) }));
     } else if (reportType.includes("Site-wise")) {
-      aggregateBySite(filteredRecords).forEach((metric) => rows.push({ ...metric, name: siteMap.get(metric.name) ?? metric.name }));
+      aggregateBySite(filteredRecords).forEach((metric) => rows.push({ ...Object.fromEntries(Object.entries(metric).filter(([key]) => key !== "efficiency")), name: siteMap.get(metric.name) ?? metric.name }));
     } else if (reportType.includes("Lead-wise")) {
-      aggregateByLead(filteredRecords).forEach((metric) => rows.push({ ...metric }));
+      aggregateByLead(filteredRecords).forEach((metric) => rows.push({ ...Object.fromEntries(Object.entries(metric).filter(([key]) => key !== "efficiency")) }));
     } else if (reportType.includes("Shift-wise")) {
-      aggregateByShift(filteredRecords).forEach((metric) => rows.push({ ...metric }));
+      aggregateByShift(filteredRecords).forEach((metric) => rows.push({ ...Object.fromEntries(Object.entries(metric).filter(([key]) => key !== "efficiency")) }));
     } else if (reportType.includes("Exception")) {
       generateAlerts(filteredRecords, filteredVehicles).slice(0, 25).forEach((alert) => rows.push({
         type: alert.type,

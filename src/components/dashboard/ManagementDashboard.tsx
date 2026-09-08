@@ -4,13 +4,9 @@ import {
   Clock,
   Fuel,
   Gauge,
-  HardHat,
-  Route,
   Truck,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -27,7 +23,7 @@ import {
 } from "recharts";
 import type { DashboardOverview, EicherLiveDashboardRow, VehiclePerformanceRow } from "../../types/dashboard";
 import type { Alert, IntegrationSource } from "../../types/fleet";
-import { formatDateTime, formatEfficiency, formatHours, formatLitres, formatM3, formatNumber, titleCase } from "../../utils/formatters";
+import { formatDateTime, formatEfficiency, formatHours, formatLitres, formatNumber, titleCase } from "../../utils/formatters";
 import { KpiCard } from "../cards/KpiCard";
 import { ChartFrame } from "../charts/ChartFrame";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
@@ -48,9 +44,6 @@ const kpiIcons = [
   Fuel,
   Gauge,
   Gauge,
-  Route,
-  HardHat,
-  Fuel,
   Clock,
   AlertTriangle,
 ];
@@ -122,22 +115,7 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <ChartFrame title="Production vs Fuel Consumed Trend" subtitle="Daily production and fuel burn across selected filters">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={overview.productionFuelTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
-              <XAxis dataKey="name" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip formatter={(value: number, name: string) => [formatNumber(value, 1), titleCase(name)]} />
-              <Legend />
-              <Area yAxisId="left" type="monotone" dataKey="productionM3" name="Production m³" stroke="#1f9d74" fill="#1f9d74" fillOpacity={0.18} />
-              <Area yAxisId="right" type="monotone" dataKey="fuelConsumedLitres" name="Fuel L" stroke="#a56414" fill="#a56414" fillOpacity={0.18} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartFrame>
-
-        <ChartFrame title="Shift-wise Comparison" subtitle="Fuel, production, trips, and running hours by shift">
+<ChartFrame title="Shift-wise Comparison" subtitle="Fuel and running hours by shift">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.shiftComparison}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
@@ -146,13 +124,12 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
               <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#a56414" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="productionM3" name="Production m³" fill="#1f9d74" radius={[4, 4, 0, 0]} />
               <Bar dataKey="runningHours" name="Running hr" fill="#2f80ed" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
 
-        <ChartFrame title="Site-wise Fuel and Production Performance">
+        <ChartFrame title="Site-wise Fuel Performance">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.sitePerformance}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
@@ -161,7 +138,6 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
               <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#a56414" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="productionM3" name="Production m³" fill="#1f9d74" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
@@ -175,7 +151,6 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
               <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#5d7484" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="productionM3" name="Production m³" fill="#e3a008" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
