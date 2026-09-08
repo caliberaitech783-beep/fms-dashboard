@@ -8,7 +8,7 @@ import { ChangePasswordForm } from "../components/auth/ChangePasswordForm";
 import { LoginForm } from "../components/auth/LoginForm";
 import { GlobalFilters } from "../components/filters/GlobalFilters";
 import { MobileNav } from "../components/layout/MobileNav";
-import { Sidebar } from "../components/layout/Sidebar";
+import { DesktopNav } from "../components/layout/DesktopNav";
 import { TopBar } from "../components/layout/TopBar";
 import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
 import { FleetDashboard } from "../components/dashboard/FleetDashboard";
@@ -149,8 +149,19 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="min-h-screen bg-coal-50">
-      <Sidebar active={activeSection} onChange={handleSectionChange} items={allowedItems} />
-      <main className="lg:pl-72">
+      <DesktopNav
+        active={activeSection}
+        onChange={handleSectionChange}
+        items={allowedItems}
+        onReportChange={(path) => {
+          handleSectionChange("reports");
+          if (path !== "/reports") {
+            window.history.replaceState({}, "", path);
+            window.dispatchEvent(new Event("reports:root"));
+          }
+        }}
+      />
+      <main>
         <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />
         {showGlobalFilters && (
           <GlobalFilters
