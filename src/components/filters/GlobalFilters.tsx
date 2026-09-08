@@ -55,7 +55,7 @@ export function GlobalFilters({
         <FilterSelect label="Shift" value={filters.shift} options={SHIFT_OPTIONS.map((shift) => ({ value: shift.value, label: shift.label }))} onChange={(value) => setFilter("shift", value as DashboardFilters["shift"])} />
         <SiteDrilldownSelect value={filters.siteId} options={options.sites} onChange={(value) => setFilter("siteId", value)} />
         <FilterSelect label="Types of work" value={filters.contractType} options={withAll(options.contracts, "All Work Types")} onChange={(value) => setFilter("contractType", value as DashboardFilters["contractType"])} />
-        <FilterSelect label="Category" value={filters.assetCategory} options={withAll(options.categories)} onChange={(value) => setFilter("assetCategory", value as DashboardFilters["assetCategory"])} />
+        <FilterSelect label="Category" value={filters.assetCategory} options={withAll(options.categories).map((option) => ({ ...option, label: option.value === "HEMM" ? "Equipment" : option.label }))} onChange={(value) => setFilter("assetCategory", value as DashboardFilters["assetCategory"])} />
         <FilterSelect label="OEM" value={filters.company} options={withAll(options.companies)} onChange={(value) => setFilter("company", value as DashboardFilters["company"])} />
         <FilterSelect label="Model" value={filters.modelNumber} options={withAll(options.models)} onChange={(value) => setFilter("modelNumber", value)} />
         <FilterInput label="Vehicle" value={filters.vehicleNumber} placeholder="Search vehicle" onChange={(value) => setFilter("vehicleNumber", value)} />
