@@ -27,13 +27,7 @@ export function GlobalFilters({
 }: GlobalFiltersProps) {
   return (
     <div className="sticky top-0 z-20 border-b border-coal-200 bg-coal-50/95 px-4 py-3 backdrop-blur lg:px-6">
-      <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold text-coal-950">Unified Mining Fleet Fuel Monitoring Portal</h1>
-          </div>
-          <p className="mt-1 text-sm text-coal-500">Fleet fuel, utilization, and tracker health command center.</p>
-        </div>
+      <div className="mb-2 flex justify-end">
         <div className="flex gap-2">
           <Button icon={<RefreshCw className="h-4 w-4" />} onClick={onRefresh} variant="primary">Refresh</Button>
           <Button icon={<RotateCcw className="h-4 w-4" />} onClick={resetFilters}>Reset</Button>

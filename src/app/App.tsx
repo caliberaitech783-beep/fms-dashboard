@@ -59,6 +59,13 @@ function AppContent() {
 }
 
 function DashboardShell({ onLogout }: { onLogout: () => void }) {
+  const [desktopLayout, setDesktopLayout] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setDesktopLayout(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const { currentUser } = useAuth();
   const [activeSection, setActiveSection] = useState<NavItemId>(() => initialSectionFromUrl());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -153,6 +160,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
         active={activeSection}
         onChange={handleSectionChange}
         items={allowedItems}
+        userControls={desktopLayout && <TopBar compact user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />}
         onReportChange={(path) => {
           handleSectionChange("reports");
           if (path !== "/reports") {
@@ -162,7 +170,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
         }}
       />
       <main>
-        <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />
+        {!desktopLayout && <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />}
         {showGlobalFilters && (
           <GlobalFilters
             filters={filters}

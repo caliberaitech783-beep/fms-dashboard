@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, Mountain } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowUpRight, ChevronDown, ChevronRight } from "lucide-react";
 import type { NavItem, NavItemId } from "../../constants/routes";
 import { reportCategories } from "../../config/reportCategories";
 import { cx } from "../ui/cx";
 
 interface DesktopNavProps {
   active: NavItemId;
+  userControls?: ReactNode;
   items: readonly NavItem[];
   onChange: (id: NavItemId) => void;
   onReportChange: (path: string) => void;
@@ -23,7 +24,7 @@ const descriptions: Partial<Record<NavItemId, string>> = {
   settings: "Portal preferences and configuration",
 };
 
-export function DesktopNav({ active, items, onChange, onReportChange }: DesktopNavProps) {
+export function DesktopNav({ active, items, onChange, onReportChange, userControls }: DesktopNavProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const triggerRefs = useRef<Partial<Record<MenuId, HTMLButtonElement | null>>>({});
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -70,12 +71,12 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
           }
         }}
       >
-        <div className="flex min-h-20 items-center gap-8 px-6 xl:px-8">
+        <div className="flex min-h-20 items-center gap-3 px-4 xl:gap-6 xl:px-6">
           <div className="flex shrink-0 items-center gap-3 text-coal-950">
-            <span className="rounded-xl bg-ore-600 p-2.5 text-white"><Mountain className="h-6 w-6" aria-hidden="true" /></span>
-            <div><p className="text-base font-bold tracking-tight">CMLL FMS</p><p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-coal-500">Mining operations</p></div>
+            <img src="/caliber-logo.png" alt="Caliber" className="h-auto w-24 object-contain xl:w-28" />
+            <div><p className="text-base font-bold tracking-tight">CMLL FMS</p><p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-coal-500">Fuel Monitoring System</p></div>
           </div>
-          <nav aria-label="Portal sections" className="flex flex-1 items-center gap-1 xl:gap-3">
+          <nav aria-label="Portal sections" className="flex flex-1 items-center gap-0 xl:gap-1">
             {primaryItems.map((item) => item.id === "reports" ? (
               <button
                 key={item.id}
@@ -116,7 +117,7 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
               >{group === "control" ? "Control" : "Admin"}<ChevronDown className={cx("h-3.5 w-3.5 transition-transform", openMenu === group && "rotate-180")} /></button>
             ))}
           </nav>
-          <span className="hidden text-xs text-coal-500 xl:block">Unified fleet monitoring</span>
+          {userControls}
         </div>
         {openMenu && (
           <div ref={panelRef} id={`desktop-menu-${openMenu}`} style={{ left: Math.max(16, Math.min(triggerRefs.current[openMenu]?.offsetLeft ?? 16, window.innerWidth - (openMenu === "reports" ? 650 : 340))) }} className="absolute top-full w-[19rem] rounded-lg border border-coal-200 bg-white p-2 shadow-xl motion-safe:animate-[menu-reveal_150ms_ease-out]">
