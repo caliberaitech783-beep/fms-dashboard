@@ -101,7 +101,6 @@ function defaultReportSortColumn(
 export function ReportsDashboard({
   reports,
   filters,
-  loading,
   refreshKey,
   onTimingComplete,
 }: ReportsDashboardProps) {
@@ -297,10 +296,6 @@ export function ReportsDashboard({
     && exploredRows.length > 0
     && (filters.company !== "Scania" || preview.live === true),
   );
-
-  if (loading) {
-    return <LoadingState />;
-  }
 
   const reportColumns: DataTableColumn<Report>[] = [
     { header: "Report", render: (row) => <span className="font-semibold text-coal-900">{row.name}</span>, className: "min-w-64" },
