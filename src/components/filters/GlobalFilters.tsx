@@ -35,7 +35,7 @@ export function GlobalFilters({
             <Badge tone="good">Dummy Data Mode</Badge>
             <Badge tone="info">API Ready</Badge>
           </div>
-          <p className="mt-1 text-sm text-coal-500">Fleet fuel, production, utilization, alerts, and tracker health command center.</p>
+          <p className="mt-1 text-sm text-coal-500">Fleet fuel, utilization, and tracker health command center.</p>
         </div>
         <div className="flex gap-2">
           <Button icon={<RefreshCw className="h-4 w-4" />} onClick={onRefresh} variant="primary">Refresh</Button>

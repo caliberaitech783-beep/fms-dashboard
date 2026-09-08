@@ -4,7 +4,6 @@ export type ReportType =
   | "Vehicle Efficiency Report"
   | "Idle Time Report"
   | "Running Time Report"
-  | "Fuel vs Production Report"
   | "Company-wise Performance Report"
   | "Model-wise Performance Report"
   | "Site-wise Report"
@@ -25,7 +24,6 @@ export const reportTypes: ReportType[] = [
   "Vehicle Efficiency Report",
   "Idle Time Report",
   "Running Time Report",
-  "Fuel vs Production Report",
   "Company-wise Performance Report",
   "Model-wise Performance Report",
   "Site-wise Report",

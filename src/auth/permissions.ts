@@ -48,10 +48,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 const NAV_PERMISSIONS: Record<NavItemId, Permission[]> = {
   management: ["dashboard:management", "dashboard:full"],
   fleet: ["fleet:read", "dashboard:full"],
-  fuel: ["fuel:read", "dashboard:full"],
-  diesel: ["fuel:read", "dashboard:full"],
-  production: ["production:read", "dashboard:full"],
-  alerts: ["alerts:read", "dashboard:full"],
   reports: ["reports:read", "dashboard:full"],
   notifications: ["notifications:read", "dashboard:full"],
   "admin-notifications": ["notifications:manage", "dashboard:full"],

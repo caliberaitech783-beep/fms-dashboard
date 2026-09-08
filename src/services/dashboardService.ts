@@ -17,7 +17,6 @@ import {
   formatEfficiency,
   formatHours,
   formatLitres,
-  formatM3,
   formatNumber,
 } from "../utils/formatters";
 import { ALERT_THRESHOLDS } from "../constants/thresholds";
@@ -150,9 +149,6 @@ function buildKpis(
     { label: "Total Fuel Consumed", value: eicherLocationOnly ? "-" : formatLitres(values.totalFuelConsumed), subLabel: notSupplied ?? cumulativeLabel, tone: "info" },
     { label: "Avg Truck Efficiency", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: notSupplied ?? (liveVolvoOnly ? "Cumulative Volvo efficiency" : "Truck category only"), tone: "good" },
     { label: "Avg HEMM Fuel Rate", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageHemmFuelRate, "L/hr"), subLabel: notSupplied ?? "HEMM category only", tone: "info" },
-    { label: "Total Trips", value: eicherLocationOnly ? "-" : formatNumber(values.totalTrips), subLabel: notSupplied ?? (liveVolvoOnly ? "Not supplied by Volvo RFMS" : "All completed trips"), tone: "neutral" },
-    { label: "Total Production", value: eicherLocationOnly ? "-" : formatM3(values.totalProduction), subLabel: notSupplied ?? (liveVolvoOnly ? "Not supplied by Volvo RFMS" : "Trips x capacity"), tone: "good" },
-    { label: "Fuel per m3", value: eicherLocationOnly ? "-" : `${formatNumber(values.fuelPerM3, 3)} L/m3`, subLabel: notSupplied ?? (liveVolvoOnly ? "Requires production data" : "Fuel intensity"), tone: "warning" },
     { label: "Total Idle Hours", value: eicherLocationOnly ? "-" : formatHours(values.totalIdleHours), subLabel: notSupplied ?? (liveVolvoOnly ? cumulativeLabel : "Engine idle"), tone: "warning" },
     { label: "Alerts Count", value: formatNumber(alertsCount), subLabel: "Open exceptions", tone: alertsCount ? "danger" : "good" },
   ];

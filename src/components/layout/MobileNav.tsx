@@ -10,7 +10,7 @@ interface MobileNavProps {
   items?: readonly NavItem[];
 }
 
-const PRIMARY_MOBILE_IDS: readonly NavItemId[] = ["management", "fleet", "fuel", "alerts"];
+const PRIMARY_MOBILE_IDS: readonly NavItemId[] = ["management", "reports", "fleet", "notifications"];
 
 export function MobileNav({ active, onChange, items = NAV_ITEMS }: MobileNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -179,6 +179,5 @@ export function MobileNav({ active, onChange, items = NAV_ITEMS }: MobileNavProp
 
 function mobileLabel(item: NavItem): string {
   if (item.id === "management") return "Home";
-  if (item.id === "alerts") return "Alerts";
   return item.label.replace(" Control", "");
 }
