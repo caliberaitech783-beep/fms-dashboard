@@ -9,14 +9,13 @@ import {
 import type { ReportView } from "../src/types/reportCategories.ts";
 import { reportTypes } from "../src/types/reports.ts";
 
-test("defines exactly the eight required report categories", () => {
-  assert.equal(reportCategories.length, 8);
+test("defines exactly the seven required report categories", () => {
+  assert.equal(reportCategories.length, 7);
   assert.deepEqual(
     reportCategories.map((category) => category.name),
     [
       "Fuel & Efficiency",
       "Operations & Utilization",
-      "Production & Haulage",
       "Performance Analysis",
       "Site & Fleet",
       "Alerts & Tracker Health",
@@ -38,10 +37,6 @@ test("maps every existing report type exactly once as a primary report", () => {
 });
 
 test("redirects shortcuts and legacy report URLs to their canonical routes", () => {
-  assert.equal(
-    normalizeReportPath("/reports/production-haulage/fuel-vs-production"),
-    "/reports/fuel-efficiency/fuel-vs-production",
-  );
   assert.equal(
     normalizeReportPath("/reports/performance-analysis/vehicle-efficiency"),
     "/reports/fuel-efficiency/vehicle-efficiency",

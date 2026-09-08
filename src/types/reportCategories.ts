@@ -8,7 +8,6 @@ export type ReportStatusFilterValue = "all" | ReportStatus;
 export type ReportCategoryId =
   | "fuel-efficiency"
   | "operations-utilization"
-  | "production-haulage"
   | "performance-analysis"
   | "site-fleet"
   | "alerts-tracker"
