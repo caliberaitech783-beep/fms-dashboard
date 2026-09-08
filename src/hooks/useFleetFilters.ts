@@ -18,7 +18,7 @@ export const defaultFilters: DashboardFilters = {
   timeFrom: "00:00",
   timeTo: "23:59",
   timePeriodMode: "schedule",
-  shift: "All",
+  shift: "A",
   siteId: "All",
   contractType: "All",
   assetCategory: "All",
@@ -111,7 +111,7 @@ export function useFleetFilters() {
     return {
       sites: sites.map((site) => ({ value: site.id, label: site.name, group: site.location })),
       contracts: uniqueSorted(sites.map((site) => site.contractType)),
-      categories: uniqueSorted(contractVehicles.map((vehicle) => vehicle.assetCategory)),
+      categories: ["Truck", "HEMM"],
       assetTypes: uniqueSorted(categoryVehicles.map((vehicle) => vehicle.assetType)),
       companies: uniqueSorted(availableCompanies),
       models: configuredModels ?? uniqueSorted(companyVehicles.map((vehicle) => vehicle.modelNumber)),

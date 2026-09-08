@@ -10,10 +10,7 @@ export const SHIFT_DEFINITIONS: Record<
 };
 
 export const SHIFT_OPTIONS = [
-  { value: "All", label: "All Shifts" },
   { value: "A", label: "Shift A" },
   { value: "B", label: "Shift B" },
   { value: "C", label: "Shift C" },
-  { value: "ALL_DAY", label: "All Day" },
-  { value: "UNKNOWN", label: "Unknown" },
 ] as const;
