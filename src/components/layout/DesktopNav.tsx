@@ -70,7 +70,6 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
                 aria-expanded={openMenu === "reports"}
                 aria-controls="desktop-menu-reports"
                 aria-current={active === "reports" ? "page" : undefined}
-                onMouseEnter={() => setOpenMenu("reports")}
                 onClick={() => setOpenMenu((current) => current === "reports" ? null : "reports")}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown") {
@@ -114,16 +113,7 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
                   <div><p className="text-lg font-semibold text-coal-950">Reports</p><p className="mt-1 text-sm text-coal-500">Explore fleet performance, utilization, and OEM reports.</p></div>
                   <button type="button" onClick={() => selectReport("/reports")} className="flex items-center gap-2 rounded-lg bg-ore-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ore-700">All reports<ArrowUpRight className="h-4 w-4" /></button>
                 </div>
-                <div className="grid grid-cols-4 gap-x-8 gap-y-6">
-                  {reportCategories.map((category) => (
-                    <section key={category.id}>
-                      <button type="button" onClick={() => selectReport(category.route)} className="mb-2 text-left text-xs font-semibold uppercase tracking-wider text-coal-500 hover:text-ore-700">{category.name}</button>
-                      <div className="space-y-0.5">{category.reports.filter((report) => !report.isShortcut).map((report) => (
-                        <button key={report.id} type="button" onClick={() => selectReport(report.route)} className="block w-full rounded-md px-2 py-1.5 text-left text-sm font-medium text-coal-800 transition-colors hover:bg-ore-50 hover:text-ore-700">{report.name}</button>
-                      ))}</div>
-                    </section>
-                  ))}
-                </div>
+                <ReportCategoryMenu onSelect={selectReport} />
               </>
             ) : (
               <div className="grid grid-cols-[1fr_3fr] gap-10">
@@ -137,6 +127,39 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
           </div>
         )}
       </header>
+    </div>
+  );
+}
+
+function ReportCategoryMenu({ onSelect }: { onSelect: (path: string) => void }) {
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  return (
+    <div className="divide-y divide-coal-100">
+      {reportCategories.map((category) => {
+        const expanded = expandedCategory === category.id;
+        return (
+          <section key={category.id}>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={`report-category-${category.id}`}
+              onClick={() => setExpandedCategory(expanded ? null : category.id)}
+              className={cx("flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-semibold transition-colors hover:bg-ore-50 hover:text-ore-700", expanded ? "bg-ore-50 text-ore-700" : "text-coal-800")}
+            >
+              {category.name}
+              <ChevronDown aria-hidden="true" className={cx("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+            </button>
+            {expanded && (
+              <div id={`report-category-${category.id}`} className="space-y-1 border-l-2 border-ore-200 py-2 pl-4 ml-4 mb-3">
+                {category.reports.filter((report) => !report.isShortcut).map((report) => (
+                  <button key={report.id} type="button" onClick={() => onSelect(report.route)} className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-coal-700 transition-colors hover:bg-ore-50 hover:text-ore-700">{report.name}</button>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
