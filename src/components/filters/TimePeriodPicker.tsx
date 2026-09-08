@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
 
 export interface TimePeriodValue {
   dateFrom: string;
@@ -135,6 +135,7 @@ function matchingPreset(value: TimePeriodValue): PresetKey | null {
 }
 
 export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }: TimePeriodPickerProps) {
+  const [position, setPosition] = useState({ left: 16, top: 16 });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<TimePeriodValue>({ dateFrom, dateTo, timeFrom, timeTo });
   const [viewMonth, setViewMonth] = useState(() => new Date(parseDateKey(dateFrom).getFullYear(), parseDateKey(dateFrom).getMonth(), 1));
@@ -167,7 +168,8 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
   const calendarDays = useMemo(() => {
     const firstDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
     const daysInMonth = endOfMonth(firstDay).getDate();
-    return Array.from({ length: 42 }, (_, index) => {
+    const cellCount = Math.ceil((firstDay.getDay() + daysInMonth) / 7) * 7;
+    return Array.from({ length: cellCount }, (_, index) => {
       const day = index - firstDay.getDay() + 1;
       return day >= 1 && day <= daysInMonth
         ? new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
@@ -176,6 +178,8 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
   }, [viewMonth]);
 
   const openPicker = () => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (rect) setPosition({ left: Math.max(16, Math.min(rect.left, window.innerWidth - 320)), top: Math.max(16, Math.min(rect.bottom + 8, window.innerHeight - 440)) });
     const nextDraft = { dateFrom, dateTo, timeFrom, timeTo };
     setDraft(nextDraft);
     const fromDate = parseDateKey(dateFrom);
@@ -242,31 +246,19 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
         <div
           role="dialog"
           aria-label="Choose time period"
-          className="absolute left-0 top-full z-50 mt-2 max-h-[calc(100vh-7.5rem)] w-[22rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-coal-200 bg-white shadow-command"
+          style={position}
+          className="fixed z-50 max-h-[min(27rem,calc(100dvh-2rem))] w-[19rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-coal-200 bg-white shadow-command"
         >
-          <div className="p-4">
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((preset) => {
-                const selected = activePreset === preset.key;
-                return (
-                  <button
-                    key={preset.key}
-                    type="button"
-                    onClick={() => applyPreset(preset.key)}
-                    className={`inline-flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-ore-100 ${
-                      selected
-                        ? "border-coal-950 bg-coal-950 text-white"
-                        : "border-coal-300 bg-white text-coal-800 hover:border-coal-500 hover:bg-coal-50"
-                    }`}
-                  >
-                    {selected && <Check className="h-3.5 w-3.5" />}
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="p-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-coal-600">
+              Quick range
+              <select aria-label="Quick range" value={activePreset ?? "custom"} onChange={(event) => { if (event.target.value !== "custom") applyPreset(event.target.value as PresetKey); }} className="h-8 min-w-0 flex-1 rounded-md border border-coal-200 bg-white px-2 text-xs text-coal-800">
+                <option value="custom">Custom dates</option>
+                {PRESETS.map((preset) => <option key={preset.key} value={preset.key}>{preset.label}</option>)}
+              </select>
+            </label>
 
-            <div className="mt-5">
+            <div className="mt-2">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
@@ -290,11 +282,11 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
               </div>
 
               <div className="mt-2 grid grid-cols-7 text-center text-xs font-medium text-coal-500">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => <span key={`${day}-${index}`} className="py-2">{day}</span>)}
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => <span key={`${day}-${index}`} className="py-1">{day}</span>)}
               </div>
-              <div className="grid grid-cols-7 gap-y-1">
+              <div className="grid grid-cols-7">
                 {calendarDays.map((date, index) => {
-                  if (!date) return <span key={`blank-${index}`} className="h-9" />;
+                  if (!date) return <span key={`blank-${index}`} className="h-7" />;
                   const key = toDateKey(date);
                   const isSelected = key === draft.dateFrom || key === draft.dateTo;
                   const isInRange = key > draft.dateFrom && key < draft.dateTo;
@@ -307,7 +299,7 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
                       aria-pressed={isSelected}
                       disabled={isFuture}
                       onClick={() => selectDate(date)}
-                      className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-sm transition focus:outline-none focus:ring-2 focus:ring-ore-200 ${
+                      className={`mx-auto grid h-7 w-7 place-items-center rounded-full text-sm transition focus:outline-none focus:ring-2 focus:ring-ore-200 ${
                         isSelected
                           ? "bg-coal-950 font-semibold text-white"
                           : isInRange
@@ -324,7 +316,7 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-4 border-t border-coal-100 pt-4">
+            <div className="mt-2 grid grid-cols-2 gap-3 border-t border-coal-100 pt-2">
               <TimeInput
                 label="Start time"
                 value={draft.timeFrom}
@@ -347,18 +339,18 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
 
             {error && <p className="mt-3 text-xs font-medium text-safety-red">{error}</p>}
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="h-9 rounded-md px-4 text-sm font-medium text-coal-700 hover:bg-coal-100 focus:outline-none focus:ring-2 focus:ring-coal-200"
+                className="h-8 rounded-md px-4 text-sm font-medium text-coal-700 hover:bg-coal-100 focus:outline-none focus:ring-2 focus:ring-coal-200"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={apply}
-                className="h-9 rounded-md bg-coal-950 px-5 text-sm font-semibold text-white hover:bg-coal-800 focus:outline-none focus:ring-2 focus:ring-coal-300"
+                className="h-8 rounded-md bg-coal-950 px-5 text-sm font-semibold text-white hover:bg-coal-800 focus:outline-none focus:ring-2 focus:ring-coal-300"
               >
                 Apply
               </button>

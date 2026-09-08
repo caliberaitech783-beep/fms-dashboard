@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, Mountain } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, ChevronDown, ChevronRight, Mountain } from "lucide-react";
 import type { NavItem, NavItemId } from "../../constants/routes";
 import { reportCategories } from "../../config/reportCategories";
 import { cx } from "../ui/cx";
@@ -26,10 +26,25 @@ const descriptions: Partial<Record<NavItemId, string>> = {
 export function DesktopNav({ active, items, onChange, onReportChange }: DesktopNavProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const triggerRefs = useRef<Partial<Record<MenuId, HTMLButtonElement | null>>>({});
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const primaryItems = items.filter((item) => item.group === "operate");
   const groups = (["control", "admin"] as const).filter((group) => items.some((item) => item.group === group));
   const selectedItem = items.find((item) => item.id === active);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpenMenu(null);
+    };
+    const close = () => setOpenMenu(null);
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("resize", close);
+    };
+  }, [openMenu]);
 
   const select = (id: NavItemId) => {
     setOpenMenu(null);
@@ -41,8 +56,7 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
   };
 
   return (
-    <div className="relative z-40 hidden lg:block">
-      {openMenu && <div aria-hidden="true" className="fixed inset-0 bg-coal-950/35 backdrop-blur-[2px]" onPointerDown={() => setOpenMenu(null)} />}
+    <div ref={wrapperRef} className="relative z-40 hidden lg:block">
       <header
         className="relative border-b border-coal-200 bg-white"
         onMouseLeave={() => setOpenMenu(null)}
@@ -90,7 +104,6 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
                 type="button"
                 aria-expanded={openMenu === group}
                 aria-controls={`desktop-menu-${group}`}
-                onMouseEnter={() => setOpenMenu(group)}
                 onClick={() => setOpenMenu((current) => current === group ? null : group)}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown") {
@@ -106,23 +119,17 @@ export function DesktopNav({ active, items, onChange, onReportChange }: DesktopN
           <span className="hidden text-xs text-coal-500 xl:block">Unified fleet monitoring</span>
         </div>
         {openMenu && (
-          <div ref={panelRef} id={`desktop-menu-${openMenu}`} className="absolute inset-x-0 top-full max-h-[calc(100vh-6rem)] overflow-y-auto border-b border-coal-200 bg-white px-8 py-7 shadow-xl motion-safe:animate-[menu-reveal_150ms_ease-out]">
+          <div ref={panelRef} id={`desktop-menu-${openMenu}`} style={{ left: Math.max(16, Math.min(triggerRefs.current[openMenu]?.offsetLeft ?? 16, window.innerWidth - (openMenu === "reports" ? 650 : 340))) }} className="absolute top-full w-[19rem] rounded-lg border border-coal-200 bg-white p-2 shadow-xl motion-safe:animate-[menu-reveal_150ms_ease-out]">
             {openMenu === "reports" ? (
               <>
-                <div className="mb-6 flex items-center justify-between border-b border-coal-100 pb-4">
-                  <div><p className="text-lg font-semibold text-coal-950">Reports</p><p className="mt-1 text-sm text-coal-500">Explore fleet performance, utilization, and OEM reports.</p></div>
-                  <button type="button" onClick={() => selectReport("/reports")} className="flex items-center gap-2 rounded-lg bg-ore-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-ore-700">All reports<ArrowUpRight className="h-4 w-4" /></button>
-                </div>
+                <button type="button" onClick={() => selectReport("/reports")} className="mb-1 flex w-full items-center justify-between border-b border-coal-100 px-3 py-2 text-xs font-semibold text-ore-700">All reports<ArrowUpRight className="h-3.5 w-3.5" /></button>
                 <ReportCategoryMenu onSelect={selectReport} />
               </>
             ) : (
-              <div className="grid grid-cols-[1fr_3fr] gap-10">
-                <div><p className="text-xs font-semibold uppercase tracking-widest text-ore-600">{openMenu === "control" ? "Stay connected" : "Manage your portal"}</p><h2 className="mt-3 text-2xl font-semibold text-coal-950">{openMenu === "control" ? "Keep operations in sync." : "Everything in one place."}</h2></div>
-                <div className="grid grid-cols-2 gap-3">{items.filter((item) => item.group === openMenu).map((item) => {
-                  const Icon = item.icon;
-                  return <button key={item.id} type="button" aria-current={active === item.id ? "page" : undefined} onClick={() => select(item.id)} className="group flex items-start gap-3 rounded-xl p-4 text-left transition-colors hover:bg-ore-50"><Icon className="mt-0.5 h-5 w-5 shrink-0 text-ore-600" /><span><span className="block text-sm font-semibold text-coal-950 group-hover:text-ore-700">{item.label}</span><span className="mt-1 block text-xs leading-relaxed text-coal-500">{descriptions[item.id]}</span></span></button>;
-                })}</div>
-              </div>
+              <div className="max-h-[min(24rem,calc(100dvh-7rem))] overflow-y-auto">{items.filter((item) => item.group === openMenu).map((item) => {
+                const Icon = item.icon;
+                return <button key={item.id} type="button" aria-current={active === item.id ? "page" : undefined} onClick={() => select(item.id)} title={descriptions[item.id]} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-coal-800 hover:bg-ore-50 hover:text-ore-700"><Icon className="h-4 w-4 shrink-0 text-ore-600" />{item.label}</button>;
+              })}</div>
             )}
           </div>
         )}
@@ -135,7 +142,7 @@ function ReportCategoryMenu({ onSelect }: { onSelect: (path: string) => void }) 
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   return (
-    <div className="divide-y divide-coal-100">
+    <div className="relative">
       {reportCategories.map((category) => {
         const expanded = expandedCategory === category.id;
         return (
@@ -145,13 +152,13 @@ function ReportCategoryMenu({ onSelect }: { onSelect: (path: string) => void }) 
               aria-expanded={expanded}
               aria-controls={`report-category-${category.id}`}
               onClick={() => setExpandedCategory(expanded ? null : category.id)}
-              className={cx("flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-semibold transition-colors hover:bg-ore-50 hover:text-ore-700", expanded ? "bg-ore-50 text-ore-700" : "text-coal-800")}
+              className={cx("flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-ore-50 hover:text-ore-700", expanded ? "bg-ore-50 text-ore-700" : "text-coal-800")}
             >
               {category.name}
-              <ChevronDown aria-hidden="true" className={cx("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+              <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0" />
             </button>
             {expanded && (
-              <div id={`report-category-${category.id}`} className="space-y-1 border-l-2 border-ore-200 py-2 pl-4 ml-4 mb-3">
+              <div id={`report-category-${category.id}`} className="absolute left-full top-0 ml-2 max-h-[min(24rem,calc(100dvh-7rem))] w-[19rem] overflow-y-auto rounded-lg border border-coal-200 bg-white p-2 shadow-xl">
                 {category.reports.filter((report) => !report.isShortcut).map((report) => (
                   <button key={report.id} type="button" onClick={() => onSelect(report.route)} className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-coal-700 transition-colors hover:bg-ore-50 hover:text-ore-700">{report.name}</button>
                 ))}
