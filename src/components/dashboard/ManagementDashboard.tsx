@@ -82,40 +82,27 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <ChartFrame title="Truck Model Efficiency · km/L" subtitle="Distance travelled per litre of fuel">
+        <ChartFrame height={360} title="Truck Model Efficiency · km/L" subtitle="Distance travelled per litre of fuel">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.modelPerformance.filter((row) => row.efficiencyUnit === "km/L")}>
               <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
               <YAxis />
               <Tooltip formatter={(value: number) => [formatNumber(value, 2) + " km/L", "Efficiency"]} />
-              <Bar dataKey="efficiency" name="km/L" fill="#72ddec" radius={[4, 4, 0, 0]} />
+              <Bar maxBarSize={44} dataKey="efficiency" name="km/L" fill="#72ddec" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
-        <ChartFrame title="Shift-wise Comparison" subtitle="Fuel and running hours by shift">
+        <ChartFrame height={360} title="Shift-wise Comparison" subtitle="Fuel and running hours by shift">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.shiftComparison}>
+            <BarChart data={overview.shiftComparison} barSize={44} barGap={8}>
               <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
-              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#72ddec" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="runningHours" name="Running hr" fill="#39b8af" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartFrame>
-
-        <ChartFrame title="Site-wise Fuel Performance · km/L" subtitle="Truck distance divided by fuel consumed in the selected period">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.sitePerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
-              <XAxis dataKey="name" interval={0} angle={-18} textAnchor="end" height={70} />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
-              <Legend />
-              <Bar dataKey="efficiency" name="km/L" fill="#72ddec" radius={[4, 4, 0, 0]} />
+              <Bar maxBarSize={44} dataKey="fuelConsumedLitres" name="Fuel L" fill="#72ddec" radius={[4, 4, 0, 0]} />
+              <Bar maxBarSize={44} dataKey="runningHours" name="Running hr" fill="#39b8af" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
@@ -128,7 +115,7 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
                 <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
                 <YAxis />
                 <Tooltip formatter={(value: number) => [formatNumber(value, 2), metric === "standstill" ? "%" : "L/h"]} />
-                <Bar dataKey={metric} name={metric === "standstill" ? "Standstill %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]} />
+                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Standstill %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
