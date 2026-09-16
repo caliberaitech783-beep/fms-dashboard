@@ -8,6 +8,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -83,24 +84,28 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ChartFrame height={360} title="Truck Model Efficiency · km/L" subtitle="Distance travelled per litre of fuel">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.modelPerformance.filter((row) => row.efficiencyUnit === "km/L")}>
+            <BarChart margin={{ top: 28, right: 12, left: 0, bottom: 0 }} data={overview.modelPerformance.filter((row) => row.efficiencyUnit === "km/L")}>
               <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
               <YAxis />
-              <Tooltip formatter={(value: number) => [formatNumber(value, 2) + " km/L", "Efficiency"]} />
-              <Bar maxBarSize={44} dataKey="efficiency" name="km/L" fill="#72ddec" radius={[4, 4, 0, 0]} />
+              <Tooltip cursor={false} formatter={(value: number) => [formatNumber(value, 2) + " km/L", "Efficiency"]} />
+              <Bar maxBarSize={44} dataKey="efficiency" name="km/L" fill="#72ddec" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="efficiency" position="top" fill="#d9f7fc" fontSize={12} formatter={formatBarValue} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
         {(["standstill", "averageDiesel"] as const).map((metric) => (
           <ChartFrame key={metric} title={metric === "standstill" ? "Standstill · %" : "Avg Diesel · L/h"} subtitle="Selected shift / period by vehicle">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={overview.vehicleMetrics ?? []}>
+              <BarChart margin={{ top: 28, right: 12, left: 0, bottom: 0 }} data={overview.vehicleMetrics ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
                 <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
                 <YAxis />
-                <Tooltip formatter={(value: number) => [formatNumber(value, 2), metric === "standstill" ? "%" : "L/h"]} />
-                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Standstill %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]} />
+                <Tooltip cursor={false} formatter={(value: number) => [formatNumber(value, 2), metric === "standstill" ? "%" : "L/h"]} />
+                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Standstill %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey={metric} position="top" fill="#d9f7fc" fontSize={11} formatter={formatBarValue} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -133,4 +138,8 @@ function coordinateText(latitude: number | null, longitude: number | null): stri
 
 function metricText(value: number | null, unit: string, digits: number): string {
   return value === null ? "-" : `${formatNumber(value, digits)} ${unit}`;
+}
+
+function formatBarValue(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? formatNumber(value, 2) : "";
 }
