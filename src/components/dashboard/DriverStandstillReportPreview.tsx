@@ -224,7 +224,7 @@ function ReportErrorState({ error }: { error: NonNullable<ReportPreview["error"]
     mapping: "Scania site or shift mapping is incomplete",
     validation: "Scania report request is invalid",
     configuration: "Scania API is not configured",
-    rate_limit: "Scania API rate limit reached",
+    rate_limit: "Vehicle data service rate limit reached",
     network: "Scania report service is unreachable",
     upstream: "Scania live report is unavailable",
     portal_authentication: "Dashboard authentication is required",

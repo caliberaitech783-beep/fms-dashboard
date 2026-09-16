@@ -495,7 +495,7 @@ export function ReportsDashboard({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold text-coal-950">{activeItem.name}</h1>
-                <ReportStatusBadge status={activeReport.status} />
+                <ReportStatusBadge status={preview?.error ? "failed" : activeReport.status} />
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">{activeItem.description}</p>
             </div>
@@ -595,7 +595,7 @@ export function ReportsDashboard({
 
         <Panel title="Report Register" subtitle="Generated report status and available formats.">
           {activeReport.source ? (
-            <DataTable columns={reportColumns} rows={[activeReport.source]} getRowKey={(row) => row.id} />
+            <DataTable columns={reportColumns} rows={[preview?.error ? { ...activeReport.source, status: "failed" } : activeReport.source]} getRowKey={(row) => row.id} />
           ) : (
             <EmptyReportState />
           )}

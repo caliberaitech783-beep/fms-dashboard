@@ -7,16 +7,20 @@ import { buildVolvoDriverReportQuery } from "../utils/volvoDriverReportQuery";
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const REPORT_CACHE_MS = 60_000;
-export function invalidateVolvoReportCache() { reportCache.clear(); }
+export function invalidateVolvoReportCache() {
+  for (const cached of reportCache.values()) cached.expiresAt = 0;
+}
+const retryAfterBySession = new Map<string, number>();
 const reportCache = new Map<string, { expiresAt: number; preview: ReportPreview }>();
 const inFlightReports = new Map<string, Promise<ReportPreview>>();
 
-function errorPreview(message: string): ReportPreview {
+function errorPreview(message: string, status?: number): ReportPreview {
   return {
     reportType: "Driverwise Standstill Tracking",
     generatedAt: new Date().toISOString(),
     columns: ["status", "message"],
-    rows: [{ status: "Live Volvo data unavailable", message }],
+    rows: [],
+    error: { kind: status === 429 ? "rate_limit" : "upstream", message, status, retryable: true },
   };
 }
 
@@ -36,6 +40,7 @@ export async function fetchVolvoDriverStandstillReport(
   const session = getAuthSession();
   if (!session?.token) return errorPreview("Dashboard authentication is required.");
 
+  const token = session.token;
   const query = buildVolvoDriverReportQuery(filters);
   // Cache by the requested window, not its moving generation-time cutoff.
   const keyQuery = buildVolvoDriverReportQuery(filters, new Date(0));
@@ -43,16 +48,22 @@ export async function fetchVolvoDriverStandstillReport(
     const period = getOperationalShiftPeriod(keyQuery.get("site"), filters.dateTo, filters.shift);
     if (period) { keyQuery.set("startTime", `${period.dateFrom}T${period.timeFrom}:00+05:30`); keyQuery.set("stopTime", `${period.dateTo}T${period.timeTo}:00+05:30`); }
   }
-  const cacheKey = `${session.token}|${keyQuery}`;
-  if (options.forceRefresh) {
-    reportCache.delete(cacheKey);
-  }
+  const cacheKey = `${token}|${keyQuery}`;
   const cached = reportCache.get(cacheKey);
+  function rateLimitedPreview(retryAt: number): ReportPreview {
+    const message = `Volvo is temporarily limiting requests. Try again after ${new Date(retryAt).toLocaleTimeString()}. Refresh and Generate will wait until then.`;
+    if (cached) {
+      return {
+        ...cached.preview,
+        notice: [cached.preview.notice, message, `Showing the previous report generated at ${new Date(cached.preview.generatedAt).toLocaleString()}; its reporting period has not been updated.`].filter(Boolean).join(" "),
+      };
+    }
+    return errorPreview(message, 429);
+  }
+  const retryAt = retryAfterBySession.get(token) || 0;
+  if (retryAt > Date.now()) return rateLimitedPreview(retryAt);
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.preview;
-  }
-  if (cached) {
-    reportCache.delete(cacheKey);
   }
 
   const pendingReport = inFlightReports.get(cacheKey);
@@ -67,15 +78,28 @@ export async function fetchVolvoDriverStandstillReport(
         signal: AbortSignal.timeout(60_000),
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${session.token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) {
+        if (response.status === 429) {
+          const bodyDelay = payload && typeof payload === "object" && "retryAfterSeconds" in payload
+            ? Number(payload.retryAfterSeconds) * 1000 : NaN;
+          const header = response.headers.get("Retry-After");
+          const headerDelay = header === null ? NaN : Number.isFinite(Number(header))
+            ? Number(header) * 1000 : Date.parse(header) - Date.now();
+          const delay = Number.isFinite(bodyDelay) && bodyDelay > 0 ? bodyDelay
+            : Number.isFinite(headerDelay) && headerDelay > 0 ? headerDelay : 60_000;
+          const retryAt = Date.now() + delay;
+          if (retryAfterBySession.size >= 64) retryAfterBySession.delete(retryAfterBySession.keys().next().value!);
+          retryAfterBySession.set(token, retryAt);
+          return rateLimitedPreview(retryAt);
+        }
         const message = payload && typeof payload === "object" && "message" in payload
           ? String(payload.message)
           : "Volvo RFMS did not return the requested shift report.";
-        return errorPreview(message);
+        return errorPreview(message, response.status);
       }
       if (!isReportPreview(payload)) {
         return errorPreview("Volvo RFMS returned an invalid shift report.");
