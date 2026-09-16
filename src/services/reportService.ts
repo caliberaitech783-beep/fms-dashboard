@@ -97,7 +97,9 @@ export const reportService = {
         start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
         end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
       };
-      if (valid.length !== previews.length) preview.notice = "Some selected sites did not return report data. Displaying the available sites.";
+      const notices = previews.map((item) => item.notice || item.error?.message).filter(Boolean);
+      if (valid.length !== previews.length) notices.push("Some selected sites did not return report data. Displaying the available sites.");
+      preview.notice = [...new Set(notices)].join(" ") || undefined;
       return removeHiddenReportColumns(preview);
     }
 
