@@ -25,12 +25,12 @@ import { ALERT_THRESHOLDS } from "../constants/thresholds";
 import { getFilteredPortalData } from "./dataAccess";
 
 export const dashboardService = {
-  async getOverview(filters: DashboardFilters): Promise<DashboardOverview> {
+  async getOverview(filters: DashboardFilters, onProgress?: (overview: DashboardOverview) => void, signal?: AbortSignal): Promise<DashboardOverview> {
     const data = await getFilteredPortalData(filters);
     const { sites, vehicles, integrations } = data;
     const filteredVehicles = filterVehicles(vehicles, filters);
-    const periodData = await dashboardPeriodRecords(filters, filteredVehicles, data.records, data.filteredRecords);
-    const filteredRecords = periodData.records;
+    signal?.throwIfAborted();
+    const build = (filteredRecords: FleetTelemetryRecord[], notice: string): DashboardOverview => {
     const kpiValues = aggregateDashboardKpis(filteredRecords, filteredVehicles, filters);
     const truckRecords = filteredRecords.filter((record) => record.assetCategory === "Truck");
     const fuel = truckRecords.reduce((sum, record) => sum + (record.fuelConsumedLitres ?? 0), 0);
@@ -45,7 +45,7 @@ export const dashboardService = {
 
     return {
       kpis: buildKpis(kpiValues, filters.company === "Eicher", filteredRecords.some((row) => row.fuelConsumedLitres !== null)),
-      periodNotice: periodData.notice,
+      periodNotice: notice,
       vehicleMetrics: getVehiclePerformanceRows(filteredRecords, filteredVehicles).map((row) => {
         const parts = filteredRecords.filter((record) => record.vehicleId === row.vehicle.id);
         const weighted = (value: (record: FleetTelemetryRecord) => number | null) => {
@@ -94,6 +94,12 @@ export const dashboardService = {
         ? buildEicherLiveLocations(filteredRecords, filteredVehicles)
         : undefined,
     };
+    };
+    onProgress?.(build([], "Loading selected-period consumption..."));
+    const periodData = await dashboardPeriodRecords(filters, filteredVehicles, data.records, data.filteredRecords, (records) => {
+      onProgress?.(build(records, "Loading remaining site/shift data. Totals are partial until the update completes."));
+    }, signal);
+    return build(periodData.records, periodData.notice);
   },
 };
 

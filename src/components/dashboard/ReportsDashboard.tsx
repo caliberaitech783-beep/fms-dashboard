@@ -114,6 +114,8 @@ export function ReportsDashboard({
   const [previewRequestKey, setPreviewRequestKey] = useState(0);
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const manualGenerationRef = useRef(false);
+  const previewSelectionRef = useRef("");
   const [busyReportType, setBusyReportType] = useState<ReportType | null>(null);
   const [explorerState, setExplorerState] = useState<ReportExplorerState>(emptyReportExplorerState);
   const [downloadState, setDownloadState] = useState<{
@@ -197,9 +199,14 @@ export function ReportsDashboard({
     }
 
     let mounted = true;
+    const forceRefresh = manualGenerationRef.current;
+    manualGenerationRef.current = false;
+    const selection = JSON.stringify([selectedReport, filters]);
+    if (previewSelectionRef.current !== selection) setPreview(null);
+    previewSelectionRef.current = selection;
     const startedAt = performance.now();
     setPreviewLoading(true);
-    reportService.getReportPreview(selectedReport, filters, { forceRefresh: true })
+    reportService.getReportPreview(selectedReport, filters, { forceRefresh })
       .then((result) => {
         if (mounted) {
           setPreview(result);
@@ -320,6 +327,7 @@ export function ReportsDashboard({
   };
 
   const generateReport = (report: ReportView) => {
+    manualGenerationRef.current = true;
     const route = normalizeReportPath(report.item.redirectTo ?? report.item.route);
     setBusyReportType(report.item.reportType);
     if (currentPath === route) {
@@ -552,7 +560,8 @@ export function ReportsDashboard({
             </div>
           }
         >
-          {previewLoading || !preview ? (
+          {previewLoading && preview && <p role="status" className="mb-3 text-sm text-coal-500">Refreshing report. The previous generated result remains visible until the update finishes.</p>}
+          {!preview ? (
             <LoadingState />
           ) : selectedReport === "Driverwise Standstill Tracking" && preview.period ? (
             <DriverStandstillReportPreview

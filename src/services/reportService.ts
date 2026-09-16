@@ -1,3 +1,5 @@
+import { apiClient } from "./apiClient";
+import { invalidateVolvoReportCache } from "./volvoDriverReportService";
 import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
 import { reportTypes, type ReportPreview, type ReportType } from "../types/reports";
 import { formatDateTime, titleCase } from "../utils/formatters";
@@ -15,7 +17,7 @@ import {
   getVehiclePerformanceRows,
   sumRecords,
 } from "../utils/calculations";
-import { getFilteredPortalData, getPortalData } from "./dataAccess";
+import { getFilteredPortalData } from "./dataAccess";
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
 import {
   fetchScaniaDriverStandstillReport,
@@ -41,8 +43,8 @@ import {
 
 export const reportService = {
   async getReports() {
-    const data = await getPortalData();
-    return data.reports.filter((report) => reportTypes.includes(report.type as ReportType));
+    const reports = await apiClient.fleet.fetchReports();
+    return reports.filter((report) => reportTypes.includes(report.type as ReportType));
   },
 
   async getReportPreview(
@@ -67,11 +69,14 @@ export const reportService = {
       const allShifts = filters.shift === "All";
       const allSites = filters.siteId === "All" && Boolean(filters.region);
       const sites = allSites
-        ? (await getPortalData()).sites.filter((site) => site.location === filters.region).map((site) => site.id)
+        ? (await apiClient.fleet.fetchSites()).filter((site) => site.location === filters.region).map((site) => site.id)
         : [filters.siteId];
       if (!sites.length) return { reportType, generatedAt: new Date().toISOString(), columns: [], rows: [], notice: "No sites are configured for the selected region." };
       const previews: ReportPreview[] = [];
-      for (const siteId of sites) {
+      let nextSite = 0;
+      await Promise.all(Array.from({ length: Math.min(3, sites.length) }, async () => {
+      while (nextSite < sites.length) {
+        const siteId = sites[nextSite++];
         let selected = { ...filters, siteId };
         if (allShifts) {
           const first = getOperationalShiftPeriod(siteId, filters.dateFrom, "A");
@@ -80,6 +85,7 @@ export const reportService = {
         }
         previews.push(await fetchReport(selected, options));
       }
+      }));
       const valid = previews.filter((preview) => preview.period && !preview.error);
       if (!valid.length) return removeHiddenReportColumns(previews[0]);
       const preview = { ...valid[0], rows: valid.flatMap((item) => item.rows), summary: valid.length === 1 ? valid[0].summary : undefined };
@@ -95,7 +101,7 @@ export const reportService = {
       return removeHiddenReportColumns(preview);
     }
 
-    const { sites, vehicles, filteredVehicles, filteredRecords, whatsAppDeliveryLogs } = await getFilteredPortalData(filters);
+    const { sites, vehicles, filteredVehicles, filteredRecords } = await getFilteredPortalData(filters);
     const siteMap = new Map(sites.map((site) => [site.id, site.name]));
     const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
     const vehicleRows = getVehiclePerformanceRows(filteredRecords, filteredVehicles);
@@ -107,7 +113,7 @@ export const reportService = {
         reportType,
         generatedAt: new Date().toISOString(),
         columns: ["reportName", "pdfFileName", "recipientName", "sentAt", "status", "retryCount"],
-        rows: whatsAppDeliveryLogs.map((log) => ({
+        rows: (await apiClient.fleet.fetchWhatsAppDeliveryLogs()).map((log) => ({
           reportName: log.reportName,
           pdfFileName: log.pdfFileName,
           recipientName: log.recipientName,
@@ -204,6 +210,7 @@ export const reportService = {
 
   invalidateLiveReportCache() {
     invalidateScaniaReportCache();
+    invalidateVolvoReportCache();
   },
 
   exportCsv(preview: ReportPreview, fileName: string) {

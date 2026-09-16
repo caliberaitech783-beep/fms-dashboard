@@ -21,7 +21,7 @@ export interface DashboardDataState {
   error: string | null;
 }
 
-export function useDashboardData(filters: DashboardFilters, refreshKey: number) {
+export function useDashboardData(filters: DashboardFilters, refreshKey: number, section: string = "management") {
   const [state, setState] = useState<DashboardDataState>({
     overview: null,
     fleetRows: [],
@@ -36,35 +36,36 @@ export function useDashboardData(filters: DashboardFilters, refreshKey: number) 
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
 
     setState((current) => ({ ...current, loading: true, error: null }));
 
-    Promise.all([
-      dashboardService.getOverview(filters),
-      fleetService.getVehicles(filters),
-      alertService.getAlerts(filters),
-      integrationService.getIntegrationStatus(),
-      reportService.getReports(),
-      whatsappReportService.getSchedules(),
-      whatsappReportService.getDeliveryLogs(),
-    ])
-      .then(([overview, fleetRows, alerts, integrations, reports, whatsAppSchedules, whatsAppDeliveryLogs]) => {
-        if (!mounted) {
-          return;
+    const update = (patch: Partial<DashboardDataState>) => {
+      if (mounted) setState((current) => ({ ...current, ...patch }));
+    };
+    const load = async () => {
+      switch (section) {
+        case "management":
+          update({ overview: await dashboardService.getOverview(filters, (overview) => update({ overview }), controller.signal) });
+          break;
+        case "fleet": {
+          const [fleetRows, alerts] = await Promise.all([fleetService.getVehicles(filters), alertService.getAlerts(filters)]);
+          update({ fleetRows, alerts });
+          break;
         }
-
-        setState({
-          overview,
-          fleetRows,
-          alerts,
-          integrations,
-          reports,
-          whatsAppSchedules,
-          whatsAppDeliveryLogs,
-          loading: false,
-          error: null,
-        });
-      })
+        case "master-data": update({ fleetRows: await fleetService.getVehicles(filters) }); break;
+        case "reports": update({ reports: await reportService.getReports() }); break;
+        case "integrations": update({ integrations: await integrationService.getIntegrationStatus() }); break;
+        case "whatsapp": {
+          const [whatsAppSchedules, whatsAppDeliveryLogs] = await Promise.all([whatsappReportService.getSchedules(), whatsappReportService.getDeliveryLogs()]);
+          update({ whatsAppSchedules, whatsAppDeliveryLogs });
+          break;
+        }
+      }
+      update({ loading: false });
+    };
+    // Coalesce quick filter changes before starting expensive OEM requests.
+    const timer = window.setTimeout(() => { void load()
       .catch((error: Error) => {
         if (!mounted) {
           return;
@@ -75,12 +76,14 @@ export function useDashboardData(filters: DashboardFilters, refreshKey: number) 
           loading: false,
           error: error.message,
         }));
-      });
+      }); }, 180);
 
     return () => {
+      window.clearTimeout(timer);
       mounted = false;
+      controller.abort();
     };
-  }, [filters, refreshKey]);
+  }, [filters, refreshKey, section]);
 
   return state;
 }
