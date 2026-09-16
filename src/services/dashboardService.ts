@@ -55,7 +55,9 @@ export const dashboardService = {
         };
         return {
           name: row.vehicle.vehicleNumber,
-          standstill: weighted((record) => record.idlePercentage),
+          standstill: weighted((record) => row.vehicle.company === "Scania"
+            ? typeof record.rawMetrics.adjustedIdling === "number" ? record.rawMetrics.adjustedIdling : null
+            : record.idlePercentage),
           averageDiesel: weighted((record) => typeof record.rawMetrics.averageDiesel === "number" ? record.rawMetrics.averageDiesel : record.fuelConsumedLitres !== null && (record.engineHours ?? 0) > 0 ? record.fuelConsumedLitres / record.engineHours! : null),
         };
       }),
