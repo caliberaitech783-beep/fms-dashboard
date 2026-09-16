@@ -438,3 +438,10 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
   normalizeVehicle: (payload) => mockAdapter.normalizeVehicle(payload),
   normalizeTelemetry: (payload) => mockAdapter.normalizeTelemetry(payload),
 };
+
+/** Avoid waiting for unrelated OEMs when the user selected one live fleet. */
+export async function fetchSelectedOemFleet(company: string): Promise<{ vehicles: Vehicle[]; records: FleetTelemetryRecord[] } | null> {
+  if (!["Volvo", "Scania", "Eicher"].includes(company)) return null;
+  const snapshot = company === "Volvo" ? await fetchLiveSnapshot() : company === "Scania" ? await fetchScaniaLiveSnapshot() : await fetchEicherLiveSnapshot();
+  return { vehicles: snapshot?.vehicles ?? [], records: snapshot?.telemetry ?? [] };
+}

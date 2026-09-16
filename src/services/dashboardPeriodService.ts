@@ -4,7 +4,7 @@ import { reportTelemetry, selectedShiftPeriods } from "../utils/dashboardPeriods
 import { fetchVolvoDriverStandstillReport } from "./volvoDriverReportService";
 import { fetchScaniaDriverStandstillReport } from "./scaniaReportService";
 
-export async function dashboardPeriodRecords(filters: DashboardFilters, vehicles: Vehicle[], snapshots: FleetTelemetryRecord[], filteredRecords: FleetTelemetryRecord[]) {
+export async function dashboardPeriodRecords(filters: DashboardFilters, vehicles: Vehicle[], snapshots: FleetTelemetryRecord[], filteredRecords: FleetTelemetryRecord[], onProgress?: (records: FleetTelemetryRecord[]) => void, signal?: AbortSignal) {
   const records = filteredRecords.filter((record) => !isLiveOemSource(record.source));
   const live = vehicles.filter((vehicle) => isLiveOemSource(vehicle.source));
   const jobs: Array<() => Promise<void>> = [];
@@ -25,12 +25,13 @@ export async function dashboardPeriodRecords(filters: DashboardFilters, vehicles
           records.push(...rows);
           if (!preview.period || preview.error || !rows.length) issues.add(`${company}: some selected site/shift data is unavailable.`);
         } catch { issues.add(`${company}: some selected site/shift data is unavailable.`); }
+        finally { onProgress?.([...records]); }
       });
     }
   }
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(3, jobs.length) }, async () => {
-    while (next < jobs.length) await jobs[next++]();
+    while (!signal?.aborted && next < jobs.length) await jobs[next++]();
   }));
   const unsupported = [...new Set(live.filter((v) => !["Volvo", "Scania"].includes(v.company) || !v.siteId).map((v) => v.company))];
   if (unsupported.length) issues.add(`Shift consumption unavailable for ${unsupported.join(", ")}; cumulative readings are excluded.`);

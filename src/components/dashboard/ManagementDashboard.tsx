@@ -32,7 +32,7 @@ const kpiIcons = [Truck, Activity, Fuel, Gauge, Gauge];
 
 
 export function ManagementDashboard({ overview, loading }: ManagementDashboardProps) {
-  if (loading || !overview) {
+  if (!overview) {
     return <LoadingState />;
   }
 
@@ -61,7 +61,8 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
   const showEicherLiveLocations = Array.isArray(overview.eicherLiveLocations);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={loading}>
+      {loading && <p role="status" className="text-sm text-coal-500">Updating selected filters and period data...</p>}
       {overview.periodNotice && <p role="status" className="rounded-md border border-coal-200 bg-coal-50 px-4 py-3 text-sm text-coal-600">{overview.periodNotice}</p>}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {overview.kpis.map((metric, index) => {

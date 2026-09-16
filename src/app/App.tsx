@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { reportService } from "../services/reportService";
+import { invalidatePortalData } from "../services/dataAccess";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AuthProvider, useAuth } from "../auth/AuthContext";
 import { canAccessNav } from "../auth/permissions";
 import { NAV_ITEMS, type NavItemId } from "../constants/routes";
@@ -10,21 +12,32 @@ import { GlobalFilters } from "../components/filters/GlobalFilters";
 import { MobileNav } from "../components/layout/MobileNav";
 import { DesktopNav } from "../components/layout/DesktopNav";
 import { TopBar } from "../components/layout/TopBar";
-import { AdminNotificationsDashboard } from "../components/dashboard/AdminNotificationsDashboard";
-import { FleetDashboard } from "../components/dashboard/FleetDashboard";
-import { IntegrationsDashboard } from "../components/dashboard/IntegrationsDashboard";
-import { ManagementDashboard } from "../components/dashboard/ManagementDashboard";
-import { MasterDataDashboard } from "../components/dashboard/MasterDataDashboard";
-import { NotificationCenterDashboard } from "../components/dashboard/NotificationCenterDashboard";
-import { ReportsDashboard } from "../components/dashboard/ReportsDashboard";
-import { SettingsDashboard } from "../components/dashboard/SettingsDashboard";
-import { UserManagementDashboard } from "../components/dashboard/UserManagementDashboard";
-import { WhatsAppDeliveryDashboard } from "../components/dashboard/WhatsAppDeliveryDashboard";
+
+
+
+
+
+
+
+
+
+
 import { LoadingState } from "../components/ui/LoadingState";
 import { Panel } from "../components/ui/Panel";
 import { TimingToast } from "../components/ui/TimingToast";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary";
 import { invalidateLiveOemCaches, refreshLiveOemData } from "../services/adapters/volvoRfmsAdapter";
+
+const AdminNotificationsDashboard = lazy(() => import("../components/dashboard/AdminNotificationsDashboard").then((module) => ({ default: module.AdminNotificationsDashboard })));
+const FleetDashboard = lazy(() => import("../components/dashboard/FleetDashboard").then((module) => ({ default: module.FleetDashboard })));
+const IntegrationsDashboard = lazy(() => import("../components/dashboard/IntegrationsDashboard").then((module) => ({ default: module.IntegrationsDashboard })));
+const ManagementDashboard = lazy(() => import("../components/dashboard/ManagementDashboard").then((module) => ({ default: module.ManagementDashboard })));
+const MasterDataDashboard = lazy(() => import("../components/dashboard/MasterDataDashboard").then((module) => ({ default: module.MasterDataDashboard })));
+const NotificationCenterDashboard = lazy(() => import("../components/dashboard/NotificationCenterDashboard").then((module) => ({ default: module.NotificationCenterDashboard })));
+const ReportsDashboard = lazy(() => import("../components/dashboard/ReportsDashboard").then((module) => ({ default: module.ReportsDashboard })));
+const SettingsDashboard = lazy(() => import("../components/dashboard/SettingsDashboard").then((module) => ({ default: module.SettingsDashboard })));
+const UserManagementDashboard = lazy(() => import("../components/dashboard/UserManagementDashboard").then((module) => ({ default: module.UserManagementDashboard })));
+const WhatsAppDeliveryDashboard = lazy(() => import("../components/dashboard/WhatsAppDeliveryDashboard").then((module) => ({ default: module.WhatsAppDeliveryDashboard })));
 
 export function App() {
   return (
@@ -76,7 +89,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   } | null>(null);
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, setFilters, resetFilters, options } = useFleetFilters();
-  const data = useDashboardData(filters, refreshKey);
+  const data = useDashboardData(filters, refreshKey, activeSection);
   const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
@@ -84,6 +97,8 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   );
   const reloadDashboard = () => {
     invalidateLiveOemCaches();
+    invalidatePortalData();
+    reportService.invalidateLiveReportCache();
     setRefreshKey((current) => current + 1);
   };
   const refreshLiveOems = async () => {
@@ -191,7 +206,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               <p className="text-sm text-red-700">{data.error}</p>
             </Panel>
           ) : (
-            renderSection(
+            <Suspense fallback={<LoadingState />}>{renderSection(
               activeSection,
               data,
               filters,
@@ -199,7 +214,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               showTimingNotice,
               reloadDashboard,
               ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshLiveOems : undefined,
-            )
+            )}</Suspense>
           )}
         </div>
         </div>

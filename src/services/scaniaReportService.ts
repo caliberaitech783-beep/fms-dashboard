@@ -6,7 +6,7 @@ import { reportGenerationPeriod } from "../utils/reportGenerationPeriod";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
-const REPORT_CACHE_MS = 5 * 60_000;
+const REPORT_CACHE_MS = 60_000;
 const SCANIA_REPORT_COLUMNS = [
   "Registration number",
   "Drivers",
@@ -238,7 +238,7 @@ type ScaniaRequestResult =
     };
   };
 
-function scaniaRequest(filters: DashboardFilters): ScaniaRequestResult {
+function scaniaRequest(filters: DashboardFilters, now = new Date()): ScaniaRequestResult {
   const mappedSite = siteName(filters.siteId);
   if (!mappedSite) {
     return {
@@ -262,7 +262,7 @@ function scaniaRequest(filters: DashboardFilters): ScaniaRequestResult {
   const scheduled = filters.timePeriodMode === "custom"
     ? { startTime: `${filters.dateFrom}T${filters.timeFrom}:00+05:30`, stopTime: `${filters.dateTo}T${filters.timeTo}:00+05:30` }
     : scaniaShiftWindow(date, filters.shift);
-  const window = reportGenerationPeriod(scheduled.startTime, scheduled.stopTime);
+  const window = reportGenerationPeriod(scheduled.startTime, scheduled.stopTime, now);
   return {
     body: {
       site: mappedSite,
@@ -290,7 +290,7 @@ export async function fetchScaniaDriverStandstillReport(
   const request = scaniaRequest(filters);
   if (request.error) return request.error;
 
-  const cacheKey = JSON.stringify(request.body);
+  const cacheKey = `${session.token}|${JSON.stringify(scaniaRequest(filters, new Date(0)).body)}`;
   if (options.forceRefresh) {
     reportCache.delete(cacheKey);
   } else {
@@ -306,6 +306,7 @@ export async function fetchScaniaDriverStandstillReport(
     try {
       const response = await fetch(`${API_BASE_URL}/scania/reports/vehicle-evaluation`, {
         method: "POST",
+        signal: AbortSignal.timeout(60_000),
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${session.token}`,
@@ -346,6 +347,7 @@ export async function fetchScaniaDriverStandstillReport(
         meta: payload.meta,
         notice: payload.notice ?? payload.meta.emptyReason ?? null,
       };
+      if (reportCache.size >= 64) reportCache.delete(reportCache.keys().next().value!);
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,
         preview,

@@ -1,3 +1,5 @@
+import { fetchSelectedOemFleet } from "./adapters/volvoRfmsAdapter";
+import { getAuthSession } from "../auth/sessionService";
 import { apiClient } from "./apiClient";
 import type {
   DashboardFilters,
@@ -32,23 +34,23 @@ function normalizeVehicleModel(vehicle: Vehicle): Vehicle {
   };
 }
 
-export async function getPortalData(): Promise<PortalData> {
-  const [
-    sites,
-    vehicles,
-    records,
-    integrations,
-    reports,
-    whatsAppSchedules,
-    whatsAppDeliveryLogs,
-  ] = await Promise.all([
+const portalRequests = new Map<string, Promise<PortalData>>();
+export function invalidatePortalData() { portalRequests.clear(); }
+export function getPortalData(company = "All"): Promise<PortalData> {
+  const key = `${getAuthSession()?.token ?? ""}|${company}`;
+  const pending = portalRequests.get(key);
+  if (pending) return pending;
+  const promise = loadPortalData(company);
+  portalRequests.set(key, promise);
+  void promise.finally(() => { if (portalRequests.get(key) === promise) portalRequests.delete(key); }).catch(() => undefined);
+  return promise;
+}
+async function loadPortalData(company: string): Promise<PortalData> {
+  const selected = await fetchSelectedOemFleet(company);
+  const [sites, vehicles, records] = await Promise.all([
     apiClient.fleet.fetchSites(),
-    apiClient.fleet.fetchVehicles(),
-    apiClient.fleet.fetchTelemetry(),
-    apiClient.fleet.fetchIntegrations(),
-    apiClient.fleet.fetchReports(),
-    apiClient.fleet.fetchWhatsAppSchedules(),
-    apiClient.fleet.fetchWhatsAppDeliveryLogs(),
+    selected ? Promise.resolve(selected.vehicles) : apiClient.fleet.fetchVehicles(),
+    selected ? Promise.resolve(selected.records) : apiClient.fleet.fetchTelemetry(),
   ]);
   const normalizedVehicles = vehicles.map(normalizeVehicleModel);
   const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
@@ -66,15 +68,15 @@ export async function getPortalData(): Promise<PortalData> {
     sites,
     vehicles: normalizedVehicles,
     records: normalizedRecords,
-    integrations,
-    reports,
-    whatsAppSchedules,
-    whatsAppDeliveryLogs,
+    integrations: [],
+    reports: [],
+    whatsAppSchedules: [],
+    whatsAppDeliveryLogs: [],
   };
 }
 
 export async function getFilteredPortalData(filters: DashboardFilters) {
-  const data = await getPortalData();
+  const data = await getPortalData(filters.company);
   const filteredVehicles = filterVehicles(data.vehicles, filters);
   const filteredRecords = filterTelemetryRecords(data.records, data.vehicles, filters);
   const filteredVehicleIds = new Set(filteredRecords.map((record) => record.vehicleId));
