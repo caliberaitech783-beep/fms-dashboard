@@ -275,8 +275,8 @@ function validateReportInput(input) {
   return {
     site,
     shift,
-    startTime: canonicalWindow.startTime,
-    stopTime: canonicalWindow.stopTime,
+    startTime: input.exactPeriod === true ? startTime : canonicalWindow.startTime,
+    stopTime: input.exactPeriod === true ? stopTime : canonicalWindow.stopTime,
     requestedStartTime: startTime,
     requestedStopTime: stopTime,
     reportDate,
