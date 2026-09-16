@@ -8,7 +8,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -93,20 +92,6 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
-        <ChartFrame height={360} title="Shift-wise Comparison" subtitle="Fuel and running hours by shift">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.shiftComparison} barSize={44} barGap={8}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
-              <Legend />
-              <Bar maxBarSize={44} dataKey="fuelConsumedLitres" name="Fuel L" fill="#72ddec" radius={[4, 4, 0, 0]} />
-              <Bar maxBarSize={44} dataKey="runningHours" name="Running hr" fill="#39b8af" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartFrame>
-
         {(["standstill", "averageDiesel"] as const).map((metric) => (
           <ChartFrame key={metric} title={metric === "standstill" ? "Standstill · %" : "Avg Diesel · L/h"} subtitle="Selected shift / period by vehicle">
             <ResponsiveContainer width="100%" height="100%">
