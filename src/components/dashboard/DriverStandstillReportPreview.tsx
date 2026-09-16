@@ -109,10 +109,10 @@ export function DriverStandstillReportPreview({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="driver-standstill-report space-y-4">
       {period && (
         <div className="border-b-2 border-[#213d68] pb-4">
-          <h3 className="text-xl font-semibold text-[#213d68]">
+          <h3 className="report-title text-xl font-semibold text-[#213d68]">
             Driverwise Standstill Tracking |{" "}
             {period.site ?? "All Sites"} | {period.customTimeRange ? "Custom period" : `Shift ${period.shift}`}
           </h3>
@@ -168,7 +168,7 @@ export function DriverStandstillReportPreview({
             </thead>
             <tbody>
               {!scania && (
-                <tr className="bg-white font-semibold text-[#213d68]">
+                <tr className="report-summary bg-white font-semibold text-[#213d68]">
                   {displayColumns.map((column) => (
                     <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
                       {formatCell(summary[column])}

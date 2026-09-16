@@ -2,6 +2,7 @@ import { getAuthSession } from "../auth/sessionService";
 import { SHIFT_DEFINITIONS } from "../constants/shifts";
 import type { DashboardFilters, IntegrationSource } from "../types/fleet";
 import type { ReportPreview } from "../types/reports";
+import { reportGenerationPeriod } from "../utils/reportGenerationPeriod";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -256,8 +257,9 @@ function scaniaRequest(filters: DashboardFilters): ScaniaRequestResult {
       ),
     };
   }
-  const date = filters.dateTo;
-  const window = scaniaShiftWindow(date, filters.shift);
+  const date = filters.timePeriodMode === "schedule" ? filters.dateFrom : filters.dateTo;
+  const scheduled = scaniaShiftWindow(date, filters.shift);
+  const window = reportGenerationPeriod(scheduled.startTime, scheduled.stopTime);
   return {
     body: {
       site: mappedSite,

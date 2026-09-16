@@ -71,3 +71,32 @@ test("forwards an overnight scheduled period with the next end date", () => {
   assert.equal(query.get("startTime"), "2026-08-13T21:00:00+05:30");
   assert.equal(query.get("stopTime"), "2026-08-14T05:00:00+05:30");
 });
+
+test("active shift ends at generation time rather than its future scheduled end", () => {
+  const query = buildVolvoDriverReportQuery(reportFilters({ dateFrom: "2026-09-16", dateTo: "2026-09-16", shift: "B", timeFrom: "13:00", timeTo: "21:00", timePeriodMode: "schedule" }), new Date("2026-09-16T16:10:23+05:30"));
+  assert.equal(query.get("startTime"), "2026-09-16T13:00:00+05:30");
+  assert.equal(query.get("stopTime"), "2026-09-16T10:40:23.000Z");
+});
+
+test("default active shift resolves its start before capping the end", () => {
+  const query = buildVolvoDriverReportQuery(reportFilters({ dateFrom: "2026-09-16", dateTo: "2026-09-16", shift: "B" }), new Date("2026-09-16T16:10:00+05:30"));
+  assert.equal(query.get("startTime"), "2026-09-16T13:00:00+05:30");
+  assert.equal(query.get("stopTime"), "2026-09-16T10:40:00.000Z");
+});
+
+test("overnight shift caps on the following day and refresh advances the cutoff", () => {
+  const filters = reportFilters({ dateFrom: "2026-09-16", dateTo: "2026-09-17", shift: "C", timeFrom: "21:00", timeTo: "05:00", timePeriodMode: "schedule" });
+  const first = buildVolvoDriverReportQuery(filters, new Date("2026-09-17T02:00:00+05:30"));
+  const next = buildVolvoDriverReportQuery(filters, new Date("2026-09-17T02:05:00+05:30"));
+  assert.equal(first.get("startTime"), "2026-09-16T21:00:00+05:30");
+  assert.equal(first.get("stopTime"), "2026-09-16T20:30:00.000Z");
+  assert.equal(next.get("stopTime"), "2026-09-16T20:35:00.000Z");
+});
+
+test("completed and future shifts preserve their scheduled periods", () => {
+  const filters = reportFilters({ timeFrom: "05:00", timeTo: "13:00", timePeriodMode: "schedule" });
+  for (const now of ["2026-08-13T16:00:00+05:30", "2026-08-12T16:00:00+05:30"]) {
+    const query = buildVolvoDriverReportQuery(filters, new Date(now));
+    assert.equal(query.get("stopTime"), "2026-08-13T13:00:00+05:30");
+  }
+});

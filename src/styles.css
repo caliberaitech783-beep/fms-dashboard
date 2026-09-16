@@ -208,3 +208,9 @@ select {
 .fms-theme .time-period-dialog [class*="border-coal-"] { border-color: #d5dee2; }
 .fms-theme section, .fms-theme article { min-width: 0; }
 .fms-theme .recharts-wrapper { overflow: hidden; }
+
+/* Keep report emphasis readable against both the portal and highlighted cells. */
+.fms-theme .driver-standstill-report .report-title { color: #a5edf4; }
+.fms-theme .driver-standstill-report .report-summary { background: #155363; color: #f0fcff; }
+.fms-theme .driver-standstill-report td.bg-rose-200 { background: #fbcdd5; color: #571b30; }
+.fms-theme .driver-standstill-report td.bg-red-600 { background: #b91c1c; color: #fff; }
