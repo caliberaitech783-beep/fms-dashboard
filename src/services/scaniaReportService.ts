@@ -1,3 +1,4 @@
+import { prepareScaniaStandstill, SCANIA_STANDSTILL_COLUMNS } from "../utils/scaniaStandstill";
 import { getAuthSession } from "../auth/sessionService";
 import { SHIFT_DEFINITIONS } from "../constants/shifts";
 import type { DashboardFilters, IntegrationSource } from "../types/fleet";
@@ -7,20 +8,7 @@ import { reportGenerationPeriod } from "../utils/reportGenerationPeriod";
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
 const REPORT_CACHE_MS = 60_000;
-const SCANIA_REPORT_COLUMNS = [
-  "Registration number",
-  "Drivers",
-  "Engine running time (h:m)",
-  "Distance driven (km)",
-  "Consumption liquid fuel (km/l)",
-  "Consumption liquid fuel (litres)",
-  "Consumption liquid fuel (litres/h)",
-  "Idling (% of engine running time)",
-  "Idling (h:m)",
-  "Performance mode - Power (km)",
-  "Performance mode - Power (% of distance)",
-  "Powertrain coasting (% of distance)",
-];
+const SCANIA_REPORT_COLUMNS = SCANIA_STANDSTILL_COLUMNS;
 const SCANIA_SHIFT_REPORT_COLUMNS = [
   "Shift",
   "Site",
@@ -335,7 +323,7 @@ export async function fetchScaniaDriverStandstillReport(
         );
       }
 
-      const preview: ReportPreview = {
+      const preview: ReportPreview = prepareScaniaStandstill({
         reportType: payload.reportType,
         generatedAt: payload.generatedAt,
         columns: SCANIA_REPORT_COLUMNS,
@@ -346,7 +334,7 @@ export async function fetchScaniaDriverStandstillReport(
         period: payload.period,
         meta: payload.meta,
         notice: payload.notice ?? payload.meta.emptyReason ?? null,
-      };
+      });
       if (reportCache.size >= 64) reportCache.delete(reportCache.keys().next().value!);
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,

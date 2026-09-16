@@ -1,3 +1,4 @@
+import { SCANIA_STANDSTILL_COLUMNS, scaniaStandstillSummary } from "../../utils/scaniaStandstill";
 import type { ReportPreview } from "../../types/reports";
 import type { ReportRow } from "../../utils/reportExplorer";
 import { cx } from "../ui/cx";
@@ -38,20 +39,7 @@ export const driverStandstillDisplayColumns = [
   AVERAGE_DIESEL,
 ];
 
-export const scaniaStandstillDisplayColumns = [
-  "Registration number",
-  DRIVER,
-  "Engine running time (h:m)",
-  "Distance driven (km)",
-  "Consumption liquid fuel (km/l)",
-  "Consumption liquid fuel (litres)",
-  "Consumption liquid fuel (litres/h)",
-  "Idling (% of engine running time)",
-  "Idling (h:m)",
-  "Performance mode - Power (km)",
-  "Performance mode - Power (% of distance)",
-  "Powertrain coasting (% of distance)",
-];
+export const scaniaStandstillDisplayColumns = SCANIA_STANDSTILL_COLUMNS;
 
 export function driverStandstillColumns(preview?: ReportPreview | null) {
   if (isScaniaReport(preview)) return scaniaStandstillDisplayColumns;
@@ -88,8 +76,7 @@ const HEADERS: Record<string, string> = {
   "Consumption liquid fuel (litres/h)": "Consumption liquid fuel (litres/h)",
   "Idling (% of engine running time)": "Idling (% of engine running time)",
   "Idling (h:m)": "Idling (h:m)",
-  "Performance mode - Power (km)": "Performance mode - Power (km)",
-  "Performance mode - Power (% of distance)": "Performance mode - Power (% of distance)",
+  "Adjusted Idling (%)": "Adjusted Idling (%)",
   "Powertrain coasting (% of distance)": "Powertrain coasting (% of distance)",
 };
 
@@ -102,7 +89,7 @@ export function DriverStandstillReportPreview({
   const period = preview.period;
   const scania = isScaniaReport(preview);
   const displayColumns = driverStandstillColumns(preview);
-  const summary = resolveDriverStandstillSummary(preview);
+  const summary = scania ? scaniaStandstillSummary(preview.rows) : resolveDriverStandstillSummary(preview);
   const averages = {
     fuelEconomy: average(preview.rows, scania ? "Consumption liquid fuel (km/l)" : EFFICIENCY),
     litresPerHour: average(preview.rows, scania ? "Consumption liquid fuel (litres/h)" : AVERAGE_DIESEL),
@@ -167,7 +154,6 @@ export function DriverStandstillReportPreview({
               </tr>
             </thead>
             <tbody>
-              {!scania && (
                 <tr className="report-summary bg-white font-semibold text-[#213d68]">
                   {displayColumns.map((column) => (
                     <td key={column} className="border border-coal-200 px-2 py-2 text-center first:text-left nth-[2]:text-left">
@@ -175,7 +161,6 @@ export function DriverStandstillReportPreview({
                     </td>
                   ))}
                 </tr>
-              )}
               <ReportDrilldownRows
                 rows={rows}
                 drilldownColumn={drilldownColumn}
@@ -305,7 +290,7 @@ function metricCellClass(
   if (column === AVERAGE_DIESEL && averages.litresPerHour !== null && value > averages.litresPerHour) {
     return "bg-rose-200";
   }
-  if (column === "Idling (% of engine running time)" && value > 28) return "bg-red-600 text-white";
+  if (column === "Adjusted Idling (%)" && value > 28) return "bg-red-600 text-white";
   if (column === "Consumption liquid fuel (km/l)" && averages.fuelEconomy !== null && value < averages.fuelEconomy) {
     return "bg-rose-200";
   }

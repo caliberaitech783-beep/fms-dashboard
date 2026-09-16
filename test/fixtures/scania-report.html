@@ -1,0 +1,20 @@
+<!doctype html><html><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {DriverStandstillReportPreview} from '/src/components/dashboard/DriverStandstillReportPreview.tsx';
+import {prepareScaniaStandstill} from '/src/utils/scaniaStandstill.ts';
+import {reportService} from '/src/services/reportService.ts';
+import '/src/styles.css';
+const rows = Array.from({length: 70}, (_, i) => ({
+ 'Registration number': 'S '+(i+1), Drivers: 'Driver '+(i+1),
+ 'Engine running time (h:m)': '2:00', 'Distance driven (km)': 30+i,
+ 'Consumption liquid fuel (km/l)': .6, 'Consumption liquid fuel (litres)': 50,
+ 'Consumption liquid fuel (litres/h)': 25, 'Idling (% of engine running time)': 30,
+ 'Idling (h:m)': '0:36', 'Powertrain coasting (% of distance)': 10,
+ 'Performance mode - Power (km)': 10, 'Performance mode - Power (% of distance)': 2,
+}));
+const preview = prepareScaniaStandstill({reportType:'Driverwise Standstill Tracking',oem:'Scania',live:true,generatedAt:'2026-09-16T09:30:00Z',columns:['Registration number'],rows,period:{site:'Sasti OCM',date:'2026-09-16',shift:'B',start:'2026-09-16T13:00:00+05:30',end:'2026-09-16T15:00:00+05:30',timezone:'Asia/Kolkata'}});
+createRoot(document.getElementById('root')).render(React.createElement('main',{className:'fms-theme min-h-screen p-6'},
+...['Csv','Pdf','Excel'].map(format=>React.createElement('button',{key:format,onClick:()=>reportService['export'+format](preview,'scania-qa.'+({Csv:'csv',Pdf:'pdf',Excel:'xlsx'}[format]))},format)),
+React.createElement(DriverStandstillReportPreview,{preview,rows:preview.rows,drilldownColumn:'',subDrilldownColumn:''})));
+</script></body></html>

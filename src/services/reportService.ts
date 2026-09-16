@@ -1,3 +1,4 @@
+import { prepareScaniaStandstill, scaniaExportRows } from "../utils/scaniaStandstill";
 import { apiClient } from "./apiClient";
 import { invalidateVolvoReportCache } from "./volvoDriverReportService";
 import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
@@ -100,7 +101,7 @@ export const reportService = {
       const notices = previews.map((item) => item.notice || item.error?.message).filter(Boolean);
       if (valid.length !== previews.length) notices.push("Some selected sites did not return report data. Displaying the available sites.");
       preview.notice = [...new Set(notices)].join(" ") || undefined;
-      return removeHiddenReportColumns(preview);
+      return removeHiddenReportColumns(prepareScaniaStandstill(preview));
     }
 
     const { sites, vehicles, filteredVehicles, filteredRecords } = await getFilteredPortalData(filters);
@@ -217,7 +218,7 @@ export const reportService = {
 
   exportCsv(preview: ReportPreview, fileName: string) {
     const visiblePreview = removeHiddenReportColumns(preview);
-    const csv = rowsToCsv(visiblePreview.rows, visiblePreview.columns);
+    const csv = rowsToCsv(scaniaExportRows(visiblePreview), visiblePreview.columns);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, fileName);
   },
@@ -626,7 +627,7 @@ function buildXlsxWorkbook(preview: ReportPreview) {
   const sheetName = sanitizeWorksheetName(preview.reportType);
   const sheetRows = [
     preview.columns.map((column) => titleCase(column)),
-    ...preview.rows.map((row) => preview.columns.map((column) => cellToText(row[column]))),
+    ...scaniaExportRows(preview).map((row) => preview.columns.map((column) => cellToText(row[column]))),
   ];
   const worksheetXml = [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
