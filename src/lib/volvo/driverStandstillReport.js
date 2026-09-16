@@ -352,6 +352,7 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
   const retryDelayMs = Math.max(0, Number(options.retryDelayMs || 0));
   const eventBatches = new Array(vins.length);
   let nextIndex = 0;
+  let stopped = false;
 
   async function fetchVin(vin) {
     let lastError;
@@ -365,6 +366,7 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
           vin,
         });
       } catch (error) {
+        if (error.statusCode === 429) throw error;
         lastError = error;
         if (attempt < retryAttempts && retryDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
@@ -375,13 +377,13 @@ async function fetchVehicleScopedHistory(client, vehicles, options = {}) {
   }
 
   async function worker() {
-    while (nextIndex < vins.length) {
+    while (!stopped && nextIndex < vins.length) {
       const index = nextIndex;
       nextIndex += 1;
       try {
         eventBatches[index] = await fetchVin(vins[index]);
       } catch (error) {
-        if (!options.continueOnError) throw error;
+        if (error.statusCode === 429 || !options.continueOnError) { stopped = true; throw error; }
         eventBatches[index] = [];
       }
       if (requestDelayMs > 0 && nextIndex < vins.length) {
@@ -403,7 +405,7 @@ async function fetchFleetHistory(client, vehicles, options = {}) {
       maxPages: options.maxPages,
     });
   } catch (error) {
-    if (options.fallbackToVehicleRequests === false) throw error;
+    if (error.statusCode === 429 || options.fallbackToVehicleRequests === false) throw error;
     return fetchVehicleScopedHistory(client, vehicles, options);
   }
 }

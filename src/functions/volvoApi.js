@@ -45,6 +45,7 @@ let cachedSnapshot = null;
 let pendingSnapshot = null;
 let cachedMasterVehicles = null;
 const driverReportCache = new Map();
+const pendingDriverReports = new Map();
 
 function allowedOrigin(request) {
   const configured = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in")
@@ -449,7 +450,7 @@ async function handleScores(request, context) {
     ];
     context.error("Volvo Scores request failed", safeErrorMessage(error, secrets));
     const upstreamAuthFailure = !error.isPortalAuth && [401, 403].includes(error.statusCode);
-    const status = upstreamAuthFailure ? 502 : [400, 401, 403, 503].includes(error.statusCode)
+    const status = upstreamAuthFailure ? 502 : [400, 401, 403, 429, 503].includes(error.statusCode)
       ? error.statusCode
       : 502;
     return response(request, status, {
@@ -566,160 +567,171 @@ async function loadDriverStandstillReport(request) {
     };
   }
 
-  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${window.shiftStart}|${window.shiftEnd}`;
+  // Generation-time cutoffs change by seconds. Share near-current requests for
+  // one minute while retaining the exact original period in the returned report.
+  const endMilliseconds = new Date(window.shiftEnd).getTime();
+  const isLiveWindow = Math.abs(Date.now() - endMilliseconds) < 60_000;
+  const cacheEnd = isLiveWindow ? Math.floor(endMilliseconds / 60_000) : window.shiftEnd;
+  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${window.shiftStart}|${cacheEnd}`;
   const cacheMilliseconds = Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000);
   const cached = driverReportCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < cacheMilliseconds) {
     return cached.value;
   }
 
-  const snapshot = await loadSnapshot();
-  const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
-  const siteFilterApplied = siteVehicles.length > 0;
-  const selectedVehicles = siteVehicles;
-  const fallbackDriverMap = parseDriverMap(process.env.VOLVO_RFMS_DRIVER_MAP_JSON);
-  let driverDirectory = emptyDriverDirectory();
-  let liveDriverConnected = false;
-  try {
-    driverDirectory = await getLiveVolvoDriverDirectory();
-    liveDriverConnected = driverDirectory.driverCount > 0;
-  } catch {
-    liveDriverConnected = false;
-  }
-  const buildRows = (statuses, reportWindow) => buildDriverStandstillRows({
-    vehicles: selectedVehicles,
-    statuses,
-    shiftStart: reportWindow.shiftStart,
-    shiftEnd: reportWindow.shiftEnd,
-    shiftName: shift,
-    driverMap: new Map([...fallbackDriverMap, ...driverNameMap(driverDirectory)]),
-    now: new Date(),
-    // A truck may report multiple drivers during one shift. The report is a
-    // fleet view, so combine those intervals into one exact row per Volvo VIN.
-    groupByVehicle: true,
-    metricProfile: "volvo-manager",
-  });
-  let statuses = [];
-  let rows = [];
-  let availabilityFallbackApplied = false;
-  const client = createVolvoClientFromEnv();
-  const fallbackDays = window.customTimeRange
-    ? 0
-    : Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
-  const historyStrategy = reportHistoryStrategy(reportSite, {
-    concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
-    vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
-    majriConcurrency: Number(process.env.VOLVO_RFMS_MAJRI_REPORT_CONCURRENCY || 12),
-  });
-  const historyOptions = {
-    maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
-    concurrency: historyStrategy.concurrency,
-    requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
-    retryAttempts: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_ATTEMPTS || 3),
-    retryDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_DELAY_MS || 250),
-    // A missing VIN makes fleet totals incorrect. Fail the request after retries
-    // instead of caching and presenting a partial historical report.
-    continueOnError: false,
-  };
-  if (selectedVehicles.length) {
-    const candidates = Array.from({ length: fallbackDays + 1 }, (_, dayOffset) => {
-      const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
-      return {
-        date: candidateDate,
-        window: window.customTimeRange
-          ? window
-          : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift),
-      };
-    });
-    const history = await fetchReportHistoryCandidates(client, selectedVehicles, {
-      ...historyOptions,
-      vehicleRequestThreshold: historyStrategy.vehicleRequestThreshold,
-      candidates,
-      buildRows,
-      now: new Date(),
-    });
-    statuses = history.statuses;
-    rows = history.rows;
-    if (history.rows.length && history.candidate) {
-      date = history.candidate.date;
-      window = history.candidate.window;
-      availabilityFallbackApplied = history.candidateIndex > 0;
+  if (pendingDriverReports.has(cacheKey)) return pendingDriverReports.get(cacheKey);
+  const pending = (async () => {
+    const snapshot = await loadSnapshot();
+    const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
+    const siteFilterApplied = siteVehicles.length > 0;
+    const selectedVehicles = siteVehicles;
+    const fallbackDriverMap = parseDriverMap(process.env.VOLVO_RFMS_DRIVER_MAP_JSON);
+    let driverDirectory = emptyDriverDirectory();
+    let liveDriverConnected = false;
+    try {
+      driverDirectory = await getLiveVolvoDriverDirectory();
+      liveDriverConnected = driverDirectory.driverCount > 0;
+    } catch {
+      liveDriverConnected = false;
     }
-  }
-  const columns = [
-    "Vehicles",
-    "Drivers",
-    "Total time (hh:mm)",
-    "Driving (km)",
-    "Diesel engine on (l)",
-    "Avg diesel engine on (km/l)",
-    "Standstill (%)",
-    "Standstill (hh:mm)",
-    "Engine load % time of Total time (%)",
-    "Coasting (%)",
-    "Avg diesel (l/h)",
-  ];
-  const reportRows = rows.map((row) => ({
-    "Vehicles": row.vehicle,
-    "Drivers": row.driver,
-    "Total time (hh:mm)": row.totalTime,
-    "Driving (km)": row.drivingKm,
-    "Diesel engine on (l)": row.dieselEngineOnLitres,
-    "Avg diesel engine on (km/l)": row.averageDieselEngineKmPerLitre,
-    "Fuel consumed (litres)": row.fuelLitres,
-    "Standstill (%)": row.standstillPercent,
-    "Standstill (hh:mm)": row.standstillTime,
-    "Engine load % time of Total time (%)": row.engineLoadPercent,
-    "Coasting (%)": row.coastingPercent,
-    "Avg diesel (l/h)": row.averageDieselLitresPerHour,
-  }));
-  const notices = [];
-  if (dateResolution.fallbackApplied) {
-    notices.push(`The selected demo date ${requestedDate} is outside Volvo's live history window. Showing ${date} instead.`);
-  }
-  if (availabilityFallbackApplied) {
-    notices.push(`No complete Volvo intervals were available for ${dateResolution.date}. Showing the latest available Shift ${shift} data from ${date}.`);
-  }
-  if (!siteFilterApplied) {
-    notices.push(`No Volvo vehicles have a ${scheduleSiteName(reportSite)} site assignment. Configure the Volvo VIN-to-site mapping to load this report.`);
-  }
-  if (!liveDriverConnected) {
-    notices.push("Live Volvo driver details are temporarily unavailable; masked driver identifiers are shown where available.");
-  }
+    const buildRows = (statuses, reportWindow) => buildDriverStandstillRows({
+      vehicles: selectedVehicles,
+      statuses,
+      shiftStart: reportWindow.shiftStart,
+      shiftEnd: reportWindow.shiftEnd,
+      shiftName: shift,
+      driverMap: new Map([...fallbackDriverMap, ...driverNameMap(driverDirectory)]),
+      now: new Date(),
+      // A truck may report multiple drivers during one shift. The report is a
+      // fleet view, so combine those intervals into one exact row per Volvo VIN.
+      groupByVehicle: true,
+      metricProfile: "volvo-manager",
+    });
+    let statuses = [];
+    let rows = [];
+    let availabilityFallbackApplied = false;
+    const client = createVolvoClientFromEnv();
+    const fallbackDays = window.customTimeRange
+      ? 0
+      : Math.max(0, Number(process.env.VOLVO_RFMS_REPORT_FALLBACK_DAYS || 1));
+    const historyStrategy = reportHistoryStrategy(reportSite, {
+      concurrency: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CONCURRENCY || 6),
+      vehicleRequestThreshold: Number(process.env.VOLVO_RFMS_DIRECT_VIN_REPORT_LIMIT || 20),
+      majriConcurrency: Number(process.env.VOLVO_RFMS_MAJRI_REPORT_CONCURRENCY || 12),
+    });
+    const historyOptions = {
+      maxPages: Number(process.env.VOLVO_RFMS_HISTORICAL_MAX_PAGES || 120),
+      concurrency: historyStrategy.concurrency,
+      requestDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_REQUEST_DELAY_MS || 0),
+      retryAttempts: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_ATTEMPTS || 3),
+      retryDelayMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_RETRY_DELAY_MS || 250),
+      // A missing VIN makes fleet totals incorrect. Fail the request after retries
+      // instead of caching and presenting a partial historical report.
+      continueOnError: false,
+    };
+    if (selectedVehicles.length) {
+      const candidates = Array.from({ length: fallbackDays + 1 }, (_, dayOffset) => {
+        const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
+        return {
+          date: candidateDate,
+          window: window.customTimeRange
+            ? window
+            : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift),
+        };
+      });
+      const history = await fetchReportHistoryCandidates(client, selectedVehicles, {
+        ...historyOptions,
+        vehicleRequestThreshold: historyStrategy.vehicleRequestThreshold,
+        candidates,
+        buildRows,
+        now: new Date(),
+      });
+      statuses = history.statuses;
+      rows = history.rows;
+      if (history.rows.length && history.candidate) {
+        date = history.candidate.date;
+        window = history.candidate.window;
+        availabilityFallbackApplied = history.candidateIndex > 0;
+      }
+    }
+    const columns = [
+      "Vehicles",
+      "Drivers",
+      "Total time (hh:mm)",
+      "Driving (km)",
+      "Diesel engine on (l)",
+      "Avg diesel engine on (km/l)",
+      "Standstill (%)",
+      "Standstill (hh:mm)",
+      "Engine load % time of Total time (%)",
+      "Coasting (%)",
+      "Avg diesel (l/h)",
+    ];
+    const reportRows = rows.map((row) => ({
+      "Vehicles": row.vehicle,
+      "Drivers": row.driver,
+      "Total time (hh:mm)": row.totalTime,
+      "Driving (km)": row.drivingKm,
+      "Diesel engine on (l)": row.dieselEngineOnLitres,
+      "Avg diesel engine on (km/l)": row.averageDieselEngineKmPerLitre,
+      "Fuel consumed (litres)": row.fuelLitres,
+      "Standstill (%)": row.standstillPercent,
+      "Standstill (hh:mm)": row.standstillTime,
+      "Engine load % time of Total time (%)": row.engineLoadPercent,
+      "Coasting (%)": row.coastingPercent,
+      "Avg diesel (l/h)": row.averageDieselLitresPerHour,
+    }));
+    const notices = [];
+    if (dateResolution.fallbackApplied) {
+      notices.push(`The selected demo date ${requestedDate} is outside Volvo's live history window. Showing ${date} instead.`);
+    }
+    if (availabilityFallbackApplied) {
+      notices.push(`No complete Volvo intervals were available for ${dateResolution.date}. Showing the latest available Shift ${shift} data from ${date}.`);
+    }
+    if (!siteFilterApplied) {
+      notices.push(`No Volvo vehicles have a ${scheduleSiteName(reportSite)} site assignment. Configure the Volvo VIN-to-site mapping to load this report.`);
+    }
+    if (!liveDriverConnected) {
+      notices.push("Live Volvo driver details are temporarily unavailable; masked driver identifiers are shown where available.");
+    }
 
-  const value = {
-    reportType: "Driverwise Standstill Tracking",
-    generatedAt: new Date().toISOString(),
-    columns,
-    rows: reportRows,
-    live: true,
-    source: "VOLVO_RFMS_HISTORY",
-    period: {
-      date,
-      requestedDate,
-      fallbackApplied: dateResolution.fallbackApplied || availabilityFallbackApplied,
-      shift,
-      site: scheduleSiteName(reportSite),
-      start: window.shiftStart,
-      end: window.shiftEnd,
-      timezone: window.timezone,
-      customTimeRange: window.customTimeRange,
-    },
-    siteFilterApplied,
-    driverSource: liveDriverConnected ? "VOLVO_GROUP_DRIVER_API" : "MASKED_IDENTIFIER_FALLBACK",
-    driverRecords: driverDirectory.driverCount,
-    driverTimes: driverDirectory.driverTimeCount,
-    historyRecords: statuses.length,
-    siteVehicleCount: selectedVehicles.length,
-    reportedVehicleCount: reportRows.length,
-    notice: notices.length ? notices.join(" ") : null,
-    unsupportedMetrics: {
-      iShiftPerformanceTimePercent: "Requires a Volvo Connect analytics field or formula; it is not in standard RFMS 2.1 accumulated data.",
-      aboveEconomyPercent: "Requires Volvo's economy-band definition or analytics endpoint; it is not a standard RFMS field.",
-    },
-  };
-  driverReportCache.set(cacheKey, { cachedAt: Date.now(), value });
-  return value;
+    const value = {
+      reportType: "Driverwise Standstill Tracking",
+      generatedAt: new Date().toISOString(),
+      columns,
+      rows: reportRows,
+      live: true,
+      source: "VOLVO_RFMS_HISTORY",
+      period: {
+        date,
+        requestedDate,
+        fallbackApplied: dateResolution.fallbackApplied || availabilityFallbackApplied,
+        shift,
+        site: scheduleSiteName(reportSite),
+        start: window.shiftStart,
+        end: window.shiftEnd,
+        timezone: window.timezone,
+        customTimeRange: window.customTimeRange,
+      },
+      siteFilterApplied,
+      driverSource: liveDriverConnected ? "VOLVO_GROUP_DRIVER_API" : "MASKED_IDENTIFIER_FALLBACK",
+      driverRecords: driverDirectory.driverCount,
+      driverTimes: driverDirectory.driverTimeCount,
+      historyRecords: statuses.length,
+      siteVehicleCount: selectedVehicles.length,
+      reportedVehicleCount: reportRows.length,
+      notice: notices.length ? notices.join(" ") : null,
+      unsupportedMetrics: {
+        iShiftPerformanceTimePercent: "Requires a Volvo Connect analytics field or formula; it is not in standard RFMS 2.1 accumulated data.",
+        aboveEconomyPercent: "Requires Volvo's economy-band definition or analytics endpoint; it is not a standard RFMS field.",
+      },
+    };
+    if (driverReportCache.size >= 64) driverReportCache.delete(driverReportCache.keys().next().value);
+    driverReportCache.set(cacheKey, { cachedAt: Date.now(), value });
+    return value;
+  })();
+  pendingDriverReports.set(cacheKey, pending);
+  try { return await pending; } finally { pendingDriverReports.delete(cacheKey); }
 }
 
 async function handleDriverReport(request, context) {
@@ -733,10 +745,17 @@ async function handleDriverReport(request, context) {
   } catch (error) {
     const secrets = [process.env.VOLVO_RFMS_USERNAME, process.env.VOLVO_RFMS_PASSWORD];
     context.error("Volvo driver standstill report failed", safeErrorMessage(error, secrets));
-    const status = [400, 401, 403, 503].includes(error.statusCode) ? error.statusCode : 502;
-    return response(request, status, {
+    const status = [400, 401, 403, 429, 503].includes(error.statusCode) ? error.statusCode : 502;
+    const retryAfterSeconds = status === 429 ? Math.max(1, Math.ceil((error.retryAfterMs || 60_000) / 1000)) : undefined;
+    const result = response(request, status, {
       message: status === 401 ? "Authentication required." : safeErrorMessage(error, secrets),
+      ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
     });
+    if (retryAfterSeconds) {
+      result.headers["Retry-After"] = String(retryAfterSeconds);
+      result.headers["Access-Control-Expose-Headers"] = "Retry-After";
+    }
+    return result;
   }
 }
 
@@ -780,7 +799,7 @@ function volvoSecrets() {
 function volvoFailureResponse(request, context, error, label) {
   context.error(label, safeErrorMessage(error, volvoSecrets()));
   const upstreamAuthFailure = !error.isPortalAuth && [401, 403].includes(error.statusCode);
-  const status = upstreamAuthFailure ? 502 : [400, 401, 403, 503].includes(error.statusCode) ? error.statusCode : 502;
+  const status = upstreamAuthFailure ? 502 : [400, 401, 403, 429, 503].includes(error.statusCode) ? error.statusCode : 502;
   return response(request, status, {
     message: upstreamAuthFailure
       ? "Volvo API authorization failed. Check the server-side API subscription, credentials and vehicle permissions."

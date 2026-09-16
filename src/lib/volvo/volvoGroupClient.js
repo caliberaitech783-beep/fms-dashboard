@@ -1,3 +1,4 @@
+const { guardedVolvoFetch } = require("./volvoRequestGate");
 const { randomUUID } = require("node:crypto");
 const { safeErrorMessage } = require("../tracking/masking");
 const {
@@ -201,6 +202,7 @@ class VolvoGroupClient {
       const masked = safeErrorMessage(error, [this.clientId, this.clientSecret]);
       throw Object.assign(new Error(masked || "Volvo OAuth token request failed."), {
         statusCode: error.statusCode || (error.name === "AbortError" ? 504 : 502),
+          retryAfterMs: error.retryAfterMs,
       });
     } finally {
       clearTimeout(timeout);
@@ -261,7 +263,9 @@ class VolvoGroupClient {
         ]);
         const safeError = Object.assign(new Error(safeMessage || "Volvo API request failed."), {
           statusCode: error.statusCode || (error.name === "AbortError" ? 504 : 502),
+          retryAfterMs: error.retryAfterMs,
         });
+        if (error.statusCode === 429 && error.retryAfterMs) throw safeError;
         if (attempt < this.retries && (!error.statusCode || RETRYABLE_STATUS_CODES.has(error.statusCode))) {
           lastError = safeError;
           await this.sleepFn(Math.round(250 * (2 ** attempt) + this.randomFn() * 200));
@@ -431,6 +435,7 @@ function createVolvoGroupClientFromEnv(env = process.env, options = {}) {
     timeoutMs: env.VOLVO_REQUEST_TIMEOUT_MS || options.timeoutMs,
     maxPages: env.VOLVO_MAX_PAGES || options.maxPages,
     ...options,
+    fetchFn: guardedVolvoFetch(options.fetchFn || globalThis.fetch),
   });
 }
 
