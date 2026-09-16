@@ -67,7 +67,11 @@ export const dashboardService = {
       sitePerformance: withSiteNames(aggregateBySite(filteredRecords.filter((row) => row.assetCategory === "Truck")), siteNameMap).map((metric) => withModelEfficiency(metric, "Truck")),
       companyPerformance: aggregateByCompany(filteredRecords, vehicles),
       modelPerformance: ["Truck", "HEMM"].flatMap((category) => {
-        const categoryVehicles = filteredVehicles.filter((vehicle) => vehicle.assetCategory === category);
+        const categoryVehicles = filteredVehicles
+          .filter((vehicle) => vehicle.assetCategory === category)
+          .map((vehicle) => category === "Truck" && vehicle.company === "Scania" && !vehicle.modelNumber?.trim()
+            ? { ...vehicle, modelNumber: "500-XT" }
+            : vehicle);
         const ids = new Set(categoryVehicles.map((vehicle) => vehicle.id));
         return aggregateByModel(filteredRecords.filter((record) => ids.has(record.vehicleId)), categoryVehicles)
           .map((metric) => withModelEfficiency(metric, category)).sort((a, b) => b.fuelConsumedLitres - a.fuelConsumedLitres).slice(0, 12);
