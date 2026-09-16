@@ -1,3 +1,4 @@
+import { withModelEfficiency } from "../utils/modelEfficiency";
 import type { DashboardOverview, KpiMetric, NamedMetric } from "../types/dashboard";
 import type { DashboardFilters, FleetTelemetryRecord, Site, Vehicle } from "../types/fleet";
 import {
@@ -15,7 +16,6 @@ import {
 } from "../utils/calculations";
 import {
   formatEfficiency,
-  formatHours,
   formatLitres,
   formatNumber,
 } from "../utils/formatters";
@@ -34,7 +34,7 @@ export const dashboardService = {
     }));
 
     return {
-      kpis: buildKpis(kpiValues, alerts.length, filters.company === "Volvo", filters.company === "Eicher"),
+      kpis: buildKpis(kpiValues, filters.company === "Volvo", filters.company === "Eicher"),
       productionFuelTrend: aggregateTrendByDate(filteredRecords),
       shiftComparison: aggregateByShift(filteredRecords).map((metric) => ({
         ...metric,
@@ -42,15 +42,12 @@ export const dashboardService = {
       })),
       sitePerformance: withSiteNames(aggregateBySite(filteredRecords), siteNameMap),
       companyPerformance: aggregateByCompany(filteredRecords, vehicles),
-      modelPerformance: aggregateByModel(filteredRecords, vehicles)
-        .map((metric) => ({
-          ...metric,
-          efficiency: metric.runningHours
-            ? metric.fuelConsumedLitres / metric.runningHours
-            : metric.fuelConsumedLitres / Math.max(1, metric.distanceKm ?? 1),
-        }))
-        .sort((a, b) => b.fuelConsumedLitres - a.fuelConsumedLitres)
-        .slice(0, 12),
+      modelPerformance: ["Truck", "HEMM"].flatMap((category) => {
+        const categoryVehicles = filteredVehicles.filter((vehicle) => vehicle.assetCategory === category);
+        const ids = new Set(categoryVehicles.map((vehicle) => vehicle.id));
+        return aggregateByModel(filteredRecords.filter((record) => ids.has(record.vehicleId)), categoryVehicles)
+          .map((metric) => withModelEfficiency(metric, category)).sort((a, b) => b.fuelConsumedLitres - a.fuelConsumedLitres).slice(0, 12);
+      }),
       statusDistribution,
       categoryFuel: aggregateByCategory(filteredRecords, vehicles),
       runningIdleTrend: aggregateRunningIdleTrend(filteredRecords),
@@ -133,7 +130,6 @@ function rawNumber(metrics: Record<string, unknown>, key: string): number | null
 
 function buildKpis(
   values: ReturnType<typeof aggregateDashboardKpis>,
-  alertsCount: number,
   liveVolvoOnly = false,
   eicherLocationOnly = false,
 ): KpiMetric[] {
@@ -144,13 +140,9 @@ function buildKpis(
   return [
     { label: "Total Vehicles", value: formatNumber(values.totalVehicles), subLabel: "Filtered fleet", tone: "neutral" },
     { label: "Running Vehicles", value: formatNumber(values.runningVehicles), subLabel: "Live operating", tone: "good" },
-    { label: "Idle Vehicles", value: formatNumber(values.idleVehicles), subLabel: "Needs attention", tone: "warning" },
-    { label: "Offline Vehicles", value: formatNumber(values.offlineVehicles), subLabel: "Tracker gaps", tone: "danger" },
     { label: "Total Fuel Consumed", value: eicherLocationOnly ? "-" : formatLitres(values.totalFuelConsumed), subLabel: notSupplied ?? cumulativeLabel, tone: "info" },
     { label: "Avg Truck Efficiency", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: notSupplied ?? (liveVolvoOnly ? "Cumulative Volvo efficiency" : "Truck category only"), tone: "good" },
-    { label: "Avg HEMM Fuel Rate", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageHemmFuelRate, "L/hr"), subLabel: notSupplied ?? "HEMM category only", tone: "info" },
-    { label: "Total Idle Hours", value: eicherLocationOnly ? "-" : formatHours(values.totalIdleHours), subLabel: notSupplied ?? (liveVolvoOnly ? cumulativeLabel : "Engine idle"), tone: "warning" },
-    { label: "Alerts Count", value: formatNumber(alertsCount), subLabel: "Open exceptions", tone: alertsCount ? "danger" : "good" },
+    { label: "Avg Equipment Fuel Rate", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageHemmFuelRate, "L/hr"), subLabel: notSupplied ?? "Equipment category only", tone: "info" },
   ];
 }
 

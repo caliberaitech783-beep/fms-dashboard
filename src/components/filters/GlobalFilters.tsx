@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { ChevronDown, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import type { DashboardFilters } from "../../types/fleet";
 import type { FilterOptions } from "../../hooks/useFleetFilters";
 import { SHIFT_OPTIONS } from "../../constants/shifts";
@@ -25,15 +25,18 @@ export function GlobalFilters({
   resetFilters,
   onRefresh,
 }: GlobalFiltersProps) {
+  const [open, setOpen] = useState(true);
   return (
-    <div className="sticky top-0 z-20 border-b border-coal-200 bg-coal-50/95 px-4 py-3 backdrop-blur lg:px-6">
+    <aside aria-label="Fleet filters" className={open ? "filter-panel w-full shrink-0 border-r border-coal-200 bg-white p-4 lg:sticky lg:top-0 lg:max-h-screen lg:w-72 lg:overflow-y-auto" : "filter-panel shrink-0 p-3"}>
+      <div className="mb-4 flex items-center justify-between gap-3"><button type="button" aria-label={open ? "Collapse filters" : "Open filters"} aria-expanded={open} onClick={() => setOpen(!open)} className="flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="h-4 w-4" />{open && "Filters"}</button>{open && <button type="button" aria-label="Close filters" onClick={() => setOpen(false)}><X className="h-4 w-4" /></button>}</div>
+      {open && <>
       <div className="mb-2 flex justify-end">
         <div className="flex gap-2">
           <Button icon={<RefreshCw className="h-4 w-4" />} onClick={onRefresh} variant="primary">Refresh</Button>
           <Button icon={<RotateCcw className="h-4 w-4" />} onClick={resetFilters}>Reset</Button>
         </div>
       </div>
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6 2xl:grid-cols-9">
+      <div className="grid gap-4">
         <TimePeriodPicker
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
@@ -49,36 +52,9 @@ export function GlobalFilters({
         <FilterSelect label="Category" value={filters.assetCategory} options={withAll(options.categories).map((option) => ({ ...option, label: option.value === "HEMM" ? "Equipment" : option.label }))} onChange={(value) => setFilter("assetCategory", value as DashboardFilters["assetCategory"])} />
         <FilterSelect label="OEM" value={filters.company} options={withAll(options.companies)} onChange={(value) => setFilter("company", value as DashboardFilters["company"])} />
         <FilterSelect label="Model" value={filters.modelNumber} options={withAll(options.models)} onChange={(value) => setFilter("modelNumber", value)} />
-        <FilterInput label="Vehicle" value={filters.vehicleNumber} placeholder="Search vehicle" onChange={(value) => setFilter("vehicleNumber", value)} />
       </div>
-    </div>
-  );
-}
-
-interface FilterInputProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  placeholder?: string;
-  min?: string;
-  step?: string;
-}
-
-function FilterInput({ label, value, onChange, type = "text", placeholder, min, step }: FilterInputProps) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-coal-500">{label}</span>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        min={min}
-        step={step}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-md border border-coal-200 bg-white px-3 text-sm text-coal-800 outline-none transition focus:border-ore-600 focus:ring-2 focus:ring-ore-100"
-      />
-    </label>
+      </>}
+    </aside>
   );
 }
 
@@ -232,6 +208,7 @@ function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
     <label className="block">
       <span className="mb-1 block text-xs font-semibold text-coal-500">{label}</span>
       <select
+        aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="h-10 w-full rounded-md border border-coal-200 bg-white px-3 text-sm text-coal-800 outline-none transition focus:border-ore-600 focus:ring-2 focus:ring-ore-100"

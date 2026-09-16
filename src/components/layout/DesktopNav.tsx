@@ -85,7 +85,8 @@ export function DesktopNav({ active, items, onChange, onReportChange, userContro
                 aria-expanded={openMenu === "reports"}
                 aria-controls="desktop-menu-reports"
                 aria-current={active === "reports" ? "page" : undefined}
-                onClick={() => setOpenMenu((current) => current === "reports" ? null : "reports")}
+                onMouseEnter={() => setOpenMenu("reports")}
+                onClick={() => setOpenMenu("reports")}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
@@ -105,7 +106,8 @@ export function DesktopNav({ active, items, onChange, onReportChange, userContro
                 type="button"
                 aria-expanded={openMenu === group}
                 aria-controls={`desktop-menu-${group}`}
-                onClick={() => setOpenMenu((current) => current === group ? null : group)}
+                onMouseEnter={() => setOpenMenu(group)}
+                onClick={() => setOpenMenu(group)}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown") {
                     event.preventDefault();

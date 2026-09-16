@@ -1,7 +1,5 @@
 import {
   Activity,
-  AlertTriangle,
-  Clock,
   Fuel,
   Gauge,
   Truck,
@@ -10,20 +8,14 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import type { DashboardOverview, EicherLiveDashboardRow, VehiclePerformanceRow } from "../../types/dashboard";
-import type { Alert, IntegrationSource } from "../../types/fleet";
-import { formatDateTime, formatEfficiency, formatHours, formatLitres, formatNumber, titleCase } from "../../utils/formatters";
+import { formatDateTime, formatEfficiency, formatHours, formatLitres, formatNumber } from "../../utils/formatters";
 import { KpiCard } from "../cards/KpiCard";
 import { ChartFrame } from "../charts/ChartFrame";
 import { DataTable, type DataTableColumn } from "../ui/DataTable";
@@ -36,19 +28,8 @@ interface ManagementDashboardProps {
   loading: boolean;
 }
 
-const kpiIcons = [
-  Truck,
-  Activity,
-  Clock,
-  AlertTriangle,
-  Fuel,
-  Gauge,
-  Gauge,
-  Clock,
-  AlertTriangle,
-];
+const kpiIcons = [Truck, Activity, Fuel, Gauge, Gauge];
 
-const chartColors = ["#a56414", "#1f9d74", "#2f80ed", "#d64545", "#5d7484", "#e3a008"];
 
 export function ManagementDashboard({ overview, loading }: ManagementDashboardProps) {
   if (loading || !overview) {
@@ -62,23 +43,7 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
     { header: "Fuel", render: (row) => formatLitres(row.fuelConsumedLitres), align: "right" },
     { header: "Run", render: (row) => formatHours(row.runningHours), align: "right" },
     { header: "Idle", render: (row) => formatHours(row.idleHours), align: "right" },
-    { header: "Efficiency", render: (row) => formatEfficiency(row.efficiency, row.vehicle.fuelMeasurementUnit), align: "right" },
-  ];
-
-  const alertColumns: DataTableColumn<Alert>[] = [
-    { header: "Type", render: (row) => titleCase(row.type) },
-    { header: "Severity", render: (row) => <StatusBadge status={row.severity} /> },
-    { header: "Vehicle", render: (row) => row.vehicleId },
-    { header: "Message", render: (row) => row.message, className: "min-w-72" },
-    { header: "Created", render: (row) => formatDateTime(row.createdAt) },
-  ];
-
-  const integrationColumns: DataTableColumn<IntegrationSource>[] = [
-    { header: "OEM", render: (row) => row.company },
-    { header: "Source", render: (row) => row.sourceType },
-    { header: "Status", render: (row) => <StatusBadge status={row.status} /> },
-    { header: "Last Sync", render: (row) => formatDateTime(row.lastSyncAt) },
-    { header: "Records", render: (row) => formatNumber(row.recordsSyncedToday), align: "right" },
+    { header: "Efficiency", render: (row) => formatEfficiency(row.efficiency, row.vehicle.assetCategory === "Truck" ? "km/L" : "L/hr"), align: "right" },
   ];
 
   const eicherLiveColumns: DataTableColumn<EicherLiveDashboardRow>[] = [
@@ -97,7 +62,7 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {overview.kpis.map((metric, index) => {
           const Icon = kpiIcons[index] ?? Activity;
           return <KpiCard key={metric.label} metric={metric} icon={<Icon className="h-5 w-5" />} />;
@@ -114,17 +79,17 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
         </Panel>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 <ChartFrame title="Shift-wise Comparison" subtitle="Fuel and running hours by shift">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.shiftComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
-              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#a56414" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="runningHours" name="Running hr" fill="#2f80ed" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#72ddec" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="runningHours" name="Running hr" fill="#39b8af" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
@@ -132,12 +97,12 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
         <ChartFrame title="Site-wise Fuel Performance">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.sitePerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" interval={0} angle={-18} textAnchor="end" height={70} />
               <YAxis />
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
-              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#a56414" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#72ddec" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
@@ -145,70 +110,35 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
         <ChartFrame title="Company/OEM-wise Fuel Performance">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview.companyPerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
               <Legend />
-              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#5d7484" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#36b6d3" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartFrame>
 
-        <ChartFrame title="Model-wise Efficiency Comparison" subtitle="Sorted by fuel intensity and model contribution">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.modelPerformance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
-              <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatNumber(value, 2)} />
-              <Bar dataKey="efficiency" name="Efficiency / rate index" fill="#2f80ed" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartFrame>
+        {(["km/L", "L/hr"] as const).map((unit) => (
+          <ChartFrame key={unit} title={unit === "km/L" ? "Truck Model Efficiency · km/L" : "Equipment Model Fuel Rate · L/hr"} subtitle={unit === "km/L" ? "Distance travelled per litre of fuel" : "Fuel consumed per operating hour"}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={overview.modelPerformance.filter((row) => row.efficiencyUnit === unit)}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
+                <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
+                <YAxis />
+                <Tooltip formatter={(value: number) => [formatNumber(value, 2) + " " + unit, "Efficiency"]} />
+                <Bar dataKey="efficiency" name={unit} fill={unit === "km/L" ? "#72ddec" : "#39b8af"} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        ))}
 
-        <ChartFrame title="Vehicle Status Distribution">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={overview.statusDistribution} dataKey="value" nameKey="status" outerRadius={95} label>
-                {overview.statusDistribution.map((entry, index) => (
-                  <Cell key={entry.status} fill={chartColors[index % chartColors.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: number, name: string) => [formatNumber(value), titleCase(name)]} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartFrame>
 
-        <ChartFrame title="Fuel Consumed by Category">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={overview.categoryFuel}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatNumber(value, 1)} />
-              <Bar dataKey="fuelConsumedLitres" name="Fuel L" fill="#a56414" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartFrame>
 
-        <ChartFrame title="Running vs Idle Hours Trend">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={overview.runningIdleTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e7ebee" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value: number) => formatHours(value)} />
-              <Legend />
-              <Line type="monotone" dataKey="runningHours" name="Running" stroke="#1f9d74" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="idleHours" name="Idle" stroke="#e3a008" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartFrame>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Panel title="Top 10 High Fuel-consuming Vehicles">
           <DataTable columns={vehicleColumns} rows={overview.highFuelVehicles} getRowKey={(row) => row.vehicle.id} />
         </Panel>
@@ -220,14 +150,6 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Recent Critical Alerts">
-          <DataTable columns={alertColumns} rows={overview.criticalAlerts} getRowKey={(row) => row.id} />
-        </Panel>
-        <Panel title="Tracker Integration Health">
-          <DataTable columns={integrationColumns} rows={overview.integrationHealth} getRowKey={(row) => row.id} />
-        </Panel>
-      </div>
     </div>
   );
 }

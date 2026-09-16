@@ -21,6 +21,7 @@ export interface NamedMetric {
   idleHours?: number;
   trips?: number;
   efficiency?: number | null;
+  efficiencyUnit?: "km/L" | "L/hr";
 }
 
 export interface ShiftMetric extends NamedMetric {
