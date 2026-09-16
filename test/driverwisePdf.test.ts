@@ -96,14 +96,16 @@ test("adds the on-screen Volvo summary row to the PDF", () => {
   ]);
 });
 
-test("keeps the summary row off Scania PDFs", () => {
+test("includes a Scania summary and adjusted idling instead of Power columns", () => {
   const preview = volvoPreview();
   preview.oem = "Scania";
   preview.columns = ["Registration number", ...preview.columns];
 
   const text = extractTextCommands(buildDriverwiseStandstillPdf(preview));
 
-  assert.equal(text.some((value) => value.startsWith("Summary (")), false);
+  assert.equal(text.some((value) => value.startsWith("Summary (")), true);
+  assert.ok(text.includes("Adjusted"));
+  assert.ok(!text.includes("Power"));
 });
 
 test("uses the frozen official summary and extended Volvo metrics in the PDF", () => {

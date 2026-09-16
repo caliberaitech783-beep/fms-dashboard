@@ -1,3 +1,4 @@
+import { prepareScaniaStandstill, scaniaStandstillSummary } from "./scaniaStandstill.ts";
 import type { ReportPreview } from "../types/reports";
 
 type ReportValue = string | number | null;
@@ -9,6 +10,8 @@ export interface DriverwisePdfContext {
 
 interface DriverwisePdfRow {
   isSummary?: boolean;
+  adjustedIdling: string;
+  adjustedIdlingValue: number | null;
   registration: string;
   driver: string;
   engineRunningTime: string;
@@ -53,7 +56,7 @@ const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 11;
 const ROWS_PER_PAGE = 62;
 const SCANIA_SCHEMA: PdfSchemaDefinition = {
-  columnWidths: [43, 35, 34, 38, 36, 37, 39, 31, 39, 44, 41],
+  columnWidths: [48, 40, 40, 43, 43, 43, 43, 33, 48, 44],
   headerLines: [
     ["Registratio", "n", "number"],
     ["Engine", "running", "time", "(h:m)"],
@@ -63,12 +66,11 @@ const SCANIA_SCHEMA: PdfSchemaDefinition = {
     ["Consum", "ption", "liquid", "fuel", "(litres/h)"],
     ["Idling (%", "of", "engine", "running", "time)"],
     ["Idling", "(h:m)"],
-    ["Performa", "nce", "mode -", "Power", "(km)"],
-    ["Performanc", "e", "mode -", "Power", "(% of", "distance)"],
     ["Powertrain", "coasting", "(% of", "distance)"],
+    ["Adjusted", "Idling", "(%)"],
   ],
-  thresholdLineOne: " rows under 00:30 engine time excluded | km/l below fleet average = light red | litres/h above fleet average = light red | idling > 28% = red | Power distance > 30 km = red | Power share > 1% =",
-  thresholdLineTwo: "light red | coasting < 20% = light red | sorted by idling % descending",
+  thresholdLineOne: " km/l below fleet average = pink | L/h above fleet average = pink | adjusted idling > 28% = red | coasting < 20% = pink",
+  thresholdLineTwo: "Adjusted idling = raw idling x min(L/h / fleet-average L/h, 1); estimated, not measured ignition-off time.",
 };
 const VOLVO_SCHEMA: PdfSchemaDefinition = {
   columnWidths: [36, 52, 35, 35, 36, 39, 36, 35, 42, 35, 36],
@@ -124,16 +126,19 @@ export function buildDriverwiseStandstillPdf(
     : preview.columns.includes("I-Shift Performance % time of Total time (%)")
       ? "volvo-extended"
       : "volvo";
+  if (schema === "scania") preview = prepareScaniaStandstill(preview);
   const sourceRows = preview.rows.map(normalizeDriverwiseRow);
   const normalizedRows = sourceRows
-    .filter((row) => row.engineMinutes === null || row.engineMinutes >= 30)
+    .filter((row) => schema === "scania" || row.engineMinutes === null || row.engineMinutes >= 30)
     .sort((left, right) => (right.idlingPercentValue ?? -Infinity) - (left.idlingPercentValue ?? -Infinity));
   const averages = {
     fuelKmPerLitre: average(normalizedRows.map((row) => row.fuelKmPerLitreValue)),
     fuelLitresPerHour: average(normalizedRows.map((row) => row.fuelLitresPerHourValue)),
   };
-  const summaryRow = schema !== "scania" && sourceRows.length
-    ? buildVolvoSummaryRow(sourceRows, preview.summary)
+  const summaryRow = sourceRows.length
+    ? schema === "scania"
+      ? { ...normalizeDriverwiseRow(scaniaStandstillSummary(preview.rows)), isSummary: true }
+      : buildVolvoSummaryRow(sourceRows, preview.summary)
     : null;
   const pages = paginateDriverwiseRows(normalizedRows, summaryRow);
   if (pages.length === 0) {
@@ -163,6 +168,8 @@ function buildVolvoSummaryRow(
 
   return {
     isSummary: true,
+    adjustedIdling: "-",
+    adjustedIdlingValue: null,
     registration: `Summary (${rows.length})`,
     driver: `${rows.length} vehicles`,
     engineRunningTime: durationText(null, engineMinutes),
@@ -286,6 +293,8 @@ function normalizeDriverwiseRow(row: Record<string, ReportValue>): DriverwisePdf
   ]));
 
   return {
+    adjustedIdling: numberText(toNumber(row["Adjusted Idling (%)"])),
+    adjustedIdlingValue: toNumber(row["Adjusted Idling (%)"]),
     registration: textValue(getValue(row, [
       "Registration number",
       "Vehicles",
@@ -398,9 +407,8 @@ function buildPageContent(
         row.fuelLitresPerHour,
         row.idlingPercent,
         row.idlingTime,
-        row.powerDistanceKm,
-        row.powerDistancePercent,
         row.coastingPercent,
+        row.adjustedIdling,
       ]
       : schema === "volvo-extended"
         ? [
@@ -469,7 +477,7 @@ function cellFills(
   schema: PdfSchema,
 ) {
   if (row.isSummary) {
-    return Array.from({ length: schema === "volvo-extended" ? 13 : 11 }, () => null);
+    return Array.from({ length: schema === "volvo-extended" ? 13 : schema === "scania" ? 10 : 11 }, () => null);
   }
   if (schema === "volvo-extended") {
     return [
@@ -522,11 +530,10 @@ function cellFills(
     row.fuelLitresPerHourValue !== null
       && averages.fuelLitresPerHour !== null
       && row.fuelLitresPerHourValue > averages.fuelLitresPerHour ? "pink" : null,
-    row.idlingPercentValue !== null && row.idlingPercentValue > 28 ? "red" : null,
     null,
-    row.powerDistanceKmValue !== null && row.powerDistanceKmValue > 30 ? "red" : null,
-    row.powerDistancePercentValue !== null && row.powerDistancePercentValue > 1 ? "pink" : null,
+    null,
     row.coastingPercentValue !== null && row.coastingPercentValue < 20 ? "pink" : null,
+    row.adjustedIdlingValue !== null && row.adjustedIdlingValue > 28 ? "red" : null,
   ];
 }
 
