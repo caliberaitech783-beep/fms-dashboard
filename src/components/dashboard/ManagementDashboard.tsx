@@ -103,9 +103,7 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
                 <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
                 <YAxis />
                 <Tooltip cursor={false} formatter={(value: number) => [formatNumber(value, 2), metric === "standstill" ? "%" : "L/h"]} />
-                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Idling %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey={metric} position="top" fill="#d9f7fc" fontSize={11} formatter={formatBarValue} />
-                </Bar>
+                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Idling %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
