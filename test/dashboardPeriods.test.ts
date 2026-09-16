@@ -36,3 +36,16 @@ test("report period fuel replaces cumulative counters, keeps unavailable values 
   assert.ok(Math.abs(row.truckEfficiencyKmPerLitre! - 53.19/88.56)<0.00001);
   assert.equal(reportTelemetry({...preview,rows:[{Vehicles:"V-605"}]},[vehicle],[snapshot])[0].fuelConsumedLitres,null);
 });
+
+test("Scania chart telemetry uses the report's adjusted idling formula and preserves raw idling", () => {
+  const vehicles = [{id:"s1",vehicleNumber:"S 1",company:"Scania"},{id:"s2",vehicleNumber:"S 2",company:"Scania"}] as Vehicle[];
+  const snapshots = vehicles.map(v => ({id:v.id,vehicleId:v.id,rawMetrics:{}})) as FleetTelemetryRecord[];
+  const preview = {reportType:"Driverwise Standstill Tracking",oem:"Scania",columns:["Registration number"],generatedAt:"2026-09-16T10:00:00Z",
+    period:{date:"2026-09-16",shift:"A",start:"2026-09-16T05:00:00+05:30",end:"2026-09-16T13:00:00+05:30"},
+    rows:[10,30].map((rate,i)=>({"Registration number": "S "+(i+1),"Distance driven (km)":30,"Consumption liquid fuel (litres/h)":rate,"Idling (% of engine running time)":40,"Engine running time (h:m)":"2:00"}))} as ReportPreview;
+  const rows = reportTelemetry(preview,vehicles,snapshots);
+  assert.deepEqual(rows.map(r=>r.rawMetrics.adjustedIdling),[20,40]);
+  assert.deepEqual(rows.map(r=>r.idlePercentage),[40,40]);
+  preview.rows[0]["Consumption liquid fuel (litres/h)"]=null;
+  assert.equal(reportTelemetry(preview,vehicles,snapshots)[0].rawMetrics.adjustedIdling,null);
+});

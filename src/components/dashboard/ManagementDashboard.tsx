@@ -96,14 +96,14 @@ export function ManagementDashboard({ overview, loading }: ManagementDashboardPr
           </ResponsiveContainer>
         </ChartFrame>
         {(["standstill", "averageDiesel"] as const).map((metric) => (
-          <ChartFrame key={metric} title={metric === "standstill" ? "Standstill · %" : "Avg Diesel · L/h"} subtitle="Selected shift / period by vehicle">
+          <ChartFrame key={metric} title={metric === "standstill" ? "Idling · %" : "Avg Diesel · L/h"} subtitle={metric === "standstill" ? "Scania: adjusted idling; other OEMs: reported idling" : "Selected shift / period by vehicle"}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart margin={{ top: 28, right: 12, left: 0, bottom: 0 }} data={overview.vehicleMetrics ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#205363" />
                 <XAxis dataKey="name" interval={0} angle={-20} textAnchor="end" height={74} />
                 <YAxis />
                 <Tooltip cursor={false} formatter={(value: number) => [formatNumber(value, 2), metric === "standstill" ? "%" : "L/h"]} />
-                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Standstill %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]}>
+                <Bar maxBarSize={44} dataKey={metric} name={metric === "standstill" ? "Idling %" : "Avg Diesel L/h"} fill="#39b8af" radius={[4, 4, 0, 0]}>
                   <LabelList dataKey={metric} position="top" fill="#d9f7fc" fontSize={11} formatter={formatBarValue} />
                 </Bar>
               </BarChart>

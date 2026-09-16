@@ -1,3 +1,4 @@
+import { prepareScaniaStandstill, ADJUSTED_IDLING } from "./scaniaStandstill.ts";
 import type { DashboardFilters, FleetTelemetryRecord, Vehicle } from "../types/fleet";
 import type { ReportPreview } from "../types/reports";
 import { getOperationalShiftPeriod } from "./shiftResolver.ts";
@@ -40,6 +41,7 @@ function hours(value: unknown): number | null {
 export function reportTelemetry(preview: ReportPreview, vehicles: Vehicle[], templates: FleetTelemetryRecord[]): FleetTelemetryRecord[] {
   if (preview.error || !preview.period) return [];
   const scania = preview.oem === "Scania";
+  if (scania) preview = prepareScaniaStandstill(preview);
   return preview.rows.flatMap((row, index) => {
     const id = identifier(row[scania ? "Registration number" : "Vehicles"]);
     const vehicle = vehicles.find((v) => identifier(v.vehicleNumber) === id || identifier(v.trackerId) === id);
@@ -56,7 +58,7 @@ export function reportTelemetry(preview: ReportPreview, vehicles: Vehicle[], tem
       truckEfficiencyKmPerLitre: fuel !== null && fuel > 0 && distance !== null ? distance / fuel : null,
       hemmFuelRateLitrePerHour: null,
       idlePercentage: number(row[scania ? "Idling (% of engine running time)" : "Standstill (%)"]),
-      rawMetrics: { periodData: true, averageDiesel: number(row[scania ? "Consumption liquid fuel (litres/h)" : "Avg diesel (l/h)"]) },
+      rawMetrics: { periodData: true, ...(scania ? { adjustedIdling: number(row[ADJUSTED_IDLING]) } : {}), averageDiesel: number(row[scania ? "Consumption liquid fuel (litres/h)" : "Avg diesel (l/h)"]) },
     }];
   });
 }
