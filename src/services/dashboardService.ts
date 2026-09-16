@@ -1,3 +1,5 @@
+import { dashboardPeriodRecords } from "./dashboardPeriodService";
+import { filterVehicles } from "../utils/filters";
 import { withModelEfficiency } from "../utils/modelEfficiency";
 import type { DashboardOverview, KpiMetric, NamedMetric } from "../types/dashboard";
 import type { DashboardFilters, FleetTelemetryRecord, Site, Vehicle } from "../types/fleet";
@@ -24,8 +26,16 @@ import { getFilteredPortalData } from "./dataAccess";
 
 export const dashboardService = {
   async getOverview(filters: DashboardFilters): Promise<DashboardOverview> {
-    const { sites, vehicles, filteredVehicles, filteredRecords, integrations } = await getFilteredPortalData(filters);
+    const data = await getFilteredPortalData(filters);
+    const { sites, vehicles, integrations } = data;
+    const filteredVehicles = filterVehicles(vehicles, filters);
+    const periodData = await dashboardPeriodRecords(filters, filteredVehicles, data.records, data.filteredRecords);
+    const filteredRecords = periodData.records;
     const kpiValues = aggregateDashboardKpis(filteredRecords, filteredVehicles, filters);
+    const truckRecords = filteredRecords.filter((record) => record.assetCategory === "Truck");
+    const fuel = truckRecords.reduce((sum, record) => sum + (record.fuelConsumedLitres ?? 0), 0);
+    const distance = truckRecords.reduce((sum, record) => sum + (record.distanceKm ?? 0), 0);
+    kpiValues.averageTruckEfficiency = fuel > 0 ? distance / fuel : null;
     const alerts = generateAlerts(filteredRecords, filteredVehicles, ALERT_THRESHOLDS);
     const siteNameMap = new Map(sites.map((site) => [site.id, site.name]));
     const statusDistribution = ["running", "idle", "stopped", "offline", "maintenance", "unknown"].map((status) => ({
@@ -34,13 +44,27 @@ export const dashboardService = {
     }));
 
     return {
-      kpis: buildKpis(kpiValues, filters.company === "Volvo", filters.company === "Eicher"),
+      kpis: buildKpis(kpiValues, filters.company === "Eicher", filteredRecords.some((row) => row.fuelConsumedLitres !== null)),
+      periodNotice: periodData.notice,
+      vehicleMetrics: getVehiclePerformanceRows(filteredRecords, filteredVehicles).map((row) => {
+        const parts = filteredRecords.filter((record) => record.vehicleId === row.vehicle.id);
+        const weighted = (value: (record: FleetTelemetryRecord) => number | null) => {
+          const available = parts.filter((record) => value(record) !== null && (record.engineHours ?? 0) > 0);
+          const hours = available.reduce((sum, record) => sum + record.engineHours!, 0);
+          return hours > 0 ? available.reduce((sum, record) => sum + value(record)! * record.engineHours!, 0) / hours : null;
+        };
+        return {
+          name: row.vehicle.vehicleNumber,
+          standstill: weighted((record) => record.idlePercentage),
+          averageDiesel: weighted((record) => typeof record.rawMetrics.averageDiesel === "number" ? record.rawMetrics.averageDiesel : record.fuelConsumedLitres !== null && (record.engineHours ?? 0) > 0 ? record.fuelConsumedLitres / record.engineHours! : null),
+        };
+      }),
       productionFuelTrend: aggregateTrendByDate(filteredRecords),
       shiftComparison: aggregateByShift(filteredRecords).map((metric) => ({
         ...metric,
         shift: metric.name.replace("Shift ", ""),
       })),
-      sitePerformance: withSiteNames(aggregateBySite(filteredRecords), siteNameMap),
+      sitePerformance: withSiteNames(aggregateBySite(filteredRecords.filter((row) => row.assetCategory === "Truck")), siteNameMap).map((metric) => withModelEfficiency(metric, "Truck")),
       companyPerformance: aggregateByCompany(filteredRecords, vehicles),
       modelPerformance: ["Truck", "HEMM"].flatMap((category) => {
         const categoryVehicles = filteredVehicles.filter((vehicle) => vehicle.assetCategory === category);
@@ -130,18 +154,18 @@ function rawNumber(metrics: Record<string, unknown>, key: string): number | null
 
 function buildKpis(
   values: ReturnType<typeof aggregateDashboardKpis>,
-  liveVolvoOnly = false,
   eicherLocationOnly = false,
+  hasFuelData = true,
 ): KpiMetric[] {
-  const cumulativeLabel = liveVolvoOnly ? "Latest cumulative Volvo counters" : "Selected period";
+  const periodLabel = "Selected shift / period consumption";
   const eicherUnavailable = "Not supplied by Eicher VECV";
   const notSupplied = eicherLocationOnly ? eicherUnavailable : null;
 
   return [
     { label: "Total Vehicles", value: formatNumber(values.totalVehicles), subLabel: "Filtered fleet", tone: "neutral" },
     { label: "Running Vehicles", value: formatNumber(values.runningVehicles), subLabel: "Live operating", tone: "good" },
-    { label: "Total Fuel Consumed", value: eicherLocationOnly ? "-" : formatLitres(values.totalFuelConsumed), subLabel: notSupplied ?? cumulativeLabel, tone: "info" },
-    { label: "Avg Truck Efficiency", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: notSupplied ?? (liveVolvoOnly ? "Cumulative Volvo efficiency" : "Truck category only"), tone: "good" },
+    { label: "Total Fuel Consumed", value: eicherLocationOnly || !hasFuelData ? "-" : formatLitres(values.totalFuelConsumed), subLabel: notSupplied ?? periodLabel, tone: "info" },
+    { label: "Avg Truck Efficiency", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageTruckEfficiency, "km/L"), subLabel: notSupplied ?? "Selected shift / period · Trucks", tone: "good" },
     { label: "Avg Equipment Fuel Rate", value: eicherLocationOnly ? "-" : formatEfficiency(values.averageHemmFuelRate, "L/hr"), subLabel: notSupplied ?? "Equipment category only", tone: "info" },
   ];
 }

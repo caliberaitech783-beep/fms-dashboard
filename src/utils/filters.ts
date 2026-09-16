@@ -26,7 +26,8 @@ export function filterVehicles(vehicles: Vehicle[], filters: DashboardFilters): 
 
   return vehicles.filter((vehicle) => {
     const eicherLocationView = isEicherLocationView(vehicle, filters);
-    if (!eicherLocationView && !isAll(filters.siteId) && vehicle.siteId !== filters.siteId) return false;
+    if (filters.region && !vehicle.siteId?.toLowerCase().includes(`-${filters.region.toLowerCase()}-`)) return false;
+    if (!isAll(filters.siteId) && vehicle.siteId !== filters.siteId) return false;
     if (!eicherLocationView && !isAll(filters.contractType) && vehicle.contractType !== filters.contractType) return false;
     if (!eicherLocationView && !isAll(filters.assetCategory) && vehicle.assetCategory !== filters.assetCategory) return false;
     if (!eicherLocationView && !isAll(filters.assetType) && vehicle.assetType !== filters.assetType) return false;

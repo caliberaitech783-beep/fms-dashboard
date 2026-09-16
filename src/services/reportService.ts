@@ -31,7 +31,7 @@ import {
   invalidateCaseEquipmentCache,
 } from "./adapters/caseEquipmentService";
 import { removeHiddenReportColumns } from "../utils/reportColumns";
-import { resolveOperationalShift } from "../utils/shiftResolver";
+import { getOperationalShiftPeriod, resolveOperationalShift } from "../utils/shiftResolver";
 import { buildEicherReportRow, EICHER_REPORT_COLUMNS } from "../utils/eicherReport";
 import {
   buildDriverwiseStandstillPdf,
@@ -63,9 +63,35 @@ export const reportService = {
     }
 
     if (reportType === "Driverwise Standstill Tracking") {
-      const preview = filters.company === "Scania"
-        ? await fetchScaniaDriverStandstillReport(filters, options)
-        : await fetchVolvoDriverStandstillReport(filters, options);
+      const fetchReport = filters.company === "Scania" ? fetchScaniaDriverStandstillReport : fetchVolvoDriverStandstillReport;
+      const allShifts = filters.shift === "All";
+      const allSites = filters.siteId === "All" && Boolean(filters.region);
+      const sites = allSites
+        ? (await getPortalData()).sites.filter((site) => site.location === filters.region).map((site) => site.id)
+        : [filters.siteId];
+      if (!sites.length) return { reportType, generatedAt: new Date().toISOString(), columns: [], rows: [], notice: "No sites are configured for the selected region." };
+      const previews: ReportPreview[] = [];
+      for (const siteId of sites) {
+        let selected = { ...filters, siteId };
+        if (allShifts) {
+          const first = getOperationalShiftPeriod(siteId, filters.dateFrom, "A");
+          const last = getOperationalShiftPeriod(siteId, filters.dateTo, "C");
+          selected = { ...selected, shift: "A", timePeriodMode: "custom", ...(filters.timePeriodMode !== "custom" && first && last ? { dateFrom: first.dateFrom, timeFrom: first.timeFrom, dateTo: last.dateTo, timeTo: last.timeTo } : {}) };
+        }
+        previews.push(await fetchReport(selected, options));
+      }
+      const valid = previews.filter((preview) => preview.period && !preview.error);
+      if (!valid.length) return removeHiddenReportColumns(previews[0]);
+      const preview = { ...valid[0], rows: valid.flatMap((item) => item.rows), summary: valid.length === 1 ? valid[0].summary : undefined };
+      if (preview.period) preview.period = {
+        ...preview.period,
+        shift: allShifts ? "All Shifts" : preview.period.shift,
+        site: allSites ? `${filters.region} · All sites` : preview.period.site,
+        customTimeRange: filters.timePeriodMode === "custom",
+        start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
+        end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
+      };
+      if (valid.length !== previews.length) preview.notice = "Some selected sites did not return report data. Displaying the available sites.";
       return removeHiddenReportColumns(preview);
     }
 

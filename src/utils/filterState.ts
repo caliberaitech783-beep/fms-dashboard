@@ -7,7 +7,7 @@ function withSelectedShiftPeriod(filters: DashboardFilters, shiftDate: string): 
   const period = getOperationalShiftPeriod(filters.siteId, shiftDate, filters.shift);
   return period
     ? { ...filters, ...period, timePeriodMode: "schedule" }
-    : filters;
+    : filters.siteId === "All" ? { ...filters, dateFrom: shiftDate, dateTo: shiftDate, timeFrom: "00:00", timeTo: "23:59", timePeriodMode: "schedule" } : filters;
 }
 
 export function applyFleetTimePeriod(
@@ -24,7 +24,10 @@ export function applyFleetFilterChange<K extends keyof DashboardFilters>(
 ): DashboardFilters {
   let next = { ...current, [key]: value };
 
-  if (key === "siteId") {
+  if (key === "region") {
+    next.siteId = "All";
+    next.modelNumber = "All";
+  } else if (key === "siteId") {
     next.contractType = "All";
     next.assetCategory = "All";
     next.assetType = "All";
@@ -45,7 +48,9 @@ export function applyFleetFilterChange<K extends keyof DashboardFilters>(
     next.modelNumber = "All";
   }
 
-  if (key === "shift" && ["A", "B", "C"].includes(String(value))) {
+  if (key === "shift" && value === "All") {
+    next = { ...next, dateTo: current.dateFrom, timeFrom: "00:00", timeTo: "23:59", timePeriodMode: "schedule" };
+  } else if (key === "shift" && ["A", "B", "C"].includes(String(value))) {
     const shiftDate = ["A", "B", "C"].includes(current.shift)
       ? current.dateFrom
       : current.dateTo;

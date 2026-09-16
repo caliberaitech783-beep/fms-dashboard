@@ -141,7 +141,8 @@ export function buildDriverwiseStandstillPdf(
   }
 
   const reportSite = preview.period?.site;
-  const title = `${oem} Vehicle Report | ${reportSite || "All Sites"} | Shift ${preview.period?.shift || context.shift || "All"}`;
+  const shift = preview.period?.shift || context.shift || "All";
+  const title = `${oem} Vehicle Report | ${reportSite || "All Sites"} | ${shift === "All" || shift === "All Shifts" ? "All Shifts" : `Shift ${shift}`}`;
   const subtitle = buildPeriodSubtitle(preview, normalizedRows.length);
   const pageContents = pages.map((rows, pageIndex) => (
     buildPageContent(rows, pageIndex + 1, pages.length, title, subtitle, averages, schema)

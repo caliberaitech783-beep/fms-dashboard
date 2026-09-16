@@ -175,7 +175,7 @@ export function getVehiclePerformanceRows(
       const latestRecord = [...vehicleRecords].sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
       const efficiency =
         vehicle.assetCategory === "Truck"
-          ? latestRecord?.truckEfficiencyKmPerLitre ?? calculateTruckEfficiency(totals.distanceKm, totals.fuelConsumedLitres)
+          ? (vehicleRecords.every((record) => record.rawMetrics?.periodData) ? calculateTruckEfficiency(totals.distanceKm, totals.fuelConsumedLitres) : latestRecord?.truckEfficiencyKmPerLitre ?? calculateTruckEfficiency(totals.distanceKm, totals.fuelConsumedLitres))
           : vehicle.assetCategory === "HEMM"
             ? latestRecord?.hemmFuelRateLitrePerHour ?? calculateHemmFuelRate(totals.fuelConsumedLitres, totals.runningHours)
             : latestRecord?.truckEfficiencyKmPerLitre ?? calculateTruckEfficiency(totals.distanceKm, totals.fuelConsumedLitres);
