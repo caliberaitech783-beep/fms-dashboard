@@ -155,7 +155,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-coal-50">
+    <div className="fms-theme min-h-screen">
       <DesktopNav
         active={activeSection}
         onChange={handleSectionChange}
@@ -171,6 +171,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
       />
       <main>
         {!desktopLayout && <TopBar user={currentUser} onLogout={onLogout} onOpenNotifications={() => handleSectionChange("notifications")} />}
+        <div className="flex flex-col items-start lg:flex-row">
         {showGlobalFilters && (
           <GlobalFilters
             filters={filters}
@@ -181,7 +182,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
             onRefresh={reloadDashboard}
           />
         )}
-        <div className="px-4 py-4 lg:px-6">
+        <div className="min-w-0 w-full flex-1 px-4 py-4 lg:px-6">
           <div className="mb-4">
             <MobileNav active={activeSection} onChange={handleSectionChange} items={allowedItems} />
           </div>
@@ -200,6 +201,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshLiveOems : undefined,
             )
           )}
+        </div>
         </div>
       </main>
       {timingNotice && (

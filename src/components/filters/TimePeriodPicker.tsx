@@ -135,7 +135,6 @@ function matchingPreset(value: TimePeriodValue): PresetKey | null {
 }
 
 export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }: TimePeriodPickerProps) {
-  const [position, setPosition] = useState({ left: 16, top: 16 });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<TimePeriodValue>({ dateFrom, dateTo, timeFrom, timeTo });
   const [viewMonth, setViewMonth] = useState(() => new Date(parseDateKey(dateFrom).getFullYear(), parseDateKey(dateFrom).getMonth(), 1));
@@ -178,8 +177,6 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
   }, [viewMonth]);
 
   const openPicker = () => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (rect) setPosition({ left: Math.max(16, Math.min(rect.left, window.innerWidth - 320)), top: Math.max(16, Math.min(rect.bottom + 8, window.innerHeight - 440)) });
     const nextDraft = { dateFrom, dateTo, timeFrom, timeTo };
     setDraft(nextDraft);
     const fromDate = parseDateKey(dateFrom);
@@ -226,7 +223,7 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
   const visibleSummary = `${formatTime(timeFrom)} – ${formatTime(timeTo)}`;
 
   return (
-    <div ref={wrapperRef} className="relative md:col-span-2 xl:col-span-2 2xl:col-span-2">
+    <div ref={wrapperRef} className="relative">
       <span className="mb-1 block text-xs font-semibold text-coal-500">Time period</span>
       <button
         type="button"
@@ -246,17 +243,12 @@ export function TimePeriodPicker({ dateFrom, dateTo, timeFrom, timeTo, onApply }
         <div
           role="dialog"
           aria-label="Choose time period"
-          style={position}
-          className="fixed z-50 max-h-[min(27rem,calc(100dvh-2rem))] w-[19rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-coal-200 bg-white shadow-command"
+          className="time-period-dialog relative z-10 mt-2 w-full rounded-lg border border-coal-200 bg-white shadow-command"
         >
           <div className="p-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-coal-600">
-              Quick range
-              <select aria-label="Quick range" value={activePreset ?? "custom"} onChange={(event) => { if (event.target.value !== "custom") applyPreset(event.target.value as PresetKey); }} className="h-8 min-w-0 flex-1 rounded-md border border-coal-200 bg-white px-2 text-xs text-coal-800">
-                <option value="custom">Custom dates</option>
-                {PRESETS.map((preset) => <option key={preset.key} value={preset.key}>{preset.label}</option>)}
-              </select>
-            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {PRESETS.map((preset) => <button key={preset.key} type="button" aria-pressed={activePreset === preset.key} onClick={() => applyPreset(preset.key)} className={"rounded-full border px-2.5 py-1 text-xs " + (activePreset === preset.key ? "bg-coal-950 text-white" : "border-coal-200 bg-white text-coal-700 hover:bg-coal-50")}>{preset.label}</button>)}
+            </div>
 
             <div className="mt-2">
               <div className="flex items-center justify-between">

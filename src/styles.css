@@ -177,3 +177,34 @@ select {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Dark teal dashboard theme, scoped to the authenticated portal. */
+.fms-theme { color-scheme: dark; background: #052f3a; color: #d8f4f8; }
+.fms-theme .bg-white { background-color: #073b48; }
+.fms-theme .bg-coal-50, .fms-theme .bg-coal-100 { background-color: #093440; }
+.fms-theme [class*="border-coal-"] { border-color: #205464; }
+.fms-theme [class*="text-coal-9"], .fms-theme [class*="text-coal-8"], .fms-theme [class*="text-coal-7"] { color: #dff7fa; }
+.fms-theme [class*="text-coal-6"], .fms-theme [class*="text-coal-5"] { color: #a7d0d8; }
+.fms-theme .text-ore-700, .fms-theme .text-ore-600 { color: #7de4ef; }
+.fms-theme .bg-ore-50 { background-color: #115161; }
+.fms-theme button:hover { background-color: #145464; }
+.fms-theme select, .fms-theme input { color: #dcf5f8; background-color: #06323e; }
+.fms-theme select option { background-color: #073b48; }
+.fms-theme article { border-color: #2d7180; background: linear-gradient(135deg, #0b4553, #06333f); box-shadow: inset 2px 0 #71dae7, 0 6px 20px #001e2940; }
+.fms-theme article .text-2xl { color: #83e6f1; }
+.fms-theme article [class*="bg-emerald"], .fms-theme article [class*="bg-blue"], .fms-theme article [class*="bg-coal"] { background-color: #0d4c59; color: #8ce5ee; border-color: #2b6977; }
+.fms-theme .recharts-cartesian-axis-tick-value { fill: #b8e0e6; font-size: 11px; }
+.fms-theme .recharts-default-tooltip { background-color: #06323e !important; color: #e0f9ff; border-color: #2e7b89 !important; }
+.fms-theme .recharts-tooltip-label { color: #e0f9ff; }
+.fms-theme .filter-panel { background-color: #062b36; }
+.fms-theme img[alt="Caliber"] { background: white; border-radius: 6px; padding: 3px; }
+.fms-theme .time-period-dialog { color-scheme: light; background: #fff; color: #17232b; }
+.fms-theme .time-period-dialog [class*="text-coal-"] { color: #38515b; }
+.fms-theme .time-period-dialog .bg-white { background: white; }
+.fms-theme .time-period-dialog .bg-coal-950 { background: #17232b; color: white; }
+.fms-theme .time-period-dialog .bg-coal-100, .fms-theme .time-period-dialog button:hover { background: #e4eff2; }
+.fms-theme .time-period-dialog button.bg-coal-950:hover { background: #29454e; }
+.fms-theme .time-period-dialog input { color: #17232b; background: transparent; }
+.fms-theme .time-period-dialog [class*="border-coal-"] { border-color: #d5dee2; }
+.fms-theme section, .fms-theme article { min-width: 0; }
+.fms-theme .recharts-wrapper { overflow: hidden; }
