@@ -71,6 +71,9 @@ export async function fetchVolvoDriverStandstillReport(
       if (!isReportPreview(payload)) {
         return errorPreview("Volvo RFMS returned an invalid shift report.");
       }
+      if (payload.period && filters.timePeriodMode === "schedule") {
+        payload.period.customTimeRange = false;
+      }
 
       reportCache.set(cacheKey, {
         expiresAt: Date.now() + REPORT_CACHE_MS,
