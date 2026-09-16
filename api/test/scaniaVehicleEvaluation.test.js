@@ -279,3 +279,10 @@ test("joins Scania Driver Evaluation identities to their vehicle VINs", () => {
   assert.equal(assignments.get("vin s483").driverName, "Test Driver");
   assert.equal(assignments.get("s483").driverReference, "12345678");
 });
+
+test("exact report periods preserve partial-shift and all-shift consumption windows", () => {
+  const partial = reportRequest({ exactPeriod: true, stopTime: "2026-07-31T09:15:00+05:30" });
+  assert.equal(partial.stopTime, "2026-07-31T09:15:00+05:30");
+  const all = reportRequest({ exactPeriod: true, stopTime: "2026-08-01T05:00:00+05:30" });
+  assert.equal(all.stopTime, "2026-08-01T05:00:00+05:30");
+});

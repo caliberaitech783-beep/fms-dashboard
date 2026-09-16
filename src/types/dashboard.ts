@@ -35,6 +35,8 @@ export interface StatusDistribution {
 
 export interface DashboardOverview {
   kpis: KpiMetric[];
+  periodNotice?: string;
+  vehicleMetrics?: { name: string; standstill: number | null; averageDiesel: number | null }[];
   productionFuelTrend: NamedMetric[];
   shiftComparison: ShiftMetric[];
   sitePerformance: NamedMetric[];

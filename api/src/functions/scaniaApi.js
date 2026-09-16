@@ -493,7 +493,10 @@ function reportSnapshotResource(body) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return `vehicle-evaluation-report-${date}-${shift}-${site || "all-sites"}`;
+  const periodKey = body?.exactPeriod === true
+    ? `-${Buffer.from(`${body.startTime}|${body.stopTime}`).toString("base64url")}`
+    : "";
+  return `vehicle-evaluation-report-${date}-${shift}-${site || "all-sites"}${periodKey}`;
 }
 
 function storedReportFallback(snapshot) {

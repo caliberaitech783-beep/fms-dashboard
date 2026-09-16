@@ -207,6 +207,7 @@ export interface WhatsAppDeliveryLog {
 }
 
 export interface DashboardFilters {
+  region?: "WCL" | "NCL";
   dateFrom: string;
   dateTo: string;
   timeFrom: string;

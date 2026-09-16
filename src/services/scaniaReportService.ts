@@ -234,6 +234,7 @@ type ScaniaRequestResult =
       shift: string;
       startTime: string;
       stopTime: string;
+      exactPeriod?: boolean;
     };
   };
 
@@ -258,7 +259,9 @@ function scaniaRequest(filters: DashboardFilters): ScaniaRequestResult {
     };
   }
   const date = filters.timePeriodMode === "schedule" ? filters.dateFrom : filters.dateTo;
-  const scheduled = scaniaShiftWindow(date, filters.shift);
+  const scheduled = filters.timePeriodMode === "custom"
+    ? { startTime: `${filters.dateFrom}T${filters.timeFrom}:00+05:30`, stopTime: `${filters.dateTo}T${filters.timeTo}:00+05:30` }
+    : scaniaShiftWindow(date, filters.shift);
   const window = reportGenerationPeriod(scheduled.startTime, scheduled.stopTime);
   return {
     body: {
@@ -266,6 +269,7 @@ function scaniaRequest(filters: DashboardFilters): ScaniaRequestResult {
       shift: filters.shift,
       startTime: window.startTime,
       stopTime: window.stopTime,
+      exactPeriod: true,
     },
   };
 }

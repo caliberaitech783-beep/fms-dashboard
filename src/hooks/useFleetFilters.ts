@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardFilters, Site, Vehicle } from "../types/fleet";
-import { MOCK_DATE_FROM, MOCK_DATE_TO } from "../constants/dateRange";
+
 import {
   getConfiguredMakes,
   getConfiguredModels,
@@ -13,13 +13,14 @@ import { applyFleetFilterChange } from "../utils/filterState";
 import { uniqueSorted } from "../utils/filters";
 
 export const defaultFilters: DashboardFilters = {
-  dateFrom: MOCK_DATE_FROM,
-  dateTo: MOCK_DATE_TO,
+  dateFrom: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
+  dateTo: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
   timeFrom: "00:00",
   timeTo: "23:59",
   timePeriodMode: "schedule",
   shift: "A",
   siteId: "All",
+  region: "WCL",
   contractType: "All",
   assetCategory: "All",
   assetType: "All",
@@ -79,7 +80,7 @@ export function useFleetFilters() {
 
   const options = useMemo<FilterOptions>(() => {
     const siteVehicles = vehicles.filter((vehicle) => (
-      filters.siteId === "All" || vehicle.siteId === filters.siteId
+      (filters.siteId === "All" || vehicle.siteId === filters.siteId) && (!filters.region || Boolean(vehicle.siteId?.toLowerCase().includes(`-${filters.region.toLowerCase()}-`)))
     ));
     const contractVehicles = siteVehicles.filter((vehicle) => (
       filters.contractType === "All" || vehicle.contractType === filters.contractType
@@ -123,6 +124,7 @@ export function useFleetFilters() {
     filters.company,
     filters.contractType,
     filters.siteId,
+    filters.region,
     sites,
     vehicles,
   ]);
