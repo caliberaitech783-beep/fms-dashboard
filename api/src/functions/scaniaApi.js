@@ -495,12 +495,12 @@ function reportSnapshotResource(body) {
   const periodKey = body?.exactPeriod === true
     ? `-${Buffer.from(`${body.startTime}|${body.stopTime}`).toString("base64url")}`
     : "";
-  return `shift-history-v2-${date}-${shift}-${site || "all-sites"}${periodKey}`;
+  return `shift-history-v3-${date}-${shift}-${site || "all-sites"}${periodKey}`;
 }
 
 function storedReportFallback(snapshot) {
   const report = snapshot?.payload;
-  if (!report || report.meta?.periodCalculationVersion !== 2 || report.reportType !== "Driverwise Standstill Tracking" || !Array.isArray(report.rows)) {
+  if (!report || report.meta?.periodCalculationVersion !== 3 || report.reportType !== "Driverwise Standstill Tracking" || !Array.isArray(report.rows)) {
     return null;
   }
   return {
@@ -527,10 +527,7 @@ async function handleVehicleEvaluation(request, context) {
       });
     }
     const logger = createLogger(context);
-    const [importedVehicles, snapshot] = await Promise.all([
-      listImportedVehicles(),
-      getLiveScaniaSnapshot({ allowBootstrap: true }),
-    ]);
+    const snapshot = await getLiveScaniaSnapshot({ allowBootstrap: true });
     const scaniaSiteMasters = snapshot.vehicles.map((vehicle) => ({
       vin: vehicle.trackerId,
       vehicleNumber: vehicle.vehicleNumber,
@@ -541,7 +538,9 @@ async function handleVehicleEvaluation(request, context) {
       contractType: vehicle.contractType,
       active: vehicle.active,
     }));
-    const reportVehicles = [...importedVehicles, ...scaniaSiteMasters];
+    // The Scania snapshot already joins API vehicle masters to imported site assignments.
+    // Do not add unrelated OEM master rows when listing vehicles without telemetry.
+    const reportVehicles = scaniaSiteMasters;
     const resource = reportSnapshotResource(body);
     let result;
     try {
