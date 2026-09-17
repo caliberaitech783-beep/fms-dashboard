@@ -13,7 +13,6 @@ const {
   endpointForLog,
 } = require("../lib/scania/scaniaClient");
 const {
-  generateVehicleEvaluationReport,
   validateReportInput,
 } = require("../lib/scania/scaniaVehicleEvaluation");
 const { generateScaniaStatusReport } = require("../lib/scania/scaniaStatusReport");
@@ -496,18 +495,17 @@ function reportSnapshotResource(body) {
   const periodKey = body?.exactPeriod === true
     ? `-${Buffer.from(`${body.startTime}|${body.stopTime}`).toString("base64url")}`
     : "";
-  return `vehicle-evaluation-report-${date}-${shift}-${site || "all-sites"}${periodKey}`;
+  return `shift-history-v2-${date}-${shift}-${site || "all-sites"}${periodKey}`;
 }
 
 function storedReportFallback(snapshot) {
   const report = snapshot?.payload;
-  if (!report || report.reportType !== "Driverwise Standstill Tracking" || !Array.isArray(report.rows)) {
+  if (!report || report.meta?.periodCalculationVersion !== 2 || report.reportType !== "Driverwise Standstill Tracking" || !Array.isArray(report.rows)) {
     return null;
   }
   return {
     ...report,
     source: "SCANIA_STORED_REPORT_CACHE",
-    generatedAt: new Date().toISOString(),
     notice: `Scania live service is temporarily unavailable. Showing the last successful report saved ${snapshot.fetchedAt}.`,
     meta: {
       ...(report.meta || {}),
@@ -544,16 +542,10 @@ async function handleVehicleEvaluation(request, context) {
       active: vehicle.active,
     }));
     const reportVehicles = [...importedVehicles, ...scaniaSiteMasters];
-    const evaluationConfigured = Boolean(
-      process.env.SCANIA_VEHICLE_EVALUATION_GAS_URL
-      || process.env.SCANIA_VEHICLE_EVALUATION_URL,
-    );
     const resource = reportSnapshotResource(body);
     let result;
     try {
-      result = evaluationConfigured
-        ? await generateVehicleEvaluationReport(body, { importedVehicles: reportVehicles, logger })
-        : await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
+      result = await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
       await saveSnapshot(resource, result, {
         endpoint: result?.meta?.endpoint || "ScaniaDriverwiseStandstillReport",
         fetchedAt: result.generatedAt,
