@@ -49,43 +49,53 @@ async function generateScaniaStatusReport(input, options = {}) {
     if (!grouped.has(vin)) grouped.set(vin, new Map());
     grouped.get(vin).set(time, record);
   }
-  const rows = [], rejectedVehicles = [];
-  for (const [vin, samples] of grouped) {
-    const readings = [...samples.entries()].sort((a, b) => a[0] - b[0]);
-    if (readings.length < 2) continue;
-    let hours = 0, distance = 0, fuel = 0, idle = 0, invalid = false;
-    for (let i = 1; i < readings.length; i++) {
-      const [beforeTime, before] = readings[i - 1], [afterTime, after] = readings[i];
-      const engine = delta(before, after, ["totalEngineHours", "TotalEngineHours"]);
-      if (engine === null || engine > (afterTime - beforeTime) / 3600000 + 1e-7) {
-        invalid = true;
-        break;
-      }
-      hours += engine;
-      const km = delta(before, after, ["hrTotalVehicleDistance", "HRTotalVehicleDistance"]);
-      const litres = delta(before, after, ["engineTotalFuelUsed", "EngineTotalFuelUsed"]);
-      const idleSeconds = delta(eventAccumulated(before), eventAccumulated(after), [
-        "durationWheelbasedSpeedZero", "DurationWheelbasedSpeedZero",
-        "durationWheelbaseSpeedZero", "DurationWheelbaseSpeedZero",
-      ]);
-      distance = distance === null || km === null ? null : distance + km / 1000;
-      fuel = fuel === null || litres === null ? null : fuel + litres / 1000;
-      idle = idle === null || idleSeconds === null || idleSeconds > engine * 3600 + 1e-7
-        ? null : idle + idleSeconds / 3600;
+  const rows = [], unavailableVehicles = [];
+  for (const [vin, master] of masters) {
+    const readings = [...(grouped.get(vin) || new Map()).entries()].sort((a, b) => a[0] - b[0]);
+    // RFMS events can omit counters and counters can update in steps. Validate
+    // the complete measured span, not each short interval between events.
+    const engineKeys = ["totalEngineHours", "TotalEngineHours"];
+    const usable = readings.filter(([, record]) => engineKeys.some(key => number(record[key]) !== null));
+    const first = usable[0], last = usable.at(-1);
+    let hours = null, distance = null, fuel = null, idle = null;
+    if (usable.length >= 2) {
+      const before = first[1], after = last[1];
+      const counter = (keys, accumulated = false) => {
+        const records = usable.map(([, record]) => accumulated ? eventAccumulated(record) : record);
+        // A reset invalidates only this measurement, never the vehicle row.
+        let previous = null;
+        for (const record of records) {
+          const value = number(keys.map(key => record?.[key]).find(value => value != null));
+          if (value === null) continue;
+          if (previous !== null && value < previous) return null;
+          previous = value;
+        }
+        return delta(accumulated ? eventAccumulated(before) : before,
+          accumulated ? eventAccumulated(after) : after, keys);
+      };
+      hours = counter(engineKeys);
+      if (hours !== null && hours > (last[0] - first[0]) / 3600000 + 1e-7) hours = null;
+      const metres = counter(["hrTotalVehicleDistance", "HRTotalVehicleDistance", "HrTotalVehicleDistance"]);
+      const millilitres = counter(["engineTotalFuelUsed", "EngineTotalFuelUsed"]);
+      const seconds = counter(["durationWheelbasedSpeedZero", "DurationWheelbasedSpeedZero",
+        "durationWheelbaseSpeedZero", "DurationWheelbaseSpeedZero"], true);
+      distance = metres === null ? null : metres / 1000;
+      fuel = millilitres === null ? null : millilitres / 1000;
+      idle = seconds === null || hours === null || seconds > hours * 3600 + 1e-7 ? null : seconds / 3600;
     }
-    if (invalid) { rejectedVehicles.push(masters.get(vin).vehicleNumber || vin); continue; }
+    if (hours === null) unavailableVehicles.push(master.vehicleNumber || vin);
     rows.push({
       registrationNumber: masters.get(vin).vehicleNumber || vin, vin,
-      engineRunningTime: duration(hours), distanceDrivenKm: round(distance),
+      engineRunningTime: hours === null ? null : duration(hours), distanceDrivenKm: round(distance),
       fuelConsumedLitres: round(fuel),
       fuelEconomyKmPerLitre: round(fuel > 0 && distance !== null ? distance / fuel : null),
       fuelConsumptionLitresPerHour: round(hours > 0 && fuel !== null ? fuel / hours : null),
       idlingPercentage: round(hours > 0 && idle !== null ? idle / hours * 100 : null),
       idlingTime: idle === null ? null : duration(idle),
       powertrainCoastingPercentage: null,
-      lastUpdatedAt: new Date(readings.at(-1)[0]).toISOString(),
-      coverageStart: new Date(readings[0][0]).toISOString(),
-      coverageEnd: new Date(readings.at(-1)[0]).toISOString(),
+      lastUpdatedAt: last ? new Date(last[0]).toISOString() : null,
+      coverageStart: first ? new Date(first[0]).toISOString() : null,
+      coverageEnd: last ? new Date(last[0]).toISOString() : null,
     });
   }
   const emptyReason = !masters.size ? "Scania VIN-to-site assignments are unavailable for the selected site."
@@ -94,13 +104,13 @@ async function generateScaniaStatusReport(input, options = {}) {
     reportType: "Driverwise Standstill Tracking", source: "SCANIA_RFMS_STATUS_HISTORY",
     generatedAt: now.toISOString(), rows,
     notice: [emptyReason, "Totals cover timestamped readings inside the selected period only; gaps at the start or end are not estimated.",
-      rejectedVehicles.length ? `${rejectedVehicles.length} vehicle(s) excluded because engine counters reset or exceeded elapsed time.` : null].filter(Boolean).join(" "),
+      `${rows.length} mapped vehicles shown; ${rows.length - unavailableVehicles.length} with measured runtime, ${unavailableVehicles.length} with runtime unavailable. Missing or invalid measurements are shown as dashes, not zero.`].filter(Boolean).join(" "),
     period: { date: request.reportDate, shift: request.shift, site: request.siteMapping.fmsSite,
       scaniaSite: request.siteMapping.scaniaSite, start: request.startTime,
       end: new Date(Math.max(start, end)).toISOString(), timezone: request.siteMapping.timezone },
-    meta: { periodCalculationVersion: 2, endpoint: result.endpoint, httpStatus: result.status,
+    meta: { periodCalculationVersion: 3, endpoint: result.endpoint, httpStatus: result.status,
       rawRecordCount: (result.records || []).length, finalFilteredVehicleCount: rows.length,
-      siteVehicleMasterCount: masters.size, siteFilterApplied: true, rejectedVehicles,
+      siteVehicleMasterCount: masters.size, siteFilterApplied: true, unavailableVehicles,
       unavailableFields: ["powertrainCoastingPercentage"], emptyReason },
   };
 }
