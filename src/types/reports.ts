@@ -16,6 +16,7 @@ export type ReportType =
   | "Driverwise Standstill Tracking"
   | "Eicher Report"
   | "CASE Report"
+  | "LiuGong Report"
   | "WhatsApp PDF Delivery Log";
 
 export const reportTypes: ReportType[] = [
@@ -36,6 +37,7 @@ export const reportTypes: ReportType[] = [
   "Driverwise Standstill Tracking",
   "Eicher Report",
   "CASE Report",
+  "LiuGong Report",
   "WhatsApp PDF Delivery Log",
 ];
 

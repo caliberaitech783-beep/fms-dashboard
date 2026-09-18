@@ -1,3 +1,4 @@
+import { liuGongDailyFilters } from "../../utils/filterState";
 import { ArrowLeft, Clock, Download, FileSpreadsheet, FileText, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../auth/AuthContext";
@@ -43,6 +44,7 @@ import { ReportDrilldownRows } from "./ReportDrilldownRows";
 import { ReportExplorerControls } from "./ReportExplorerControls";
 
 interface ReportsDashboardProps {
+  onFiltersChange?: (filters: DashboardFilters) => void;
   reports: Report[];
   filters: DashboardFilters;
   loading: boolean;
@@ -99,6 +101,7 @@ function defaultReportSortColumn(
 }
 
 export function ReportsDashboard({
+  onFiltersChange,
   reports,
   filters,
   refreshKey,
@@ -156,6 +159,10 @@ export function ReportsDashboard({
     .flatMap((entry) => entry.reports)
     .find((report) => report.item.route === activeItem?.route);
   const selectedReport = activeItem?.reportType ?? "Daily Fuel Consumption Report";
+  const needsDailyFilters = selectedReport === "LiuGong Report" && (filters.company !== "LiuGong" || filters.shift !== "All" || filters.timeFrom !== "00:00" || filters.timeTo !== "23:59");
+  useEffect(() => {
+    if (needsDailyFilters) onFiltersChange?.(liuGongDailyFilters(filters));
+  }, [needsDailyFilters, filters, onFiltersChange]);
   const canExportReports = hasPermission(currentUser, "reports:export");
 
   useEffect(() => {
@@ -192,6 +199,7 @@ export function ReportsDashboard({
   }, [onTimingComplete]);
 
   useEffect(() => {
+    if (needsDailyFilters) return;
     if (!activeItem || !activeReport) {
       setPreview(null);
       setPreviewLoading(false);
@@ -212,7 +220,7 @@ export function ReportsDashboard({
           setPreview(result);
           setPreviewLoading(false);
           setBusyReportType(null);
-          timingCompleteRef.current?.("Report loaded", performance.now() - startedAt);
+          timingCompleteRef.current?.(result.error ? "Report unavailable" : result.rows.length ? "Report loaded" : "No report data for these filters", performance.now() - startedAt);
         }
       })
       .catch(() => {
@@ -227,7 +235,7 @@ export function ReportsDashboard({
     return () => {
       mounted = false;
     };
-  }, [activeItem, activeReport, filters, previewRequestKey, refreshKey, selectedReport]);
+  }, [activeItem, activeReport, filters, previewRequestKey, refreshKey, selectedReport, needsDailyFilters]);
 
   useEffect(() => {
     setExplorerState({
@@ -495,7 +503,7 @@ export function ReportsDashboard({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold text-coal-950">{activeItem.name}</h1>
-                <ReportStatusBadge status={preview?.error ? "failed" : activeReport.status} />
+                <ReportStatusBadge status={previewLoading ? "processing" : preview?.error ? "failed" : preview?.rows.length ? "ready" : "not_generated"} />
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">{activeItem.description}</p>
             </div>
@@ -580,8 +588,10 @@ export function ReportsDashboard({
               {!preview.error && preview.notice && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {preview.notice}
+                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals Ã‚Â· All Shifts</Button>}
                 </div>
               )}
+              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} Ã‚Â· All Shifts Ã‚Â· {preview.rows.length} machines</p>}
               <ReportPreviewTable
                 reportType={selectedReport}
                 columns={explorerColumns}
@@ -594,8 +604,10 @@ export function ReportsDashboard({
         </Panel>
 
         <Panel title="Report Register" subtitle="Generated report status and available formats.">
-          {activeReport.source ? (
-            <DataTable columns={reportColumns} rows={[preview?.error ? { ...activeReport.source, status: "failed" } : activeReport.source]} getRowKey={(row) => row.id} />
+          {preview ? (
+            <DataTable columns={reportColumns} rows={[{ id: selectedReport, name: selectedReport, type: selectedReport, filters: {}, generatedAt: preview.generatedAt, exportFormats: preview.rows.length && !preview.error ? ["PDF", "Excel", "CSV"] : [], status: preview.error ? "failed" : preview.rows.length ? "ready" : "not_generated" } as Report]} getRowKey={(row) => row.id} />
+          ) : activeReport.source ? (
+            <DataTable columns={reportColumns} rows={[activeReport.source]} getRowKey={(row) => row.id} />
           ) : (
             <EmptyReportState />
           )}
@@ -726,7 +738,7 @@ function ReportPreviewTable({
               <tr key={`${reportType}-${String(row[columns[0]] ?? "row")}-${index}`}>
                 {columns.map((column) => (
                   <td key={column} className="border-b border-coal-100 px-3 py-2 text-coal-700">
-                    {String(row[column] ?? "-")}
+                    {typeof row[column] === "number" ? (row[column] as number).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : String(row[column] ?? "-")}
                   </td>
                 ))}
               </tr>

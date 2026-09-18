@@ -230,6 +230,15 @@ export const reportCategories: ReportCategory[] = [
       },
       {
         ...exportableReport,
+        id: "liugong",
+        name: "LiuGong Report",
+        description: "Daily fuel, engine, working and idling totals for LiuGong trucks and excavators. Today may be incomplete.",
+        route: "/reports/oem/liugong",
+        reportType: "LiuGong Report",
+        categoryId: "oem",
+      },
+      {
+        ...exportableReport,
         id: "case",
         name: "CASE Report",
         description: "CASE live fuel, working, idle and utilization report using the secured OEM integration.",

@@ -1,3 +1,4 @@
+import { dashboardPeriodRecords } from "./dashboardPeriodService";
 import { fetchLiuGongReport } from "./liugongService";
 import { prepareScaniaStandstill, scaniaExportRows } from "../utils/scaniaStandstill";
 import { apiClient } from "./apiClient";
@@ -54,6 +55,7 @@ export const reportService = {
     filters: DashboardFilters,
     options: { forceRefresh?: boolean } = {},
   ): Promise<ReportPreview> {
+    if (reportType === "LiuGong Report") return fetchLiuGongReport(reportType, { ...filters, company: "LiuGong" });
     if (filters.company === "LiuGong" && ["Driverwise Standstill Tracking", "Daily Fuel Consumption Report", "Fuel Consumption Report", "Idle Time Report", "Running Time Report", "Utilization Report", "Vehicle Efficiency Report"].includes(reportType)) return fetchLiuGongReport(reportType, filters);
     if (reportType === "Eicher Report") {
       return buildEicherReport(filters, options);
@@ -95,7 +97,7 @@ export const reportService = {
       if (preview.period) preview.period = {
         ...preview.period,
         shift: allShifts ? "All Shifts" : preview.period.shift,
-        site: allSites ? `${filters.region} Ã‚Â· All sites` : preview.period.site,
+        site: allSites ? `${filters.region} Ãƒâ€šÃ‚Â· All sites` : preview.period.site,
         customTimeRange: filters.timePeriodMode === "custom",
         start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
         end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
@@ -106,7 +108,15 @@ export const reportService = {
       return removeHiddenReportColumns(prepareScaniaStandstill(preview));
     }
 
-    const { sites, vehicles, filteredVehicles, filteredRecords } = await getFilteredPortalData(filters);
+    const data = await getFilteredPortalData(filters);
+    const { sites, vehicles, filteredVehicles } = data;
+    const periodData = ["Fuel Consumption Report", "Daily Fuel Consumption Report"].includes(reportType)
+      ? await dashboardPeriodRecords(filters, filteredVehicles, data.records, data.filteredRecords)
+      : { records: data.filteredRecords, notice: "" };
+    if (!periodData.records.length && periodData.notice) return {
+      reportType, generatedAt: new Date().toISOString(), columns: [], rows: [], notice: periodData.notice,
+    };
+    const filteredRecords = periodData.records;
     const siteMap = new Map(sites.map((site) => [site.id, site.name]));
     const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
     const vehicleRows = getVehiclePerformanceRows(filteredRecords, filteredVehicles);
@@ -199,7 +209,8 @@ export const reportService = {
       reportType,
       generatedAt: new Date().toISOString(),
       columns: Object.keys(rows[0] ?? {}),
-      rows: rows.slice(0, 60),
+      rows,
+      notice: periodData.notice || undefined,
     };
   },
 

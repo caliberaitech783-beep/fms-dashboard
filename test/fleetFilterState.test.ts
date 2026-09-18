@@ -83,3 +83,14 @@ test("manually applying a period marks it as an exact custom range", () => {
 
   assert.equal(custom.timePeriodMode, "custom");
 });
+
+test("selecting LiuGong switches to calendar-day totals without changing dates or site", () => {
+  const next = applyFleetFilterChange({ ...selectedVolvoFilters, shift: "A", timeFrom: "05:00", timeTo: "13:00" }, "company", "LiuGong");
+  assert.equal(next.shift, "All");
+  assert.equal(next.timeFrom, "00:00");
+  assert.equal(next.timeTo, "23:59");
+  assert.equal(next.dateFrom, selectedVolvoFilters.dateFrom);
+  assert.equal(next.dateTo, selectedVolvoFilters.dateTo);
+  assert.equal(next.siteId, selectedVolvoFilters.siteId);
+  assert.equal(next.modelNumber, "All");
+});
