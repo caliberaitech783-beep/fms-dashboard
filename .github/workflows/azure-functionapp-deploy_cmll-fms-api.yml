@@ -89,7 +89,7 @@ jobs:
           CASE_AUDIENCE: ${{ secrets.CASE_AUDIENCE }}
           CASE_SUBSCRIPTION_KEY: ${{ secrets.CASE_SUBSCRIPTION_KEY }}
         run: |
-          if [ -z "$EICHER_API_KEY" ] || [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_REFRESH_TOKEN" ] || [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_AUDIENCE" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
+          if [ -z "$LIUGONG_ACCESS_KEY" ] || [ -z "$LIUGONG_ACCESS_SECRET" ] || [ -z "$EICHER_API_KEY" ] || [ -z "$CASE_BASE_URL" ] || [ -z "$CASE_CUMULATIVE_OPERATING_HOURS_URL" ] || [ -z "$CASE_CUMULATIVE_FUEL_USED_URL" ] || [ -z "$CASE_CUMULATIVE_IDLE_HOURS_URL" ] || [ -z "$CASE_ACCESS_TOKEN" ] || [ -z "$CASE_REFRESH_TOKEN" ] || [ -z "$CASE_CLIENT_ID" ] || [ -z "$CASE_CLIENT_SECRET" ] || [ -z "$CASE_TOKEN_URL" ] || [ -z "$CASE_AUDIENCE" ] || [ -z "$CASE_SUBSCRIPTION_KEY" ]; then
             echo "Required backend API secrets are not configured."
             exit 1
           fi
@@ -183,3 +183,7 @@ jobs:
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           scm-do-build-during-deployment: ""
           enable-oryx-build: ""
+
+      - name: Verify saved LiuGong readings
+        timeout-minutes: 9
+        run: node scripts/verify-liugong-sync.js
