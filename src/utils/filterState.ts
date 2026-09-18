@@ -46,6 +46,7 @@ export function applyFleetFilterChange<K extends keyof DashboardFilters>(
     next.modelNumber = "All";
   } else if (key === "company") {
     next.modelNumber = "All";
+    if (value === "LiuGong") next = liuGongDailyFilters(next);
   }
 
   if (key === "shift" && value === "All") {
@@ -60,4 +61,9 @@ export function applyFleetFilterChange<K extends keyof DashboardFilters>(
   }
 
   return next;
+}
+
+/** LiuGong NBI exposes calendar-day totals, not shift intervals. */
+export function liuGongDailyFilters(filters: DashboardFilters): DashboardFilters {
+  return { ...filters, company: "LiuGong", shift: "All", timeFrom: "00:00", timeTo: "23:59", timePeriodMode: "custom", modelNumber: "All" };
 }

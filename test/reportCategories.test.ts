@@ -72,3 +72,9 @@ test("calculates category status totals from child report state", () => {
     { ready: 2, queued: 1, processing: 1, failed: 1, not_generated: 1 },
   );
 });
+
+test("LiuGong is available under OEM Reports with a direct route", () => {
+  const item = findReportItem("/reports/oem/liugong");
+  assert.equal(item?.reportType, "LiuGong Report");
+  assert.equal(item?.categoryId, "oem");
+});

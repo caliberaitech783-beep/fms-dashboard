@@ -48,6 +48,9 @@ await p.evaluate(async()=>{sessionStorage.setItem('mining.auth.session.v1',JSON.
 const a=window.testApi;
 await a.fetchVolvoDriverStandstillReport(a.filters)});
 assert.equal(requests,8);
+const fuel = await p.evaluate(async()=>{const a=window.testApi;return a.reportService.getReportPreview('Fuel Consumption Report',a.filters)});
+assert.equal(fuel.rows[0].fuelConsumedLitres,88.56,'Fuel Summary must use the selected-period total, not the 980161 lifetime counter');
 console.log({passed:'section isolation, early dashboard cards, report-cache reuse, forced generation, concurrent deduplication, parallel multi-site reports',parallelThreeSitesMs:Math.round(timing),requests});
 }finally{await b.close()}})();
+
 

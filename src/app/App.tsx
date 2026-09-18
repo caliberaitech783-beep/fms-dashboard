@@ -213,6 +213,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
               refreshKey,
               showTimingNotice,
               reloadDashboard,
+              setFilters,
               ["Super Admin", "Management", "Fleet Manager"].includes(currentUser.role) ? refreshLiveOems : undefined,
             )}</Suspense>
           )}
@@ -247,6 +248,7 @@ function renderSection(
   refreshKey: number,
   onTimingComplete: (message: string, elapsedMs: number) => void,
   onFleetReload: () => void,
+  onFiltersChange: (filters: ReturnType<typeof useFleetFilters>["filters"]) => void,
   onFleetRefresh?: () => Promise<void>,
 ) {
   switch (activeSection) {
@@ -257,6 +259,7 @@ function renderSection(
     case "reports":
       return (
         <ReportsDashboard
+          onFiltersChange={onFiltersChange}
           reports={data.reports}
           filters={filters}
           loading={data.loading}

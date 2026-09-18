@@ -188,6 +188,7 @@ select {
 .fms-theme .text-ore-700, .fms-theme .text-ore-600 { color: #7de4ef; }
 .fms-theme .bg-ore-50 { background-color: #115161; }
 .fms-theme button:hover { background-color: #145464; }
+.fms-theme .hover\:text-ore-700:hover { color: #7de4ef; }
 .fms-theme select, .fms-theme input { color: #dcf5f8; background-color: #06323e; }
 .fms-theme select option { background-color: #073b48; }
 .fms-theme article { border-color: #2d7180; background: linear-gradient(135deg, #0b4553, #06333f); box-shadow: inset 2px 0 #71dae7, 0 6px 20px #001e2940; }

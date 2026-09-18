@@ -1,6 +1,13 @@
 <!doctype html><html><body><script type="module">
+import {reportService} from '/src/services/reportService.ts';
+import {liuGongDailyFilters} from '/src/utils/filterState.ts';
+import {findReportItem} from '/src/config/reportCategories.ts';
 import {fetchLiuGongReport} from '/src/services/liugongService.ts';
 import {driverStandstillColumns} from '/src/components/dashboard/DriverStandstillReportPreview.tsx';
+window.checkLiuGongRoute = async () => {
+ const filters = liuGongDailyFilters({company:'Scania',dateFrom:'2026-09-17',dateTo:'2026-09-17',shift:'A',timeFrom:'05:00',timeTo:'13:00',siteId:'All',assetCategory:'All',assetType:'All',region:'WCL',modelNumber:'500-XT',contractType:'All',vehicleNumber:'',status:'All',lead:'All'});
+ return {filters,preview:await reportService.getReportPreview(findReportItem('/reports/oem/liugong').reportType,filters)};
+};
 window.checkLiuGong = async (siteId, assetCategory, shift='All') => {
   const preview = await fetchLiuGongReport('Driverwise Standstill Tracking', {
     company:'LiuGong', dateFrom:'2026-09-17',dateTo:'2026-09-17',timeFrom:'00:00',timeTo:'23:59',
