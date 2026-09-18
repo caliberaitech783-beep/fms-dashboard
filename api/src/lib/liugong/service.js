@@ -58,29 +58,38 @@ async function post(path, body, authenticated = true) {
 }
 async function synchronize(options = {}) {
   const storage = options.store || store, now = options.now || new Date();
+  const request = options.request || post;
+  const pause = options.pause || (() => new Promise(resolve => setTimeout(resolve, 5200)));
   if (!process.env.LIUGONG_ACCESS_KEY || !process.env.LIUGONG_ACCESS_SECRET) return { configured: false };
   if (!token || expires < Date.now()) {
-    const auth = await post("/auth/login", { accessKey: process.env.LIUGONG_ACCESS_KEY, accessSecret: process.env.LIUGONG_ACCESS_SECRET }, false);
+    const auth = await request("/auth/login", { accessKey: process.env.LIUGONG_ACCESS_KEY, accessSecret: process.env.LIUGONG_ACCESS_SECRET }, false);
     token = typeof auth.data === "string" ? auth.data : auth.data?.access_token || auth.data?.token || auth.data?.accessToken || auth.token;
     if (!token) throw new Error("LiuGong authentication returned no token.");
     expires = Date.now() + 11 * 3600000;
-    await new Promise(resolve => setTimeout(resolve, 5200));
+    await pause();
   }
   const startTime = Date.parse(`${day(new Date(now.getTime()-6*86400000))}T00:00:00+05:30`);
   let updated = 0;
   const failures = [];
   for (const m of fleet) {
     try {
-    const data = await post("/open/v2/getDailyData", { deviceList: [m.serialNumber], startTime, endTime: now.getTime() });
-    const fresh = rowsFrom(data).map(normalizeDaily).filter(Boolean);
     const prior = await storage.loadSnapshot(m.serialNumber);
+    const fresh = [];
+    // Bootstrap two seven-day windows; subsequent runs refresh the latest week.
+    const windows = prior?.payload?.bootstrapComplete ? [[startTime, now.getTime()]] : [
+      [startTime - 7 * 86400000, startTime - 1], [startTime, now.getTime()],
+    ];
+    for (const [from, to] of windows) {
+      const data = await request("/open/v2/getDailyData", { deviceList: [m.serialNumber], startTime: from, endTime: to });
+      fresh.push(...rowsFrom(data).map(normalizeDaily).filter(Boolean));
+      await pause();
+    }
     const byDate = new Map((prior?.payload?.rows || []).map(r => [r.date, r]));
     for (const row of fresh) byDate.set(row.date, row);
     const rows = [...byDate.values()].sort((a,b) => a.date.localeCompare(b.date)).slice(-90);
-    await storage.saveSnapshot(m.serialNumber, { rows }, { fetchedAt: now.toISOString(), recordCount: rows.length });
+    await storage.saveSnapshot(m.serialNumber, { rows, bootstrapComplete: true }, { fetchedAt: now.toISOString(), recordCount: rows.length });
     updated++;
-    } catch { failures.push(m.serialNumber); }
-    await new Promise(resolve => setTimeout(resolve, 5200));
+    } catch { failures.push(m.serialNumber); await pause(); }
   }
   return { configured: true, updated, failures };
 }
@@ -93,6 +102,6 @@ async function report(from, to, storage = store) {
       const rows = (snapshot?.payload?.rows || []).filter(r => r.date >= from && r.date <= to);
       return { serialNumber: m.serialNumber, ...summarize(rows), daysReported: rows.length,
         lastSyncAt: snapshot?.fetchedAt || null }; }),
-    notice: "LiuGong daily totals only. Today may be incomplete. Missing days are not estimated; distance, km/L and driver data are unavailable. Historical coverage grows as daily data is collected." };
+    notice: `${snapshots.some(s => s?.payload?.rows?.length) ? "" : "No saved readings yet. Backend daily synchronization is pending or failed. "}LiuGong daily totals only. Today may be incomplete. Missing days are not estimated; distance, km/L and driver data are unavailable. Historical coverage grows as daily data is collected.` };
 }
 module.exports = { fleet, vehicles, normalizeDaily, summarize, synchronize, report, rowsFrom };

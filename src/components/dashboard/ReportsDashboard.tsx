@@ -163,6 +163,7 @@ export function ReportsDashboard({
   useEffect(() => {
     if (needsDailyFilters) onFiltersChange?.(liuGongDailyFilters(filters));
   }, [needsDailyFilters, filters, onFiltersChange]);
+  const hasReportData = Boolean(preview?.rows.length && (preview.oem !== "LiuGong" || preview.rows.some(row => Number(row["Days reported"]) > 0)));
   const canExportReports = hasPermission(currentUser, "reports:export");
 
   useEffect(() => {
@@ -503,7 +504,7 @@ export function ReportsDashboard({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold text-coal-950">{activeItem.name}</h1>
-                <ReportStatusBadge status={previewLoading ? "processing" : preview?.error ? "failed" : preview?.rows.length ? "ready" : "not_generated"} />
+                <ReportStatusBadge status={previewLoading ? "processing" : preview?.error ? "failed" : hasReportData ? "ready" : "not_generated"} />
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">{activeItem.description}</p>
             </div>
@@ -588,10 +589,10 @@ export function ReportsDashboard({
               {!preview.error && preview.notice && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {preview.notice}
-                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals Ã‚Â· All Shifts</Button>}
+                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals Ãƒâ€š| All Shifts</Button>}
                 </div>
               )}
-              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} Ã‚Â· All Shifts Ã‚Â· {preview.rows.length} machines</p>}
+              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} Ãƒâ€š| All Shifts Ãƒâ€š| {preview.rows.length} machines</p>}
               <ReportPreviewTable
                 reportType={selectedReport}
                 columns={explorerColumns}
@@ -605,7 +606,7 @@ export function ReportsDashboard({
 
         <Panel title="Report Register" subtitle="Generated report status and available formats.">
           {preview ? (
-            <DataTable columns={reportColumns} rows={[{ id: selectedReport, name: selectedReport, type: selectedReport, filters: {}, generatedAt: preview.generatedAt, exportFormats: preview.rows.length && !preview.error ? ["PDF", "Excel", "CSV"] : [], status: preview.error ? "failed" : preview.rows.length ? "ready" : "not_generated" } as Report]} getRowKey={(row) => row.id} />
+            <DataTable columns={reportColumns} rows={[{ id: selectedReport, name: selectedReport, type: selectedReport, filters: {}, generatedAt: preview.generatedAt, exportFormats: preview.rows.length && !preview.error ? ["PDF", "Excel", "CSV"] : [], status: preview.error ? "failed" : hasReportData ? "ready" : "not_generated" } as Report]} getRowKey={(row) => row.id} />
           ) : activeReport.source ? (
             <DataTable columns={reportColumns} rows={[activeReport.source]} getRowKey={(row) => row.id} />
           ) : (
