@@ -39,7 +39,8 @@ export type DataSource =
   | "VOLVO_RFMS_LIVE"
   | "SCANIA_RFMS_LIVE"
   | "EICHER_VECV_LIVE"
-  | "CASE_EQUIPMENT_LIVE";
+  | "CASE_EQUIPMENT_LIVE"
+  | "LIUGONG_NBI_LIVE";
 
 export interface Site {
   id: string;

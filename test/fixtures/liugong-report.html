@@ -1,0 +1,11 @@
+<!doctype html><html><body><script type="module">
+import {fetchLiuGongReport} from '/src/services/liugongService.ts';
+import {driverStandstillColumns} from '/src/components/dashboard/DriverStandstillReportPreview.tsx';
+window.checkLiuGong = async (siteId, assetCategory, shift='All') => {
+  const preview = await fetchLiuGongReport('Driverwise Standstill Tracking', {
+    company:'LiuGong', dateFrom:'2026-09-17',dateTo:'2026-09-17',timeFrom:'00:00',timeTo:'23:59',
+    shift,siteId,assetCategory,region:'WCL',assetType:'All',modelNumber:'All',vehicleNumber:'',status:'All',contractType:'All',lead:'All',timePeriodMode:'schedule'
+  });
+  return {...preview, displayColumns:driverStandstillColumns(preview)};
+};
+</script></body></html>

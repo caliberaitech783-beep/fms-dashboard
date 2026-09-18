@@ -563,7 +563,7 @@ export function ReportsDashboard({
           {previewLoading && preview && <p role="status" className="mb-3 text-sm text-coal-500">Refreshing report. The previous generated result remains visible until the update finishes.</p>}
           {!preview ? (
             <LoadingState />
-          ) : selectedReport === "Driverwise Standstill Tracking" && preview.period ? (
+          ) : selectedReport === "Driverwise Standstill Tracking" && preview.period && preview.oem !== "LiuGong" ? (
             <DriverStandstillReportPreview
               preview={preview}
               rows={exploredRows}

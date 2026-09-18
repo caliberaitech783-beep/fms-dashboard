@@ -1,3 +1,4 @@
+import { fetchLiuGongReport } from "./liugongService";
 import { prepareScaniaStandstill, scaniaExportRows } from "../utils/scaniaStandstill";
 import { apiClient } from "./apiClient";
 import { invalidateVolvoReportCache } from "./volvoDriverReportService";
@@ -53,6 +54,7 @@ export const reportService = {
     filters: DashboardFilters,
     options: { forceRefresh?: boolean } = {},
   ): Promise<ReportPreview> {
+    if (filters.company === "LiuGong" && ["Driverwise Standstill Tracking", "Daily Fuel Consumption Report", "Fuel Consumption Report", "Idle Time Report", "Running Time Report", "Utilization Report", "Vehicle Efficiency Report"].includes(reportType)) return fetchLiuGongReport(reportType, filters);
     if (reportType === "Eicher Report") {
       return buildEicherReport(filters, options);
     }
@@ -93,7 +95,7 @@ export const reportService = {
       if (preview.period) preview.period = {
         ...preview.period,
         shift: allShifts ? "All Shifts" : preview.period.shift,
-        site: allSites ? `${filters.region} · All sites` : preview.period.site,
+        site: allSites ? `${filters.region} Ã‚Â· All sites` : preview.period.site,
         customTimeRange: filters.timePeriodMode === "custom",
         start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
         end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
@@ -202,6 +204,7 @@ export const reportService = {
   },
 
   async prefetchReportPreview(reportType: ReportType, filters: DashboardFilters) {
+    if (filters.company === "LiuGong") return;
     if (reportType === "Driverwise Standstill Tracking") {
       if (filters.company === "Scania") {
         await fetchScaniaDriverStandstillReport(filters);
@@ -225,7 +228,7 @@ export const reportService = {
 
   exportPdf(preview: ReportPreview, fileName: string, context?: DriverwisePdfContext) {
     const visiblePreview = removeHiddenReportColumns(preview);
-    const pdf = isDriverwiseStandstillReport(visiblePreview.reportType)
+    const pdf = isDriverwiseStandstillReport(visiblePreview.reportType) && visiblePreview.oem !== "LiuGong"
       ? buildDriverwiseStandstillPdf(visiblePreview, context)
       : buildPdf(visiblePreview);
     const blob = new Blob([pdf], { type: "application/pdf" });

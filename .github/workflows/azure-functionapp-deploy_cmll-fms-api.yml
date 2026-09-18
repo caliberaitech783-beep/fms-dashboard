@@ -74,6 +74,8 @@ jobs:
 
       - name: Configure backend API settings
         env:
+          LIUGONG_ACCESS_KEY: ${{ secrets.LIUGONG_ACCESS_KEY }}
+          LIUGONG_ACCESS_SECRET: ${{ secrets.LIUGONG_ACCESS_SECRET }}
           EICHER_API_KEY: ${{ secrets.EICHER_API_KEY }}
           CASE_BASE_URL: ${{ secrets.CASE_BASE_URL }}
           CASE_CUMULATIVE_OPERATING_HOURS_URL: ${{ secrets.CASE_CUMULATIVE_OPERATING_HOURS_URL }}
@@ -129,6 +131,8 @@ jobs:
             --name cmll-fms-api-b3-783 \
             --resource-group "$resource_group" \
             --settings \
+              "LIUGONG_ACCESS_KEY=$LIUGONG_ACCESS_KEY" \
+              "LIUGONG_ACCESS_SECRET=$LIUGONG_ACCESS_SECRET" \
               "EICHER_API_KEY=$EICHER_API_KEY" \
               "EICHER_REQUEST_TIMEOUT_MS=20000" \
               "EICHER_CACHE_SECONDS=60" \
