@@ -19,6 +19,11 @@ async function main() {
     console.log(JSON.stringify({ from, to: today, machinesWithReadings: populated.length, configuredMachines: report.rows.length }));
     const snapshots = await Promise.all(service.fleet.map(machine => store.loadSnapshot(machine.serialNumber)));
     if (populated.length === report.rows.length && snapshots.every(snapshot => snapshot?.payload?.bootstrapComplete)) {
+      const dailyCoverage = {};
+      for (const snapshot of snapshots) for (const row of snapshot.payload.rows) {
+        if (row.date >= from && row.date <= today && (row.fuelLitres !== null || row.engineHours !== null)) dailyCoverage[row.date] = (dailyCoverage[row.date] || 0) + 1;
+      }
+      console.log(JSON.stringify({ dailyCoverage }));
       console.log(JSON.stringify({ verified: true, daysReported: populated.reduce((sum, row) => sum + row.daysReported, 0), machinesWithFuel: populated.filter(row => row.fuelLitres !== null).length }));
       return;
     }
