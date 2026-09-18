@@ -1,3 +1,4 @@
+import { fetchLiuGongVehicles, fetchLiuGongIntegration } from "../liugongService";
 import { getAuthSession } from "../../auth/sessionService";
 import type { FleetTelemetryRecord, IntegrationSource, Vehicle, VehicleStatus } from "../../types/fleet";
 import type { FleetDataAdapter } from "../../types/integrations";
@@ -364,6 +365,7 @@ async function mockVehicleContext() {
     && vehicle.company !== "Scania"
     && vehicle.company !== "Eicher"
     && vehicle.company !== "Case"
+    && vehicle.company !== "LiuGong"
   ));
   return {
     nonVolvoVehicles,
@@ -392,11 +394,12 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
   fetchSites: () => mockAdapter.fetchSites(),
 
   async fetchVehicles() {
-    const [volvoSnapshot, scaniaSnapshot, eicherSnapshot, caseSnapshot, context] = await Promise.all([
+    const [volvoSnapshot, scaniaSnapshot, eicherSnapshot, caseSnapshot, liugongVehicles, context] = await Promise.all([
       fetchLiveSnapshot(),
       fetchScaniaLiveSnapshot(),
       fetchEicherLiveSnapshot(),
       fetchCaseEquipmentSnapshot(),
+      fetchLiuGongVehicles(),
       mockVehicleContext(),
     ]);
     return [
@@ -405,6 +408,7 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
       ...(scaniaSnapshot?.vehicles ?? []),
       ...(eicherSnapshot?.vehicles ?? []),
       ...(caseSnapshot?.vehicles ?? []),
+      ...liugongVehicles,
     ];
   },
 
@@ -416,12 +420,13 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
     return (await liveAwareTelemetry()).filter((record) => record.trips !== null);
   },
   async fetchIntegrations() {
-    const [snapshot, scaniaSnapshot, eicherSnapshot, caseSnapshot, scaniaIntegration, integrations] = await Promise.all([
+    const [snapshot, scaniaSnapshot, eicherSnapshot, caseSnapshot, scaniaIntegration, liugongIntegration, integrations] = await Promise.all([
       fetchLiveSnapshot(),
       fetchScaniaLiveSnapshot(),
       fetchEicherLiveSnapshot(),
       fetchCaseEquipmentSnapshot(),
       fetchScaniaIntegrationStatus(),
+      fetchLiuGongIntegration(),
       mockAdapter.fetchIntegrations(),
     ]);
     return integrations.map((integration) => {
@@ -429,6 +434,7 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
       if (integration.company === "Scania") return scaniaSnapshot?.integration ?? scaniaIntegration;
       if (integration.company === "Eicher") return eicherSnapshot?.integration ?? defaultEicherIntegration();
       if (integration.company === "Case") return caseSnapshot?.integration ?? defaultCaseIntegration();
+      if (integration.company === "LiuGong") return liugongIntegration;
       return integration;
     });
   },
@@ -441,6 +447,7 @@ export const volvoRfmsAdapter: FleetDataAdapter = {
 
 /** Avoid waiting for unrelated OEMs when the user selected one live fleet. */
 export async function fetchSelectedOemFleet(company: string): Promise<{ vehicles: Vehicle[]; records: FleetTelemetryRecord[] } | null> {
+  if (company === "LiuGong") return { vehicles: await fetchLiuGongVehicles(), records: [] };
   if (!["Volvo", "Scania", "Eicher"].includes(company)) return null;
   const snapshot = company === "Volvo" ? await fetchLiveSnapshot() : company === "Scania" ? await fetchScaniaLiveSnapshot() : await fetchEicherLiveSnapshot();
   return { vehicles: snapshot?.vehicles ?? [], records: snapshot?.telemetry ?? [] };

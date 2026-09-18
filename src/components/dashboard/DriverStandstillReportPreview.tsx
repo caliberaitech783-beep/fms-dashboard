@@ -42,6 +42,7 @@ export const driverStandstillDisplayColumns = [
 export const scaniaStandstillDisplayColumns = SCANIA_STANDSTILL_COLUMNS;
 
 export function driverStandstillColumns(preview?: ReportPreview | null) {
+  if (preview?.oem === "LiuGong") return preview.columns;
   if (isScaniaReport(preview)) return scaniaStandstillDisplayColumns;
   if (!preview?.columns.includes(I_SHIFT_PERFORMANCE) && !preview?.columns.includes(ABOVE_ECONOMY)) {
     return driverStandstillDisplayColumns;

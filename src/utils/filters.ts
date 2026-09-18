@@ -12,7 +12,8 @@ export function isLiveOemSource(source: string | undefined): boolean {
   return source === "VOLVO_RFMS_LIVE"
     || source === "SCANIA_RFMS_LIVE"
     || source === "EICHER_VECV_LIVE"
-    || source === "CASE_EQUIPMENT_LIVE";
+    || source === "CASE_EQUIPMENT_LIVE"
+    || source === "LIUGONG_NBI_LIVE";
 }
 
 function isEicherLocationView(vehicleOrRecord: Pick<Vehicle, "company" | "source">, filters: DashboardFilters): boolean {
