@@ -1,3 +1,4 @@
+import { buildTabularPdf, type TabularPdfContext } from "../utils/tabularPdf";
 import { dashboardPeriodRecords } from "./dashboardPeriodService";
 import { fetchLiuGongReport } from "./liugongService";
 import { prepareScaniaStandstill, scaniaExportRows } from "../utils/scaniaStandstill";
@@ -41,7 +42,6 @@ import { buildEicherReportRow, EICHER_REPORT_COLUMNS } from "../utils/eicherRepo
 import {
   buildDriverwiseStandstillPdf,
   isDriverwiseStandstillReport,
-  type DriverwisePdfContext,
 } from "../utils/driverwisePdf";
 
 export const reportService = {
@@ -97,7 +97,7 @@ export const reportService = {
       if (preview.period) preview.period = {
         ...preview.period,
         shift: allShifts ? "All Shifts" : preview.period.shift,
-        site: allSites ? `${filters.region} Ãƒâ€šÃ‚Â· All sites` : preview.period.site,
+        site: allSites ? `${filters.region} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· All sites` : preview.period.site,
         customTimeRange: filters.timePeriodMode === "custom",
         start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
         end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
@@ -237,11 +237,11 @@ export const reportService = {
     downloadBlob(blob, fileName);
   },
 
-  exportPdf(preview: ReportPreview, fileName: string, context?: DriverwisePdfContext) {
+  exportPdf(preview: ReportPreview, fileName: string, context?: TabularPdfContext) {
     const visiblePreview = removeHiddenReportColumns(preview);
     const pdf = isDriverwiseStandstillReport(visiblePreview.reportType) && visiblePreview.oem !== "LiuGong"
       ? buildDriverwiseStandstillPdf(visiblePreview, context)
-      : buildPdf(visiblePreview);
+      : buildTabularPdf(visiblePreview, context);
     const blob = new Blob([pdf], { type: "application/pdf" });
     downloadBlob(blob, fileName);
   },
@@ -395,6 +395,7 @@ async function buildCaseReport(
     columns: CASE_REPORT_COLUMNS,
     rows,
     oem: "CASE",
+    period: { date: filters.dateFrom, shift: filters.shift, site: filters.siteId === "All" ? "All sites" : filters.siteId.replace(/^site-(wcl|ncl)-/, "").replace(/-/g, " "), start: caseReportTimestamp(filters.dateFrom, filters.timeFrom || "00:00", false), end: caseReportTimestamp(filters.dateTo, filters.timeTo || "23:59", true), timezone: "Asia/Kolkata" },
     live: true,
     source: snapshot.source,
     notice: "Generated from live CASE Equipment, Cumulative Fuel Used, Cumulative Operating Hours and Cumulative Idle Hours APIs. Fuel is in litres, Working and Idle are hours, and Utilization is percent. Missing API values are shown as --.",
@@ -710,128 +711,6 @@ function sanitizeWorksheetName(name: string) {
   return sanitized.slice(0, 31);
 }
 
-function buildPdf(preview: ReportPreview) {
-  const lines = [
-    preview.reportType,
-    `Generated: ${formatDateTime(preview.generatedAt)}`,
-    "",
-    `Rows: ${preview.rows.length}`,
-    "",
-  ];
-
-  preview.rows.forEach((row, rowIndex) => {
-    lines.push(`Row ${rowIndex + 1}`);
-    const rowText = preview.columns
-      .map((column) => `${titleCase(column)}: ${cellToText(row[column]) || "-"}`)
-      .join(" | ");
-    lines.push(...wrapText(rowText, 118));
-    lines.push("");
-  });
-
-  return createPdf(lines);
-}
-
-function createPdf(lines: string[]) {
-  const pageLineLimit = 40;
-  const pageWidth = 842;
-  const pageHeight = 595;
-  const pages = chunk(lines.length ? lines : ["No data available"], pageLineLimit);
-  const pageObjectIds = pages.map((_, index) => 4 + index * 2);
-  const contentObjectIds = pages.map((_, index) => 5 + index * 2);
-  const objects: string[] = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-  ];
-
-  pages.forEach((pageLines, pageIndex) => {
-    const content = buildPdfPageContent(pageLines, pageHeight);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectIds[pageIndex]} 0 R >>`);
-    objects.push(`<< /Length ${new TextEncoder().encode(content).length} >>\nstream\n${content}\nendstream`);
-  });
-
-  return new TextEncoder().encode(assemblePdf(objects));
-}
-
-function buildPdfPageContent(lines: string[], pageHeight: number) {
-  const commands = ["BT", "/F1 9 Tf", "12 TL"];
-  lines.forEach((line, index) => {
-    const y = pageHeight - 36 - index * 12;
-    commands.push(`1 0 0 1 36 ${y} Tm (${escapePdfText(line)}) Tj`);
-  });
-  commands.push("ET");
-  return commands.join("\n");
-}
-
-function assemblePdf(objects: string[]) {
-  const encoder = new TextEncoder();
-  const chunks = ["%PDF-1.4\n"];
-  const offsets: number[] = [];
-  let byteLength = encoder.encode(chunks[0]).length;
-
-  objects.forEach((object, index) => {
-    offsets.push(byteLength);
-    const serialized = `${index + 1} 0 obj\n${object}\nendobj\n`;
-    chunks.push(serialized);
-    byteLength += encoder.encode(serialized).length;
-  });
-
-  const xrefOffset = byteLength;
-  chunks.push([
-    `xref\n0 ${objects.length + 1}`,
-    "0000000000 65535 f ",
-    ...offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `),
-    "trailer",
-    `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
-    "startxref",
-    String(xrefOffset),
-    "%%EOF",
-  ].join("\n"));
-
-  return chunks.join("");
-}
-
-function chunk<T>(items: T[], size: number) {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
-  }
-  return result;
-}
-
-function wrapText(text: string, maxLength: number) {
-  const words = normalizePdfText(text).split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-
-  words.forEach((word) => {
-    if (word.length > maxLength) {
-      if (current) {
-        lines.push(current);
-        current = "";
-      }
-      for (let index = 0; index < word.length; index += maxLength) {
-        lines.push(word.slice(index, index + maxLength));
-      }
-      return;
-    }
-
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxLength) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  });
-
-  if (current) {
-    lines.push(current);
-  }
-
-  return lines;
-}
-
 function cellToText(value: string | number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
 }
@@ -853,12 +732,6 @@ function normalizePdfText(value: string) {
     .trim();
 }
 
-function escapePdfText(value: string) {
-  return normalizePdfText(value)
-    .replace(/\\/g, "\\\\")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
-}
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
