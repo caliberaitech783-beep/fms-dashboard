@@ -375,7 +375,7 @@ export function ReportsDashboard({
         await reportService.exportPdf(
           exploredPreview,
           csvFileName.replace(/\.csv$/, ".pdf"),
-          { company: filters.company, shift: filters.shift },
+          { company: filters.company, shift: filters.shift, siteId: filters.siteId, dateFrom: filters.dateFrom, dateTo: filters.dateTo, timeFrom: filters.timeFrom, timeTo: filters.timeTo },
         );
       } else {
         await reportService.exportExcel(exploredPreview, csvFileName.replace(/\.csv$/, ".xlsx"));
@@ -425,13 +425,13 @@ export function ReportsDashboard({
       const fileName = makeCsvFileName(report.item.reportType, filters.siteId, filters.shift, filters.dateTo);
       if (format === "PDF") {
         await reportService.exportPdf(
-          { ...reportPreview, oem: filters.company },
+          { ...reportPreview, oem: reportPreview.oem || filters.company },
           fileName.replace(/\.csv$/, ".pdf"),
-          { company: filters.company, shift: filters.shift },
+          { company: filters.company, shift: filters.shift, siteId: filters.siteId, dateFrom: filters.dateFrom, dateTo: filters.dateTo, timeFrom: filters.timeFrom, timeTo: filters.timeTo },
         );
       } else {
         await reportService.exportExcel(
-          { ...reportPreview, oem: filters.company },
+          { ...reportPreview, oem: reportPreview.oem || filters.company },
           fileName.replace(/\.csv$/, ".xlsx"),
         );
       }
@@ -589,10 +589,10 @@ export function ReportsDashboard({
               {!preview.error && preview.notice && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {preview.notice}
-                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals Ãƒâ€š| All Shifts</Button>}
+                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals ÃƒÆ’Ã¢â‚¬Å¡| All Shifts</Button>}
                 </div>
               )}
-              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} Ãƒâ€š| All Shifts Ãƒâ€š| {preview.rows.length} machines</p>}
+              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} ÃƒÆ’Ã¢â‚¬Å¡| All Shifts ÃƒÆ’Ã¢â‚¬Å¡| {preview.rows.length} machines</p>}
               <ReportPreviewTable
                 reportType={selectedReport}
                 columns={explorerColumns}
