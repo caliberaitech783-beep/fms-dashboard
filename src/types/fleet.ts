@@ -51,6 +51,7 @@ export interface Site {
 }
 
 export interface Vehicle {
+  doorNumber?: string;
   id: string;
   vehicleNumber: string;
   source?: DataSource;
