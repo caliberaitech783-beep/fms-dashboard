@@ -5,7 +5,7 @@ const round = value => value === null ? null : Math.round(value * 100) / 100;
 const ratio = (a, b, scale = 1) => a !== null && b > 0 ? round(a / b * scale) : null;
 const day = date => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(date);
 function vehicles() {
-  return fleet.map(m => ({ id: `liugong-${m.serialNumber}`, vehicleNumber: m.serialNumber,
+  return fleet.map(m => ({ id: `liugong-${m.serialNumber}`, vehicleNumber: m.serialNumber, doorNumber: m.doorNumber,
     source: "LIUGONG_NBI_LIVE", trackerId: m.serialNumber, trackerProvider: "LiuGong NBI",
     company: "LiuGong", assetCategory: m.productGroup === "Mining Truck" ? "Truck" : "HEMM",
     assetType: m.productGroup === "Mining Truck" ? "Haul Pack" : "Excavator", modelNumber: m.model,

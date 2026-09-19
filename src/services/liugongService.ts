@@ -25,7 +25,7 @@ export async function fetchLiuGongIntegration(): Promise<IntegrationSource> {
   try { return (await request()).integration ?? fallback; } catch { return fallback; }
 }
 export async function fetchLiuGongReport(reportType: ReportType, filters: DashboardFilters): Promise<ReportPreview> {
-  const columns = ["Machine S/N", "Product group", "Model", "Site", "Engine hours", "Working hours", "Idle hours",
+  const columns = ["Door no", "Machine S/N", "Product group", "Model", "Site", "Engine hours", "Working hours", "Idle hours",
     "Fuel (L)", "Avg fuel (L/h)", "Work (%)", "Idling (%)", "Days reported", "Last sync"];
   const preview: ReportPreview = { reportType, generatedAt: new Date().toISOString(), columns, rows: [], oem: "LiuGong", source: "LIUGONG_NBI_LIVE", live: true };
   if (filters.shift !== "All" || (filters.timePeriodMode === "custom" && (filters.timeFrom !== "00:00" || filters.timeTo !== "23:59")))
@@ -39,7 +39,7 @@ export async function fetchLiuGongReport(reportType: ReportType, filters: Dashbo
       period: { date: filters.dateFrom, shift: "ALL_DAY", start: `${filters.dateFrom}T00:00:00+05:30`,
         end: `${filters.dateTo}T23:59:59+05:30`, timezone: "Asia/Kolkata" },
       rows: selected.map(v => { const r = bySerial.get(v.trackerId); return {
-        "Machine S/N": v.trackerId, "Product group": v.assetCategory === "Truck" ? "Mining Truck" : "Excavator",
+        "Door no": v.doorNumber ?? null, "Machine S/N": v.trackerId, "Product group": v.assetCategory === "Truck" ? "Mining Truck" : "Excavator",
         Model: v.modelNumber, Site: v.siteName || null, "Engine hours": r?.engineHours ?? null,
         "Working hours": r?.workingHours ?? null, "Idle hours": r?.idleHours ?? null,
         "Fuel (L)": r?.fuelLitres ?? null, "Avg fuel (L/h)": r?.fuelRate ?? null,

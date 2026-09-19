@@ -3,168 +3,196 @@
     "serialNumber": "LGIDW105VRN8D0073",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-01"
   },
   {
     "serialNumber": "LGIDW105ARN8D0074",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-05"
   },
   {
     "serialNumber": "LGIDW105ERN8D0077",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-08"
   },
   {
     "serialNumber": "LGIDW105CRN8D0078",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-09"
   },
   {
     "serialNumber": "LGIDW105HRN9D0081",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-10"
   },
   {
     "serialNumber": "LGIDW105ERN8D0080",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-06"
   },
   {
     "serialNumber": "LGIDW105CRN9D0083",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-07"
   },
   {
     "serialNumber": "LGIDW105LRN8D0075",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-03"
   },
   {
     "serialNumber": "LGIDW105CRN8D0072",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-04"
   },
   {
     "serialNumber": "LGIDW105HRN8D0076",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-02"
   },
   {
     "serialNumber": "LGIDW105ERN9D0082",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-11"
   },
   {
     "serialNumber": "LGIDW105TRN9D0084",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-14"
   },
   {
     "serialNumber": "LGIDW105PRN9D0085",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-13"
   },
   {
     "serialNumber": "LGIDW105TRN8D0079",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "HP-12"
   },
   {
     "serialNumber": "LGIDW105LTN2D0227",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-20"
   },
   {
     "serialNumber": "LGIDW105HTN2D0231",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-19"
   },
   {
     "serialNumber": "LGIDW105HTN2D0228",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-21"
   },
   {
     "serialNumber": "LGIDW105CTN2D0238",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-26"
   },
   {
     "serialNumber": "LGIDW105TTN2D0234",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-24"
   },
   {
     "serialNumber": "LGIDW105LTN2D0230",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-23"
   },
   {
     "serialNumber": "LGIDW105ETN2D0232",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-25"
   },
   {
     "serialNumber": "LGIDW105CTN2D0233",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-27"
   },
   {
     "serialNumber": "LGIDW105KTN2D0236",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-28"
   },
   {
     "serialNumber": "LGIDW105PTN2D0235",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-29"
   },
   {
     "serialNumber": "LGIDW105ETN2D0229",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-22"
   },
   {
     "serialNumber": "LGIDW105JTN2D0237",
     "productGroup": "Mining Truck",
     "model": "DW105A",
-    "location": "Gouri Pauni"
+    "location": "Gouri Pauni",
+    "doorNumber": "HP-30"
   },
   {
     "serialNumber": "CLG965EHHPE907715",
     "productGroup": "Excavator",
     "model": "965EHD",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "LPC-73"
   },
   {
     "serialNumber": "CLG975EHCPE907558",
     "productGroup": "Excavator",
     "model": "975E",
-    "location": "Sasti"
+    "location": "Sasti",
+    "doorNumber": "LPC-79"
   }
 ]

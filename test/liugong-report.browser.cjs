@@ -17,6 +17,8 @@ const { vehicles } = require('../api/src/lib/liugong/service');
     assert.equal(routed.preview.period.shift,'ALL_DAY');
     const all = await page.evaluate(()=>window.checkLiuGong('All','All'));
     assert.equal(all.rows.length,28);
+    assert.deepEqual(all.columns.slice(0,2),["Door no","Machine S/N"]);
+    for (const vehicle of vehicles()) assert.equal(all.rows.find(row=>row["Machine S/N"]===vehicle.trackerId)["Door no"],vehicle.doorNumber);
     assert.deepEqual(all.displayColumns,all.columns);
     assert.equal(all.rows[0]['Fuel (L)'],80);
     assert.equal((await page.evaluate(()=>window.checkLiuGong('site-wcl-sasti-ocm','Truck'))).rows.length,14);
