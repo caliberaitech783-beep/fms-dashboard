@@ -10,7 +10,7 @@ export interface TabularPdfContext {
   timeTo?: string;
 }
 
-const ascii = (value: string) => value.replace(/[â€“â€”]/g, "-").replace(/[^\x20-\x7E]/g, " ");
+const ascii = (value: string) => value.replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, " ");
 const escape = (value: string) => ascii(value).replace(/([\\()])/g, "\\$1");
 const cell = (value: unknown) => value === null || value === undefined || value === "" ? "--"
   : typeof value === "number" ? value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : String(value);

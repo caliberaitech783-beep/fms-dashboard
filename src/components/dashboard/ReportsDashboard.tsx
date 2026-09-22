@@ -589,10 +589,10 @@ export function ReportsDashboard({
               {!preview.error && preview.notice && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {preview.notice}
-                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals ÃƒÆ’Ã¢â‚¬Å¡| All Shifts</Button>}
+                  {preview.oem === "LiuGong" && !preview.period && <Button onClick={() => onFiltersChange?.(liuGongDailyFilters(filters))}>Use daily totals | All Shifts</Button>}
                 </div>
               )}
-              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} ÃƒÆ’Ã¢â‚¬Å¡| All Shifts ÃƒÆ’Ã¢â‚¬Å¡| {preview.rows.length} machines</p>}
+              {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} | All Shifts | {preview.rows.length} machines</p>}
               <ReportPreviewTable
                 reportType={selectedReport}
                 columns={explorerColumns}
