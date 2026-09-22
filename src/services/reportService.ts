@@ -97,7 +97,7 @@ export const reportService = {
       if (preview.period) preview.period = {
         ...preview.period,
         shift: allShifts ? "All Shifts" : preview.period.shift,
-        site: allSites ? `${filters.region} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· All sites` : preview.period.site,
+        site: allSites ? `${filters.region} | All sites` : preview.period.site,
         customTimeRange: filters.timePeriodMode === "custom",
         start: valid.map((item) => item.period!.start).sort((a, b) => Date.parse(a) - Date.parse(b))[0],
         end: valid.map((item) => item.period!.end).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
