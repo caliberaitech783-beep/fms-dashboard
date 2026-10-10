@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@azure/data-tables": "^13.3.2",
-    "@azure/functions": "^4.16.2",
+    "@azure/functions": "^4.16.5",
     "exceljs": "^4.4.0",
     "web-push": "^3.6.7"
   },
