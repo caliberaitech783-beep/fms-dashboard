@@ -2,6 +2,42 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReportPreview } from "../src/types/reports.ts";
 import { buildDriverwiseStandstillPdf } from "../src/utils/driverwisePdf.ts";
+import { filterScaniaStandstillReport, prepareScaniaStandstill, scaniaExportRows, SCANIA_STANDSTILL_COLUMNS } from "../src/utils/scaniaStandstill.ts";
+
+test("Scania report filters strictly above 15 km and keeps summary and exports consistent", () => {
+  const distances = [0, 14.99, 15, 15.01, 30, null, NaN, Infinity];
+  const preview: ReportPreview = {
+    reportType: "Driverwise Standstill Tracking", oem: "Scania", generatedAt: "2026-10-10T11:22:00Z",
+    columns: SCANIA_STANDSTILL_COLUMNS,
+    notice: "8 mapped vehicles shown; 8 with measured runtime, 0 with runtime unavailable.",
+    rows: distances.map((distance, i) => ({
+      "Registration number": `S-${i}`, "Distance driven (km)": distance,
+      "Engine running time (h:m)": "1:00", "Consumption liquid fuel (litres)": 10,
+      "Consumption liquid fuel (litres/h)": 10, "Idling (% of engine running time)": 20,
+      "Idling (h:m)": "0:12",
+    })),
+  };
+  const result = filterScaniaStandstillReport(preview);
+  assert.deepEqual(result.rows.map(row => row["Registration number"]), ["S-3", "S-4"]);
+  assert.equal(result.summary?.Drivers, "2 vehicles");
+  assert.equal(result.summary?.["Distance driven (km)"], 45.01);
+  assert.equal(result.summary?.["Consumption liquid fuel (litres)"], 20);
+  assert.equal(result.summary?.["Engine running time (h:m)"], "2:00");
+  assert.match(result.notice!, /before distance filtering/);
+  assert.match(result.notice!, /greater than 15 km/);
+  assert.deepEqual(filterScaniaStandstillReport(result), result);
+  assert.equal(prepareScaniaStandstill(preview).rows.length, 8, "dashboard preparation retains full fleet");
+  assert.equal(scaniaExportRows(result).length, 3, "CSV and Excel include filtered summary and rows");
+  const pdfText = extractTextCommands(buildDriverwiseStandstillPdf(result));
+  assert.ok(pdfText.includes("Summary (2)"));
+  assert.ok(pdfText.includes("S-3"));
+  assert.ok(pdfText.includes("S-4"));
+  assert.ok(!pdfText.includes("S-2"));
+  assert.equal(filterScaniaStandstillReport({ ...preview, oem: "Volvo" }).rows.length, 8);
+  const empty = filterScaniaStandstillReport({ ...preview, rows: preview.rows.slice(0, 3) });
+  assert.equal(empty.rows.length, 0);
+  assert.equal(empty.summary?.Drivers, "0 vehicles");
+});
 
 function volvoPreview(): ReportPreview {
   return {

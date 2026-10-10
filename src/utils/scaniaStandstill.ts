@@ -68,6 +68,18 @@ export function prepareScaniaStandstill(preview: ReportPreview): ReportPreview {
     notice: preview.notice?.includes(NOTE) ? preview.notice : [preview.notice, NOTE].filter(Boolean).join(" ") };
 }
 
+// Apply only at the report boundary; dashboard telemetry still needs the full fleet.
+export function filterScaniaStandstillReport(preview: ReportPreview): ReportPreview {
+  if (preview.reportType !== "Driverwise Standstill Tracking" || preview.oem !== "Scania" || preview.error) return preview;
+  const filterNote = "Only vehicles with distance driven greater than 15 km in the selected period are shown. Counts and summary totals cover these vehicles only.";
+  const notice = preview.notice?.replace(/mapped vehicles shown/g, "mapped vehicles available before distance filtering");
+  return prepareScaniaStandstill({
+    ...preview,
+    rows: preview.rows.filter(row => (number(row[DISTANCE]) ?? 0) > 15),
+    notice: notice?.includes(filterNote) ? notice : [notice, filterNote].filter(Boolean).join(" "),
+  });
+}
+
 export function scaniaExportRows(preview: ReportPreview): Row[] {
   return preview.oem === "Scania" && preview.reportType === "Driverwise Standstill Tracking" && preview.summary
     ? [preview.summary, ...preview.rows] : preview.rows;
