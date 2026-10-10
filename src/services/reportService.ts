@@ -1,7 +1,7 @@
 import { buildTabularPdf, type TabularPdfContext } from "../utils/tabularPdf";
 import { dashboardPeriodRecords } from "./dashboardPeriodService";
 import { fetchLiuGongReport } from "./liugongService";
-import { prepareScaniaStandstill, scaniaExportRows } from "../utils/scaniaStandstill";
+import { filterScaniaStandstillReport, scaniaExportRows } from "../utils/scaniaStandstill";
 import { apiClient } from "./apiClient";
 import { invalidateVolvoReportCache } from "./volvoDriverReportService";
 import type { DashboardFilters, FleetTelemetryRecord, ShiftCode } from "../types/fleet";
@@ -105,7 +105,7 @@ export const reportService = {
       const notices = previews.map((item) => item.notice || item.error?.message).filter(Boolean);
       if (valid.length !== previews.length) notices.push("Some selected sites did not return report data. Displaying the available sites.");
       preview.notice = [...new Set(notices)].join(" ") || undefined;
-      return removeHiddenReportColumns(prepareScaniaStandstill(preview));
+      return removeHiddenReportColumns(filterScaniaStandstillReport(preview));
     }
 
     const data = await getFilteredPortalData(filters);
