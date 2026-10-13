@@ -1,8 +1,10 @@
 // Shared by all Volvo clients in this API process, including dashboard requests.
 // A vendor cooldown must not be bypassed by creating another client instance.
-function createVolvoRequestGate({ now = Date.now, concurrency = 2 } = {}) {
+function createVolvoRequestGate({ now = Date.now, concurrency = 2, minIntervalMs = 0, schedule = setTimeout } = {}) {
   let active = 0;
   let blockedUntil = 0;
+  let nextStart = 0;
+  let timerPending = false;
   const queue = [];
   function rateLimitError() {
     return Object.assign(new Error("Volvo is temporarily limiting requests. Please wait before generating another report."), {
@@ -11,7 +13,17 @@ function createVolvoRequestGate({ now = Date.now, concurrency = 2 } = {}) {
     });
   }
   function drain() {
-    while (queue.length && active < concurrency) queue.shift()();
+    if (timerPending) return;
+    while (queue.length && active < concurrency) {
+      const delay = nextStart - now();
+      if (delay > 0 && blockedUntil <= now()) {
+        timerPending = true;
+        schedule(() => { timerPending = false; drain(); }, delay);
+        return;
+      }
+      nextStart = now() + minIntervalMs;
+      queue.shift()();
+    }
   }
   return function guardedFetch(fetchFn, url, options) {
     return new Promise((resolve, reject) => {
@@ -43,7 +55,8 @@ function createVolvoRequestGate({ now = Date.now, concurrency = 2 } = {}) {
   };
 }
 
-const gate = createVolvoRequestGate();
+const configuredInterval = Number(process.env.VOLVO_REQUEST_INTERVAL_MS || 500);
+const gate = createVolvoRequestGate({ minIntervalMs: Number.isFinite(configuredInterval) ? Math.max(100, configuredInterval) : 500 });
 function guardedVolvoFetch(fetchFn = globalThis.fetch) {
   return (url, options) => gate(fetchFn, url, options);
 }
