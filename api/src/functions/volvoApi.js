@@ -44,8 +44,10 @@ const {
 let cachedSnapshot = null;
 let pendingSnapshot = null;
 let cachedMasterVehicles = null;
-const driverReportCache = new Map();
-const pendingDriverReports = new Map();
+const { createVolvoReportCache } = require("../lib/volvo/volvoReportCache");
+const driverReportCache = createVolvoReportCache({
+  liveTtlMs: Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000),
+});
 
 function allowedOrigin(request) {
   const configured = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in")
@@ -567,20 +569,11 @@ async function loadDriverStandstillReport(request) {
     };
   }
 
-  // Generation-time cutoffs change by seconds. Share near-current requests for
-  // one minute while retaining the exact original period in the returned report.
-  const endMilliseconds = new Date(window.shiftEnd).getTime();
-  const isLiveWindow = Math.abs(Date.now() - endMilliseconds) < 60_000;
-  const cacheEnd = isLiveWindow ? Math.floor(endMilliseconds / 60_000) : window.shiftEnd;
-  const cacheKey = `${date}|${shift}|${reportSite.toLowerCase()}|${window.shiftStart}|${cacheEnd}`;
-  const cacheMilliseconds = Number(process.env.VOLVO_RFMS_DRIVER_REPORT_CACHE_MS || 300_000);
-  const cached = driverReportCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < cacheMilliseconds) {
-    return cached.value;
-  }
-
-  if (pendingDriverReports.has(cacheKey)) return pendingDriverReports.get(cacheKey);
-  const pending = (async () => {
+  return driverReportCache.getOrLoad({
+    scope: `${date}|${shift}|${reportSite.toLowerCase()}`,
+    start: window.shiftStart,
+    end: window.shiftEnd,
+  }, async () => {
     const snapshot = await loadSnapshot();
     const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
     const siteFilterApplied = siteVehicles.length > 0;
@@ -726,12 +719,8 @@ async function loadDriverStandstillReport(request) {
         aboveEconomyPercent: "Requires Volvo's economy-band definition or analytics endpoint; it is not a standard RFMS field.",
       },
     };
-    if (driverReportCache.size >= 64) driverReportCache.delete(driverReportCache.keys().next().value);
-    driverReportCache.set(cacheKey, { cachedAt: Date.now(), value });
     return value;
-  })();
-  pendingDriverReports.set(cacheKey, pending);
-  try { return await pending; } finally { pendingDriverReports.delete(cacheKey); }
+  });
 }
 
 async function handleDriverReport(request, context) {

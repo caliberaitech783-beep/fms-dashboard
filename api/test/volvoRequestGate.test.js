@@ -3,6 +3,22 @@ const assert = require("node:assert/strict");
 const { createVolvoRequestGate } = require("../src/lib/volvo/volvoRequestGate");
 const { fetchFleetHistory, fetchVehicleScopedHistory } = require("../src/lib/volvo/driverStandstillReport");
 
+test("request pacing spaces starts even when earlier requests complete immediately", async () => {
+  let now = 1000; const timers = []; const starts = [];
+  const gate = createVolvoRequestGate({ now: () => now, minIntervalMs: 500,
+    schedule: (fn, delay) => timers.push({ fn, delay }) });
+  const fetchFn = async () => { starts.push(now); return new Response(null); };
+  const first = gate(fetchFn, "one");
+  const second = gate(fetchFn, "two");
+  const third = gate(fetchFn, "three");
+  await first;
+  assert.deepEqual(starts, [1000]);
+  assert.equal(timers[0].delay, 500);
+  now += 500; timers.shift().fn(); await second;
+  now += 500; timers.shift().fn(); await third;
+  assert.deepEqual(starts, [1000, 1500, 2000]);
+});
+
 for (const header of ["120", "Wed, 16 Sep 2026 12:02:00 GMT", null]) {
   test(`shared cooldown respects Retry-After ${header}`, async () => {
     let now = Date.parse("2026-09-16T12:00:00Z");

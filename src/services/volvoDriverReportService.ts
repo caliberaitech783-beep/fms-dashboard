@@ -6,11 +6,11 @@ import { buildVolvoDriverReportQuery } from "../utils/volvoDriverReportQuery";
 
 const DEFAULT_API_BASE_URL = "https://cmll-fms-api-b3-783.azurewebsites.net/api";
 const API_BASE_URL = (import.meta.env.VITE_AUTH_API_BASE_URL ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
-const REPORT_CACHE_MS = 60_000;
+const REPORT_CACHE_MS = 300_000;
 export function invalidateVolvoReportCache() {
   for (const cached of reportCache.values()) cached.expiresAt = 0;
 }
-const retryAfterBySession = new Map<string, number>();
+const retryAfterByReport = new Map<string, number>();
 const reportCache = new Map<string, { expiresAt: number; preview: ReportPreview }>();
 const inFlightReports = new Map<string, Promise<ReportPreview>>();
 
@@ -51,7 +51,7 @@ export async function fetchVolvoDriverStandstillReport(
   const cacheKey = `${token}|${keyQuery}`;
   const cached = reportCache.get(cacheKey);
   function rateLimitedPreview(retryAt: number): ReportPreview {
-    const message = `Volvo is temporarily limiting requests. Try again after ${new Date(retryAt).toLocaleTimeString()}. Refresh and Generate will wait until then.`;
+    const message = `Volvo is temporarily limiting requests. You can retry this report after ${new Date(retryAt).toLocaleTimeString()}.`;
     if (cached) {
       return {
         ...cached.preview,
@@ -60,11 +60,12 @@ export async function fetchVolvoDriverStandstillReport(
     }
     return errorPreview(message, 429);
   }
-  const retryAt = retryAfterBySession.get(token) || 0;
-  if (retryAt > Date.now()) return rateLimitedPreview(retryAt);
   if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
     return cached.preview;
   }
+  // A throttled report must not hide another report already cached by the API.
+  const retryAt = retryAfterByReport.get(cacheKey) || 0;
+  if (retryAt > Date.now()) return rateLimitedPreview(retryAt);
 
   const pendingReport = inFlightReports.get(cacheKey);
   if (pendingReport) {
@@ -92,8 +93,8 @@ export async function fetchVolvoDriverStandstillReport(
           const delay = Number.isFinite(bodyDelay) && bodyDelay > 0 ? bodyDelay
             : Number.isFinite(headerDelay) && headerDelay > 0 ? headerDelay : 60_000;
           const retryAt = Date.now() + delay;
-          if (retryAfterBySession.size >= 64) retryAfterBySession.delete(retryAfterBySession.keys().next().value!);
-          retryAfterBySession.set(token, retryAt);
+          if (retryAfterByReport.size >= 64) retryAfterByReport.delete(retryAfterByReport.keys().next().value!);
+          retryAfterByReport.set(cacheKey, retryAt);
           return rateLimitedPreview(retryAt);
         }
         const message = payload && typeof payload === "object" && "message" in payload
