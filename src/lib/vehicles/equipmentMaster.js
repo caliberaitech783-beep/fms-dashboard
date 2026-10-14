@@ -41,4 +41,23 @@ function syncEquipment(rows, imported) {
     return next.model !== row.model || next.driver !== (row.driver || "") ? [next] : [];
   });
 }
-module.exports = { normalizeEquipment, importedEquipment, mergeEquipment, syncEquipment };
+function equipmentSites(imported, entities) {
+  const { resolveImportedSite } = require("./vehicleMasterIntegration");
+  const sourceIds = new Map(imported.map(row => [importedEquipment(row).id, row.siteId || resolveImportedSite(row.rawSiteName)?.id]));
+  const overrides = new Set(entities.filter(row => !row.deleted).map(row => row.rowKey));
+  const groups = new Map();
+  for (const row of mergeEquipment(imported, entities)) {
+    const name = row.location.trim();
+    if (!name || name === "-") continue;
+    // Exact known site IDs first avoids the legacy Jayant 2 import alias.
+    const known = { "jayant 1": "site-ncl-jayant-1", "jayant 2": "site-ncl-jayant-2" };
+    const id = known[name.toLowerCase()] || resolveImportedSite(name)?.id || sourceIds.get(row.id);
+    if (!id) continue;
+    const candidates = groups.get(id) || new Map();
+    const candidate = candidates.get(name) || { name, count: 0, edited: false };
+    candidate.count++; candidate.edited ||= overrides.has(row.id);
+    candidates.set(name, candidate); groups.set(id, candidates);
+  }
+  return [...groups].map(([id, candidates]) => ({ id, name: [...candidates.values()].sort((a, b) => Number(b.edited) - Number(a.edited) || b.count - a.count || a.name.localeCompare(b.name))[0].name }));
+}
+module.exports = { normalizeEquipment, importedEquipment, mergeEquipment, syncEquipment, equipmentSites };
