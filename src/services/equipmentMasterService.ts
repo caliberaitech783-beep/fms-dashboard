@@ -24,6 +24,7 @@ async function request(body?: object, view = "") {
   return result;
 }
 export const equipmentMasterService = {
+  async fleet(): Promise<EquipmentRecord[]> { return (await request(undefined, "/fleet")).rows; },
   async sites(): Promise<{ id: string; name: string }[]> { return (await request(undefined, "/sites")).sites; },
   async list(): Promise<EquipmentRecord[]> { return (await request()).rows; },
   async sync(): Promise<{ updated: number }> { return request({ action: "sync" }); },

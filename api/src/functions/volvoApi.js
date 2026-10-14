@@ -1,3 +1,5 @@
+const { listEquipment } = require("../lib/vehicles/equipmentMasterStore");
+const { volvoRoster, rosterRevision } = require("../lib/vehicles/equipmentRoster");
 const { requestReport, processReportJobs, persistedHistoryClient, collectRecentHistory } = require("../lib/volvo/volvoReportJobs");
 const { app } = require("@azure/functions");
 const { timingSafeEqual } = require("node:crypto");
@@ -34,12 +36,9 @@ const {
   getVolvoScores,
 } = require("../lib/volvo/volvoScoresService");
 const { getReportWindow, getShiftWindow } = require("../lib/tracking/shiftResolver");
-const { listVehicles: listImportedVehicles } = require("../lib/vehicles/vehicleStore");
 const {
   importedSiteAssignment,
-  isImportedVehicleInPortalScope,
   makeNoDataLiveVehicle,
-  mergeVolvoVehicleMasters,
 } = require("../lib/vehicles/vehicleMasterIntegration");
 
 let cachedSnapshot = null;
@@ -91,15 +90,6 @@ async function requireActor(request) {
     throw Object.assign(new Error("Authentication required."), { statusCode: 401, isPortalAuth: true });
   }
   return actor;
-}
-
-function vinAllowlist() {
-  return new Set(
-    String(process.env.VOLVO_RFMS_VIN_ALLOWLIST || "")
-      .split(",")
-      .map((vin) => vin.trim())
-      .filter(Boolean),
-  );
 }
 
 function portalStatus(liveVehicle) {
@@ -256,8 +246,10 @@ async function loadMasterVehicles(client) {
 }
 
 async function loadSnapshot() {
+  const equipment = await listEquipment();
+  const revision = rosterRevision(equipment);
   const cacheMilliseconds = Number(process.env.VOLVO_RFMS_CACHE_MS || 300_000);
-  if (cachedSnapshot && Date.now() - cachedSnapshot.cachedAt < cacheMilliseconds) {
+  if (cachedSnapshot && cachedSnapshot.revision === revision && Date.now() - cachedSnapshot.cachedAt < cacheMilliseconds) {
     return cachedSnapshot.value;
   }
   if (pendingSnapshot) {
@@ -266,15 +258,13 @@ async function loadSnapshot() {
 
   pendingSnapshot = (async () => {
     const client = createVolvoClientFromEnv();
-    const allowlist = vinAllowlist();
     const siteMap = parseVolvoSiteMap(process.env.VOLVO_RFMS_SITE_MAP_JSON);
-    const [rawVehicles, liveSnapshot, driverDirectory, importedVehicles] = await Promise.all([
+    const [rawVehicles, liveSnapshot, driverDirectory] = await Promise.all([
       String(process.env.USE_MOCK_VOLVO_DATA || "").toLowerCase() === "true"
         ? Promise.resolve([])
-        : loadMasterVehicles(client),
-      getLiveVolvoSnapshot({ allowBootstrap: true }),
+        : loadMasterVehicles(client).catch(() => []),
+      getLiveVolvoSnapshot({ allowBootstrap: false }),
       getLiveVolvoDriverDirectory().catch(() => emptyDriverDirectory()),
-      listImportedVehicles(),
     ]);
     const apiMasterVehicles = rawVehicles.length ? rawVehicles : liveSnapshot.vehicles.map((vehicle) => ({
       vin: vehicle.vin,
@@ -283,15 +273,7 @@ async function loadSnapshot() {
       Type: "TRUCK",
       Model: null,
     }));
-    const masterVehicles = mergeVolvoVehicleMasters(apiMasterVehicles, importedVehicles, {
-      // The Volvo vehicle endpoint defines the fleet population. Imported
-      // records enrich matching vehicles but must not inflate dashboard KPIs.
-      appendUnmatchedImported: false,
-    });
-    const portalMasterVehicles = masterVehicles.filter(isImportedVehicleInPortalScope);
-    const selectedVehicles = allowlist.size
-      ? portalMasterVehicles.filter((vehicle) => allowlist.has(vehicleVin(vehicle)))
-      : portalMasterVehicles;
+    const selectedVehicles = volvoRoster(apiMasterVehicles, equipment);
     const liveByVin = new Map(liveSnapshot.vehicles.map((vehicle) => [vehicle.vin, vehicle]));
     const statusOptions = {
       now: new Date(),
@@ -351,14 +333,14 @@ async function loadSnapshot() {
         driverLastSyncAt: driverDirectory.fetchedAt,
       },
     };
-    cachedSnapshot = { cachedAt: Date.now(), value };
+    cachedSnapshot = { cachedAt: Date.now(), revision, value };
     return value;
   })();
 
   try {
     return await pendingSnapshot;
   } catch (error) {
-    if (cachedSnapshot?.value) return cachedSnapshot.value;
+    if (cachedSnapshot?.value && cachedSnapshot.revision === revision) return cachedSnapshot.value;
     throw error;
   } finally {
     pendingSnapshot = null;
@@ -571,7 +553,7 @@ async function loadDriverStandstillReport(request) {
   }
 
   return driverReportCache.getOrLoad({
-    scope: `${date}|${shift}|${reportSite.toLowerCase()}`,
+    scope: `${date}|${shift}|${reportSite.toLowerCase()}|${rosterRevision(await listEquipment())}`,
     start: window.shiftStart,
     end: window.shiftEnd,
   }, async () => {
@@ -675,7 +657,14 @@ async function loadDriverStandstillReport(request) {
       "Coasting (%)": row.coastingPercent,
       "Avg diesel (l/h)": row.averageDieselLitresPerHour,
     }));
+    const measuredVins = new Set(rows.map(row => String(row.vin).toUpperCase()));
+    for (const vehicle of selectedVehicles) {
+      if (measuredVins.has(String(vehicle.trackerId).toUpperCase())) continue;
+      reportRows.push({ ...Object.fromEntries(columns.map(column => [column, null])),
+        Vehicles: vehicle.vehicleNumber, Drivers: "Unknown", "Fuel consumed (litres)": null });
+    }
     const notices = [];
+    if (reportRows.length > rows.length) notices.push(`${reportRows.length} Equipment Master vehicles shown; ${rows.length} have measured shift data. Missing OEM readings are shown as dashes, not zero.`);
     if (dateResolution.fallbackApplied) {
       notices.push(`The selected demo date ${requestedDate} is outside Volvo's live history window. Showing ${date} instead.`);
     }
@@ -807,7 +796,7 @@ async function handleLiveVehicles(request, context) {
   try {
     const actor = await requireActor(request);
     const [liveSnapshot, portalSnapshot, driverDirectory] = await Promise.all([
-      getLiveVolvoSnapshot({ allowBootstrap: true }),
+      getLiveVolvoSnapshot({ allowBootstrap: false }),
       loadSnapshot(),
       getLiveVolvoDriverDirectory().catch(() => emptyDriverDirectory()),
     ]);

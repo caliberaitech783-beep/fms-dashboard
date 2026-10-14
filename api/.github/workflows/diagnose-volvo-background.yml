@@ -1,6 +1,11 @@
 name: Diagnose Volvo background collection
 on:
   workflow_dispatch:
+    inputs:
+      verify_sasti:
+        description: Queue and verify today's Sasti Shift A using Equipment Master
+        type: boolean
+        default: false
 permissions:
   id-token: write
   contents: read
@@ -21,3 +26,5 @@ jobs:
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9B3ECC08B4B04DBFB2CFA4155249F5EE }}
       - run: npm ci --ignore-scripts
       - run: node scripts/diagnose-volvo-background.js
+        env:
+          VERIFY_SASTI: ${{ inputs.verify_sasti }}

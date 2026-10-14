@@ -11,7 +11,10 @@ function reportQuery(query) {
 }
 const liveKey = values => 'latest-report:' + JSON.stringify({...values,stopTime:""});
 async function requestReport(query, store = db) {
-  const values = reportQuery(query), key = 'report:' + JSON.stringify(values), id = store.hash(key);
+  const values = reportQuery(query);
+  // Invalidate saved reports whenever Equipment Master membership or mapping changes.
+  if (store === db) values.rosterRevision = require("../vehicles/equipmentRoster").rosterRevision(await require("../vehicles/equipmentMasterStore").listEquipment());
+  const key = 'report:' + JSON.stringify(values), id = store.hash(key);
   const cached = await store.read(key);
   const stop = values.stopTime ? Date.parse(values.stopTime) : Date.parse(values.date + "T23:59:59+05:30");
   const fresh = cached && (Date.now() - Date.parse(cached.savedAt) < 300000 || stop < Date.now() - 86400000 && Date.parse(cached.savedAt) > stop + 3600000);
@@ -33,8 +36,14 @@ async function requestReport(query, store = db) {
 }
 async function processReportJobs(build, store = db, now = Date.now) {
   const candidates = await store.jobs();
+  const revision = store === db ? require("../vehicles/equipmentRoster").rosterRevision(await require("../vehicles/equipmentMasterStore").listEquipment()) : null;
   for (const job of candidates) {
-    if (job.status === "complete" || job.status === "failed" || job.dueAt > now() || job.leaseUntil > now()) continue;
+    if (["complete", "failed", "superseded"].includes(job.status) || job.leaseUntil > now()) continue;
+    if (revision && JSON.parse(job.query).rosterRevision !== revision) {
+      await store.replace({...job,status:"superseded",leaseUntil:0},job.etag);
+      continue;
+    }
+    if (job.dueAt > now()) continue;
     const claimed = {...job, status:"running", leaseUntil:now()+15*60000};
     if (!await store.replace(claimed, job.etag)) continue;
     try {

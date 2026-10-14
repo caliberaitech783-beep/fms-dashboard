@@ -1,21 +1,8 @@
 const { app } = require("@azure/functions");
-const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
 const auth = require("../lib/authStore");
 const { listVehicles } = require("../lib/vehicles/vehicleStore");
 const { normalizeEquipment, mergeEquipment, syncEquipment, equipmentSites } = require("../lib/vehicles/equipmentMaster");
-let setupPromise;
-async function getTable() {
-  if (!setupPromise) setupPromise = (async () => {
-    const connection = process.env.AzureWebJobsStorage || "";
-    const table = connection === "UseDevelopmentStorage=true" || connection.startsWith("DefaultEndpointsProtocol=")
-      ? TableClient.fromConnectionString(connection, "FmsEquipmentMaster")
-      : new TableClient(`https://${process.env.STORAGE_ACCOUNT_NAME}.table.core.windows.net`, "FmsEquipmentMaster",
-        new AzureNamedKeyCredential(process.env.STORAGE_ACCOUNT_NAME, process.env.STORAGE_ACCOUNT_KEY));
-    await table.createTable().catch(error => { if (error.statusCode !== 409) throw error; });
-    return table;
-  })().catch(error => { setupPromise = null; throw error; });
-  return setupPromise;
-}
+const { getTable } = require("../lib/vehicles/equipmentMasterStore");
 function response(request, status, jsonBody) {
   const origins = (process.env.ALLOWED_ORIGINS || "https://fms.cmll.in").split(",").map(value => value.trim());
   const origin = request.headers.get("origin");
@@ -32,8 +19,10 @@ async function handle(request, context) {
     if (!token) return response(request, 401, { message: "Authentication required." });
     const payload = auth.verifyToken(token);
     const actor = auth.assertTokenForUser(payload, await auth.getUser(payload.sub));
+    const fleetView = request.method === "GET" && request.params.view === "fleet";
     const sitesOnly = request.method === "GET" && request.params.view === "sites";
-    if (!sitesOnly && !["Super Admin", "MIS User"].includes(actor.role)) return response(request, 403, { message: "Permission denied." });
+    if (fleetView && !["Super Admin", "MIS User", "Management", "Fleet Manager"].includes(actor.role)) return response(request, 403, { message: "Permission denied." });
+    if (!sitesOnly && !fleetView && !["Super Admin", "MIS User"].includes(actor.role)) return response(request, 403, { message: "Permission denied." });
     const table = await getTable();
     async function currentRows() {
       const imported = await listVehicles();
@@ -72,7 +61,7 @@ async function handle(request, context) {
     if (!Array.isArray(body?.rows) || !body.rows.length || body.rows.length > 2000) return response(request, 400, { message: "Supply between 1 and 2,000 equipment records." });
     const rows = body.rows.map(normalizeEquipment);
     if (new Set(rows.map(row => row.id)).size !== rows.length) return response(request, 400, { message: "The import contains duplicate serial numbers." });
-    // Store page-specific master records; existing OEM mappings and reports are unaffected.
+    // Equipment Master is the subscribed fleet and site assignment authority.
     for (let offset = 0; offset < rows.length; offset += 100) {
       await table.submitTransaction(rows.slice(offset, offset + 100).map(row => ["upsert", {
         partitionKey: "EQUIPMENT", rowKey: row.id, recordJson: JSON.stringify(row),

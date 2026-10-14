@@ -1,3 +1,4 @@
+import { applyEquipmentMaster } from "./equipmentRosterService";
 import { DASHBOARD_SITES, dashboardSiteId } from "../constants/sites";
 import { fetchSelectedOemFleet } from "./adapters/volvoRfmsAdapter";
 import { getAuthSession } from "../auth/sessionService";
@@ -53,14 +54,16 @@ async function loadPortalData(company: string): Promise<PortalData> {
     selected ? Promise.resolve(selected.vehicles) : apiClient.fleet.fetchVehicles(),
     selected ? Promise.resolve(selected.records) : apiClient.fleet.fetchTelemetry(),
   ]);
-  const normalizedVehicles = vehicles.map(normalizeVehicleModel);
+  const normalizedVehicles = (await applyEquipmentMaster(vehicles, company)).map(normalizeVehicleModel);
   const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
-  const normalizedRecords = records.map((record) => {
+  const normalizedRecords = records.filter(record => normalizedVehicleById.has(record.vehicleId)).map((record) => {
     const vehicle = normalizedVehicleById.get(record.vehicleId);
     if (!vehicle) return record;
     return {
       ...record,
-      siteId: dashboardSiteId(record.siteId),
+      siteId: vehicle.siteId,
+      siteName: vehicle.siteName || null,
+      vehicleNumber: vehicle.vehicleNumber,
       company: vehicle.company,
       modelNumber: vehicle.modelNumber,
     };
