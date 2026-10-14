@@ -25,7 +25,7 @@ function selectEquipment(rows, oem, apiVins=[]) {
  return rows.filter(row=>equipmentOem(row,known.has(key(row.serialNumber)) ? oem : null)===oem);
 }
 function rosterRevision(rows) {
- return createHash('sha256').update('equipment-subscriptions-v2:').update(JSON.stringify([...rows].sort((a,b)=>key(a.serialNumber).localeCompare(key(b.serialNumber))))).digest('hex');
+ return createHash('sha256').update('equipment-subscriptions-v3-sasti19:').update(JSON.stringify([...rows].sort((a,b)=>key(a.serialNumber).localeCompare(key(b.serialNumber))))).digest('hex');
 }
 function importedRoster(rows,oem,apiVins=[]) {
  return selectEquipment(rows,oem,apiVins).map(row=>{
@@ -35,11 +35,16 @@ function importedRoster(rows,oem,apiVins=[]) {
     contractType:site?.contractType || null,serviceStatus:'Active',active:true,driver:row.driver || '',equipmentMaster:true};
  });
 }
+// User-approved Sasti subscriptions; Equipment Master remains authoritative for VIN and site.
+const SASTI_VOLVO_DOORS = new Set(['V957','V604','V947','V502','V605','V948','V590','V500','V952','V956','V949','V946','V503','V950','V501','V603','V606','V945','V944']);
 function volvoRoster(apiVehicles,rows) {
  const byVin=new Map(apiVehicles.map(v=>[key(v.vin || v.VIN),v]));
- return importedRoster(rows,'Volvo',[...byVin.keys()]).filter(record=>byVin.has(key(record.vin))).map(record=>({
+ return importedRoster(rows,'Volvo',[...byVin.keys()]).filter(record=>record.siteId === 'site-wcl-sasti-ocm'
+   ? SASTI_VOLVO_DOORS.has(key(record.vehicleNumber))
+   : byVin.has(key(record.vin))).map(record=>({
    ...(byVin.get(key(record.vin)) || {}),vin:key(record.vin),VIN:key(record.vin),
    CustomerVehicleName:record.vehicleNumber,customerVehicleName:record.vehicleNumber,
+   oemCatalogAvailable:byVin.has(key(record.vin)),
    Model:record.vehicleModel,model:record.vehicleModel,Brand:'VOLVO TRUCKS',Type:'TRUCK',
    importedVehicleMaster:{...record,vin:key(record.vin)},
  }));
