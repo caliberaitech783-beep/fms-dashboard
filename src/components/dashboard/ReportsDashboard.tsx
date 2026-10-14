@@ -221,7 +221,7 @@ export function ReportsDashboard({
           setPreview(result);
           setPreviewLoading(false);
           setBusyReportType(null);
-          timingCompleteRef.current?.(result.error ? "Report unavailable" : result.rows.length ? "Report loaded" : "No report data for these filters", performance.now() - startedAt);
+          timingCompleteRef.current?.(result.processing ? "Shift report is being collected" : result.error ? "Report unavailable" : result.rows.length ? "Report loaded" : "No report data for these filters", performance.now() - startedAt);
         }
       })
       .catch(() => {
@@ -237,6 +237,15 @@ export function ReportsDashboard({
       mounted = false;
     };
   }, [activeItem, activeReport, filters, previewRequestKey, refreshKey, selectedReport, needsDailyFilters]);
+
+  useEffect(() => {
+    if (!preview?.processing) return;
+    const timer = window.setTimeout(() => {
+      manualGenerationRef.current = true;
+      setPreviewRequestKey(current => current + 1);
+    }, 30000);
+    return () => window.clearTimeout(timer);
+  }, [preview]);
 
   useEffect(() => {
     setExplorerState({
@@ -504,7 +513,7 @@ export function ReportsDashboard({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold text-coal-950">{activeItem.name}</h1>
-                <ReportStatusBadge status={previewLoading ? "processing" : preview?.error ? "failed" : hasReportData ? "ready" : "not_generated"} />
+                <ReportStatusBadge status={previewLoading || preview?.processing ? "processing" : preview?.error ? "failed" : hasReportData ? "ready" : "not_generated"} />
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-coal-600">{activeItem.description}</p>
             </div>
@@ -593,20 +602,20 @@ export function ReportsDashboard({
                 </div>
               )}
               {preview.oem === "LiuGong" && preview.period && <p className="text-sm text-coal-600">Daily report: {filters.dateFrom} to {filters.dateTo} | All Shifts | {preview.rows.length} machines</p>}
-              <ReportPreviewTable
+              {!preview.processing && <ReportPreviewTable
                 reportType={selectedReport}
                 columns={explorerColumns}
                 rows={exploredRows}
                 drilldownColumn={activeExplorerState.drilldownColumn}
                 subDrilldownColumn={activeExplorerState.subDrilldownColumn}
-              />
+              />}
             </div>
           )}
         </Panel>
 
         <Panel title="Report Register" subtitle="Generated report status and available formats.">
           {preview ? (
-            <DataTable columns={reportColumns} rows={[{ id: selectedReport, name: selectedReport, type: selectedReport, filters: {}, generatedAt: preview.generatedAt, exportFormats: preview.rows.length && !preview.error ? ["PDF", "Excel", "CSV"] : [], status: preview.error ? "failed" : hasReportData ? "ready" : "not_generated" } as Report]} getRowKey={(row) => row.id} />
+            <DataTable columns={reportColumns} rows={[{ id: selectedReport, name: selectedReport, type: selectedReport, filters: {}, generatedAt: preview.generatedAt, exportFormats: preview.rows.length && !preview.error ? ["PDF", "Excel", "CSV"] : [], status: preview.processing ? "processing" : preview.error ? "failed" : hasReportData ? "ready" : "not_generated" } as Report]} getRowKey={(row) => row.id} />
           ) : activeReport.source ? (
             <DataTable columns={reportColumns} rows={[activeReport.source]} getRowKey={(row) => row.id} />
           ) : (
