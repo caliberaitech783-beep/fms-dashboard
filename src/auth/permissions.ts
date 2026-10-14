@@ -54,6 +54,7 @@ const NAV_PERMISSIONS: Record<NavItemId, Permission[]> = {
   integrations: ["integrations:manage", "dashboard:full"],
   whatsapp: ["whatsapp:manage", "dashboard:full"],
   "master-data": ["master-data:manage", "dashboard:full"],
+  "equipment-master": ["master-data:manage", "dashboard:full"],
   settings: ["settings:read", "dashboard:full"],
   users: ["users:manage", "dashboard:full"],
 };

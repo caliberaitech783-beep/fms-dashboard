@@ -115,8 +115,11 @@ export function DesktopNav({ active, items, onChange, onReportChange, userContro
                     requestAnimationFrame(() => panelRef.current?.querySelector<HTMLButtonElement>("button")?.focus());
                   }
                 }}
-                className={cx("flex items-center gap-1.5 rounded-lg px-3 py-3 text-sm font-semibold transition-colors", selectedItem?.group === group || openMenu === group ? "bg-ore-50 text-ore-700" : "text-coal-600 hover:bg-coal-50 hover:text-coal-950")}
+                className={cx("flex items-center gap-1.5 rounded-lg px-3 py-3 text-sm font-semibold transition-colors", (selectedItem?.group === group && active !== "equipment-master") || openMenu === group ? "bg-ore-50 text-ore-700" : "text-coal-600 hover:bg-coal-50 hover:text-coal-950")}
               >{group === "control" ? "Control" : "Admin"}<ChevronDown className={cx("h-3.5 w-3.5 transition-transform", openMenu === group && "rotate-180")} /></button>
+            ))}
+            {items.filter(item => item.id === "equipment-master").map(item => (
+              <button key={item.id} type="button" aria-current={active === item.id ? "page" : undefined} onMouseEnter={() => setOpenMenu(null)} onClick={() => select(item.id)} className={cx("rounded-lg px-3 py-3 text-sm font-semibold transition-colors", active === item.id ? "bg-ore-50 text-ore-700" : "text-coal-600 hover:bg-coal-50 hover:text-coal-950")}>{item.label}</button>
             ))}
           </nav>
           {userControls}
@@ -129,7 +132,7 @@ export function DesktopNav({ active, items, onChange, onReportChange, userContro
                 <ReportCategoryMenu onSelect={selectReport} />
               </>
             ) : (
-              <div className="max-h-[min(24rem,calc(100dvh-7rem))] overflow-y-auto">{items.filter((item) => item.group === openMenu).map((item) => {
+              <div className="max-h-[min(24rem,calc(100dvh-7rem))] overflow-y-auto">{items.filter((item) => item.group === openMenu && item.id !== "equipment-master").map((item) => {
                 const Icon = item.icon;
                 return <button key={item.id} type="button" aria-current={active === item.id ? "page" : undefined} onClick={() => select(item.id)} title={descriptions[item.id]} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-coal-800 hover:bg-ore-50 hover:text-ore-700"><Icon className="h-4 w-4 shrink-0 text-ore-600" />{item.label}</button>;
               })}</div>
