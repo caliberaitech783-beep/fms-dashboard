@@ -33,6 +33,7 @@ const FleetDashboard = lazy(() => import("../components/dashboard/FleetDashboard
 const IntegrationsDashboard = lazy(() => import("../components/dashboard/IntegrationsDashboard").then((module) => ({ default: module.IntegrationsDashboard })));
 const ManagementDashboard = lazy(() => import("../components/dashboard/ManagementDashboard").then((module) => ({ default: module.ManagementDashboard })));
 const MasterDataDashboard = lazy(() => import("../components/dashboard/MasterDataDashboard").then((module) => ({ default: module.MasterDataDashboard })));
+const EquipmentMasterDashboard = lazy(() => import("../components/dashboard/EquipmentMasterDashboard").then((module) => ({ default: module.EquipmentMasterDashboard })));
 const NotificationCenterDashboard = lazy(() => import("../components/dashboard/NotificationCenterDashboard").then((module) => ({ default: module.NotificationCenterDashboard })));
 const ReportsDashboard = lazy(() => import("../components/dashboard/ReportsDashboard").then((module) => ({ default: module.ReportsDashboard })));
 const SettingsDashboard = lazy(() => import("../components/dashboard/SettingsDashboard").then((module) => ({ default: module.SettingsDashboard })));
@@ -90,7 +91,7 @@ function DashboardShell({ onLogout }: { onLogout: () => void }) {
   const sectionTimerRef = useRef<{ section: NavItemId; startedAt: number } | null>(null);
   const { filters, setFilter, setFilters, resetFilters, options } = useFleetFilters();
   const data = useDashboardData(filters, refreshKey, activeSection);
-  const showGlobalFilters = !["users", "notifications", "admin-notifications"].includes(activeSection);
+  const showGlobalFilters = !["users", "notifications", "admin-notifications", "equipment-master"].includes(activeSection);
   const allowedItems = useMemo(
     () => NAV_ITEMS.filter((item) => canAccessNav(currentUser, item.id)),
     [currentUser],
@@ -284,6 +285,8 @@ function renderSection(
       );
     case "master-data":
       return <MasterDataDashboard fleetRows={data.fleetRows} loading={data.loading} />;
+    case "equipment-master":
+      return <EquipmentMasterDashboard />;
     case "users":
       return <UserManagementDashboard />;
     case "settings":

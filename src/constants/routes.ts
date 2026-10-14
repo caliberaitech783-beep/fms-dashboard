@@ -31,6 +31,7 @@ export const NAV_ITEMS = [
   { id: "master-data", label: "Master Data", icon: BellDot, group: "admin" },
   { id: "users", label: "Users", icon: UserCog, group: "admin" },
   { id: "settings", label: "Settings", icon: Settings, group: "admin" },
+  { id: "equipment-master", label: "Equipment Master", icon: Truck, group: "admin" },
 ] as const;
 
 export type NavItem = (typeof NAV_ITEMS)[number];
