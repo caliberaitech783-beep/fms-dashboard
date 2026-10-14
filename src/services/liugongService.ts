@@ -1,3 +1,4 @@
+import { applyEquipmentMaster } from "./equipmentRosterService";
 import { getAuthSession } from "../auth/sessionService";
 import type { DashboardFilters, Vehicle, IntegrationSource } from "../types/fleet";
 import type { ReportPreview, ReportType } from "../types/reports";
@@ -32,7 +33,7 @@ export async function fetchLiuGongReport(reportType: ReportType, filters: Dashbo
     return { ...preview, notice: "LiuGong provides daily totals. Select All Shifts and a full-day date range; shift-level data is unavailable." };
   try {
     const data = await request(`?from=${encodeURIComponent(filters.dateFrom)}&to=${encodeURIComponent(filters.dateTo)}`);
-    const vehicles = data.vehicles.map(v => ({ ...v, modelNumber: getWorkbookModelName(v.assetType, v.company, v.modelNumber) }));
+    const vehicles = (await applyEquipmentMaster(data.vehicles, "LiuGong")).map(v => ({ ...v, modelNumber: getWorkbookModelName(v.assetType, v.company, v.modelNumber) }));
     const selected = filterVehicles(vehicles, filters);
     const bySerial = new Map(data.rows?.map(r => [r.serialNumber, r]));
     return { ...preview, generatedAt: data.generatedAt || preview.generatedAt, notice: data.notice,

@@ -1,3 +1,5 @@
+import { applyEquipmentMaster } from "./equipmentRosterService";
+import { filterVehicles } from "../utils/filters";
 import { buildTabularPdf, type TabularPdfContext } from "../utils/tabularPdf";
 import { dashboardPeriodRecords } from "./dashboardPeriodService";
 import { fetchLiuGongReport } from "./liugongService";
@@ -306,7 +308,7 @@ async function buildEicherReport(
 
   const latestByVehicle = latestRecordsByVehicle(snapshot.telemetry);
   const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
-  const rows = snapshot.vehicles
+  const rows = filterVehicles(await applyEquipmentMaster(snapshot.vehicles, "Eicher"), { ...filters, company: "Eicher" })
     .filter((vehicle) => vehicle.source === "EICHER_VECV_LIVE")
     .filter((vehicle) => filters.status === "All" || vehicle.status === filters.status)
     .filter((vehicle) => !vehicleSearch || vehicle.vehicleNumber.toLowerCase().includes(vehicleSearch))
@@ -374,19 +376,20 @@ async function buildCaseReport(
     };
   }
 
-  const vehicleSearch = filters.vehicleNumber.trim().toLowerCase();
-  const selectedModel = filters.modelNumber === "All" ? "" : filters.modelNumber.trim().toLowerCase();
-  const rows = snapshot.rows
-    .filter((row) => !vehicleSearch || row.machine.toLowerCase().includes(vehicleSearch))
-    .filter((row) => !selectedModel || (row.model ?? "").toLowerCase() === selectedModel)
-    .map((row) => ({
-      Machine: row.machine,
-      "Total Fuel": caseMetricValue(row.totalFuel),
-      "Average fuel per hour": caseMetricValue(row.averageFuelPerHour),
-      Working: caseMetricValue(row.workingHours),
-      Idle: caseMetricValue(row.idleHours),
-      Utilization: caseMetricValue(row.utilization),
-    }))
+  const { filteredVehicles } = await getFilteredPortalData({ ...filters, company: "Case" });
+  const identifier = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const metrics = new Map(snapshot.rows.map(row => [identifier(row.machine), row]));
+  const rows = filteredVehicles.map(vehicle => {
+    const row = metrics.get(identifier(vehicle.trackerId)) || metrics.get(identifier(vehicle.vehicleNumber));
+    return {
+      Machine: vehicle.vehicleNumber,
+      "Total Fuel": caseMetricValue(row?.totalFuel ?? null),
+      "Average fuel per hour": caseMetricValue(row?.averageFuelPerHour ?? null),
+      Working: caseMetricValue(row?.workingHours ?? null),
+      Idle: caseMetricValue(row?.idleHours ?? null),
+      Utilization: caseMetricValue(row?.utilization ?? null),
+    };
+  })
     .sort((left, right) => left.Machine.localeCompare(right.Machine, undefined, { numeric: true }));
 
   return {
