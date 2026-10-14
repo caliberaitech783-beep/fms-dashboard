@@ -1,4 +1,5 @@
-.fms-theme .equipment-master { background:#fff; color:#292433; border:1px solid #eadce9; border-radius:14px; overflow:hidden; }
+.fms-theme .equipment-master { color-scheme:light; background:#fff; color:#292433; border:1px solid #eadce9; border-radius:14px; overflow:hidden; }
+.fms-theme .equipment-master select option { background:#fff; color:#292433; }
 .fms-theme .equipment-master .em-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; padding:26px 24px; background:#fff; border-bottom:1px solid #eadce9; }
 .equipment-master h1 { font-size:32px; font-weight:700; line-height:1.3; }
 .equipment-master .em-header p { margin-top:6px; color:#737082; font-size:14px; }

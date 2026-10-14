@@ -25,7 +25,6 @@ export function EquipmentMasterDashboard() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
-  const [draft, setDraft] = useState(blankFilters);
   const [filters, setFilters] = useState(blankFilters);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [record, setRecord] = useState<EquipmentRecord | null>(null);
@@ -77,10 +76,10 @@ export function EquipmentMasterDashboard() {
         if (event.target.value === "clear") setSelected(new Set());
         if (event.target.value === "export") download(chosen);
       }}><option value="">Actions</option><option value="all">Select filtered records</option><option value="clear">Clear selection</option><option value="export" disabled={!chosen.length}>Export selected ({chosen.length})</option></select>
-      {([['roadStatus', 'All road statuses'], ['location', 'All locations'], ['category', 'All categories']] as const).map(([key, label]) => <select key={key} aria-label={label} value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}>
+      {([['roadStatus', 'All road statuses'], ['location', 'All locations'], ['category', 'All categories']] as const).map(([key, label]) => <select key={key} aria-label={label} value={filters[key]} onChange={event => setFilters({ ...filters, [key]: event.target.value })}>
         <option value="">{label}</option>{(key === "roadStatus" ? ["On road", "Off road", "Unknown"] : [...new Set(rows.map(row => row[key]).filter(Boolean))].sort()).map(value => <option key={value}>{value}</option>)}
       </select>)}
-      <button onClick={() => setFilters({ ...draft })}><Filter size={17} />Filter</button>
+      <button onClick={() => setFilters({ ...filters })}><Filter size={17} />Filter</button>
     </div>
     {message && <p className="em-message" role="status">{message}</p>}
     {loading ? <p className="em-message" role="status">Loading equipment…</p> : <>
