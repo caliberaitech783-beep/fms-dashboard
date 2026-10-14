@@ -1,3 +1,4 @@
+const { guardedVolvoFetch } = require("./volvoRequestGate");
 const { safeErrorMessage } = require("../tracking/masking");
 
 const DEFAULT_DRIVER_BASE_URL = "https://api.volvotrucks.com/driver";
@@ -248,6 +249,7 @@ function createVolvoDriverClientFromEnv(env = process.env, options = {}) {
     retries: env.VOLVO_DRIVER_REQUEST_RETRIES ?? options.retries,
     maxPages: env.VOLVO_DRIVER_MAX_PAGES || options.maxPages,
     ...options,
+    fetchFn: guardedVolvoFetch(options.fetchFn || globalThis.fetch),
   });
 }
 

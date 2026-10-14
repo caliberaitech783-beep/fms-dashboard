@@ -1,3 +1,4 @@
+const { requestReport, processReportJobs, persistedHistoryClient, collectRecentHistory } = require("../lib/volvo/volvoReportJobs");
 const { app } = require("@azure/functions");
 const { timingSafeEqual } = require("node:crypto");
 const store = require("../lib/authStore");
@@ -632,7 +633,7 @@ async function loadDriverStandstillReport(request) {
             : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift),
         };
       });
-      const history = await fetchReportHistoryCandidates(client, selectedVehicles, {
+      const history = await fetchReportHistoryCandidates(persistedHistoryClient(client), selectedVehicles, {
         ...historyOptions,
         vehicleRequestThreshold: historyStrategy.vehicleRequestThreshold,
         candidates,
@@ -730,7 +731,8 @@ async function handleDriverReport(request, context) {
     if (!["Super Admin", "Management", "Fleet Manager"].includes(actor.role)) {
       throw Object.assign(new Error("Permission denied."), { statusCode: 403, isPortalAuth: true });
     }
-    return response(request, 200, await loadDriverStandstillReport(request));
+    const saved = await requestReport(request.query);
+    return response(request, saved.status, saved.report);
   } catch (error) {
     const secrets = [process.env.VOLVO_RFMS_USERNAME, process.env.VOLVO_RFMS_PASSWORD];
     context.error("Volvo driver standstill report failed", safeErrorMessage(error, secrets));
@@ -981,5 +983,35 @@ app.timer("volvoScheduledSync", {
     } catch (error) {
       context.error("Scheduled Volvo synchronization failed", safeErrorMessage(error, volvoSecrets()));
     }
+  },
+});
+
+// Timer leases plus persisted per-job claims coordinate workers across restarts/instances.
+app.timer("volvoReportCollector", {
+  schedule: "15 * * * * *",
+  handler: async (_timer, context) => {
+    if (!(process.env.VOLVO_API_USERNAME || process.env.VOLVO_CLIENT_ID || process.env.VOLVO_RFMS_USERNAME)) return;
+    const background = require("../lib/volvo/volvoBackgroundStore");
+    const startedAt = new Date().toISOString();
+    try {
+      await background.write("collector-status", {startedAt,status:"running"});
+      const result = await processReportJobs(loadDriverStandstillReport);
+      context.log("Volvo report collector", result);
+      if (!result.retryInMs) await collectRecentHistory(createVolvoClientFromEnv());
+      await background.write("collector-status", {startedAt,finishedAt:new Date().toISOString(),status:result.retryInMs ? "waiting" : "ready",...result});
+    }
+    catch (error) {
+      await background.write("collector-status", {startedAt,finishedAt:new Date().toISOString(),status:"waiting",upstreamStatus:error.statusCode || 500}).catch(() => {});
+      context.error("Volvo report collector unavailable", error.statusCode || 500);
+    }
+  },
+});
+
+app.http("volvoCollectionStatus", {
+  route:"internal/volvo-collection-status", authLevel:"function", methods:["GET"],
+  handler:async () => {
+    const background = require("../lib/volvo/volvoBackgroundStore");
+    const [heartbeat,cursor,jobs] = await Promise.all([background.read("collector-status"),background.get("CONTROL","HISTORY_CURSOR"),background.jobs()]);
+    return {jsonBody:{collector:heartbeat?.value || null,historyThrough:cursor?.through || null,queued:jobs.filter(job=>job.status!=="complete").length,completed:jobs.filter(job=>job.status==="complete").length}};
   },
 });

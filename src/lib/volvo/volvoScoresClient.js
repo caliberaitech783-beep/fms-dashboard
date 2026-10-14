@@ -1,3 +1,4 @@
+const { guardedVolvoFetch } = require("./volvoRequestGate");
 const { randomUUID } = require("node:crypto");
 const { safeErrorMessage } = require("../tracking/masking");
 
@@ -243,6 +244,7 @@ function createVolvoScoresClientFromEnv(env = process.env, options = {}) {
     retries: env.VOLVO_SCORES_REQUEST_RETRIES ?? options.retries,
     maxPages: env.VOLVO_SCORES_MAX_PAGES || options.maxPages,
     ...options,
+    fetchFn: guardedVolvoFetch(options.fetchFn || globalThis.fetch),
   });
 }
 
