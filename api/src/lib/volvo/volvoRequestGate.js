@@ -58,9 +58,17 @@ function createVolvoRequestGate({ now = Date.now, concurrency = 2, minIntervalMs
 const configuredInterval = Number(process.env.VOLVO_REQUEST_INTERVAL_MS || 500);
 const gate = createVolvoRequestGate({ minIntervalMs: Number.isFinite(configuredInterval) ? Math.max(100, configuredInterval) : 500 });
 function guardedVolvoFetch(fetchFn = globalThis.fetch) {
+  // Start the HTTP timeout only after both queues admit the request. Keep it
+  // active through response body parsing; each client clears it in finally.
+  const send = (url, { onRequestStart, ...options } = {}) => {
+    onRequestStart?.();
+    return fetchFn(url, options);
+  };
   const sharedFetch = process.env.AzureWebJobsStorage
-    ? (url, options) => require("./volvoDistributedGate").distributedFetch(fetchFn, url, options)
-    : fetchFn;
-  return (url, options) => gate(sharedFetch, url, options);
+    ? (url, options) => require("./volvoDistributedGate").distributedFetch(send, url, options)
+    : send;
+  const queued = (url, options) => gate(sharedFetch, url, options);
+  queued.queuesRequests = true;
+  return queued;
 }
 module.exports = { createVolvoRequestGate, guardedVolvoFetch };

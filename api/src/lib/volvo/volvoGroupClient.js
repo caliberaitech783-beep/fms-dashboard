@@ -170,13 +170,15 @@ class VolvoGroupClient {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timeout;
+    const onRequestStart = () => { timeout = setTimeout(() => controller.abort(), this.timeoutMs); };
+    if (!this.fetchFn.queuesRequests) onRequestStart();
     try {
       const response = await this.fetchFn(this.tokenUrl, {
         method: "POST",
         headers,
         body: body.toString(),
-        signal: controller.signal,
+        onRequestStart, signal: controller.signal,
       });
       const text = await response.text();
       if (!response.ok) {
@@ -225,9 +227,11 @@ class VolvoGroupClient {
       const headers = { Accept: accept, Authorization: authorization, "Cache-Control": "no-cache" };
       if (this.apiKey) headers[this.apiKeyHeader] = this.apiKey;
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      let timeout;
+      const onRequestStart = () => { timeout = setTimeout(() => controller.abort(), this.timeoutMs); };
+      if (!this.fetchFn.queuesRequests) onRequestStart();
       try {
-        const response = await this.fetchFn(url, { method: "GET", headers, signal: controller.signal });
+        const response = await this.fetchFn(url, { method: "GET", headers, onRequestStart, signal: controller.signal });
         const text = await response.text();
         if (response.status === 401 && !refreshedAfter401) {
           this.invalidateToken();
