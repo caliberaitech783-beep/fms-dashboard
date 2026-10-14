@@ -2,9 +2,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {volvoRoster, importedRoster, rosterRevision, equipmentSite} = require('../src/lib/vehicles/equipmentRoster');
 const {mergeEquipment,normalizeEquipment} = require('../src/lib/vehicles/equipmentMaster');
-test('Equipment Master retains all 19 Sasti Volvo subscriptions when API masters contain only nine',()=>{
+test('Equipment Master maps all 19 connected trucks even when only nine have metric data',()=>{
  const equipment=Array.from({length:19},(_,i)=>({serialNumber:`YV2TEST${String(i).padStart(10,'0')}`,equipment:`V${944+i}`,model:'Volvo FMX',location:'Sasti OC',oem:'',category:'Truck'}));
- const api=equipment.slice(0,9).map(r=>({vin:r.serialNumber,CustomerVehicleName:'old',rawMetric:12}));
+ const api=equipment.map((r,i)=>({vin:r.serialNumber,CustomerVehicleName:'old',...(i<9 ? {rawMetric:12} : {})}));
  api.push({vin:'YV2UNSUBSCRIBED',CustomerVehicleName:'outside'});
  const rows=volvoRoster(api,equipment);
  assert.equal(rows.length,19);
@@ -43,4 +43,17 @@ test('LiuGong report reads only the Equipment Master fleet and preserves an unas
  assert.equal(report.vehicles.length,1);
  assert.equal(report.vehicles[0].siteId,null);
  assert.equal(report.rows[0].fuelLitres,null);
+});
+
+
+test('truck VIN suffixes match subscribed API VINs without including unconnected inventory',()=>{
+ const rows=[
+  {serialNumber:'YV2XBZ0GXS8994984D28',equipment:'V501',model:'Volvo FMX',location:'Sasti OC'},
+  {serialNumber:'YV2XG30G8T8902867',equipment:'V957',model:'Volvo FMX',location:'Sasti OC'},
+  {serialNumber:'YV2XTY0GXP8982610F26',equipment:'V253',model:'Volvo FMX',location:'Sasti OC'},
+  {serialNumber:'VCEC550EK00380210',equipment:'VPC72',oem:'Volvo',location:'Sasti OC'}
+ ];
+ const result=volvoRoster([{vin:'YV2XBZ0GXS8994984'},{vin:'YV2XG30G8T8902867'}],rows);
+ assert.deepEqual(result.map(r=>r.CustomerVehicleName),['V501','V957']);
+ assert.equal(result[0].vin,'YV2XBZ0GXS8994984');
 });

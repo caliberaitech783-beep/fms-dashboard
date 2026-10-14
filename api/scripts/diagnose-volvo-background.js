@@ -13,6 +13,11 @@ const az=args=>JSON.parse(execFileSync("az",args,{encoding:"utf8",stdio:["ignore
  const date=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata"}).format(new Date());
  const query=new URLSearchParams({date,shift:"A",site:"site-wcl-sasti-ocm",startTime:date+"T05:00:00+05:30",stopTime:date+"T13:00:00+05:30"});
  const verify=process.env.VERIFY_SASTI === "true";
+ if(verify) {
+   const vehicles=await require("../src/lib/volvo/volvoRfmsClient").createVolvoClientFromEnv().fetchAllVehicles();
+   const subscribed=roster.volvoRoster(vehicles,equipment).filter(row=>row.importedVehicleMaster.siteId === "site-wcl-sasti-ocm");
+   console.log(JSON.stringify({subscribedSasti:{count:subscribed.length,vehicles:subscribed.map(row=>({door:row.CustomerVehicleName,vin:row.vin}))}}));
+ }
  if(verify) { const result=await requestReport(query); console.log(JSON.stringify({sastiVerification:{status:result.status,rows:result.report.rows.length,period:result.report.period,notice:result.report.notice}})); }
  const jobs=await db.jobs();
  console.log(JSON.stringify({phase:"before",collector:await db.read("collector-status"),cursor:await db.get("CONTROL","HISTORY_CURSOR"),gate:await db.get("CONTROL","REQUEST"),jobs:jobs.map(j=>({query:JSON.parse(j.query),status:j.status,attempts:j.attempts,lastStatus:j.lastStatus,dueAt:j.dueAt,leaseUntil:j.leaseUntil}))}));
