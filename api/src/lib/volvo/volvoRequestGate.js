@@ -58,6 +58,9 @@ function createVolvoRequestGate({ now = Date.now, concurrency = 2, minIntervalMs
 const configuredInterval = Number(process.env.VOLVO_REQUEST_INTERVAL_MS || 500);
 const gate = createVolvoRequestGate({ minIntervalMs: Number.isFinite(configuredInterval) ? Math.max(100, configuredInterval) : 500 });
 function guardedVolvoFetch(fetchFn = globalThis.fetch) {
-  return (url, options) => gate(fetchFn, url, options);
+  const sharedFetch = process.env.AzureWebJobsStorage
+    ? (url, options) => require("./volvoDistributedGate").distributedFetch(fetchFn, url, options)
+    : fetchFn;
+  return (url, options) => gate(sharedFetch, url, options);
 }
 module.exports = { createVolvoRequestGate, guardedVolvoFetch };
