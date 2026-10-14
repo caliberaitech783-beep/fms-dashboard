@@ -23,7 +23,7 @@ const az=args=>JSON.parse(execFileSync("az",args,{encoding:"utf8",stdio:["ignore
  console.log(JSON.stringify({phase:"before",collector:await db.read("collector-status"),cursor:await db.get("CONTROL","HISTORY_CURSOR"),gate:await db.get("CONTROL","REQUEST"),jobs:jobs.map(j=>({query:JSON.parse(j.query),status:j.status,attempts:j.attempts,lastStatus:j.lastStatus,dueAt:j.dueAt,leaseUntil:j.leaseUntil}))}));
  for(const job of jobs.filter(j=>j.status === "complete")) {
    const saved=await db.read(job.key);
-   console.log(JSON.stringify({savedReport:JSON.parse(job.query),savedAt:saved?.savedAt,rowCount:saved?.value?.rows?.length,period:saved?.value?.period}));
+   console.log(JSON.stringify({savedReport:JSON.parse(job.query),savedAt:saved?.savedAt,rowCount:saved?.value?.rows?.length,vehicles:saved?.value?.rows?.map(r=>({door:r.Vehicles,distance:r["Driving (km)"]})),period:saved?.value?.period}));
  }
  if(process.env.VOLVO_DIAGNOSTIC_COLLECT !== "true" && !verify) return;
  const {loadDriverStandstillReport}=require("../src/functions/volvoApi");
