@@ -25,7 +25,11 @@ async function requestReport(query, store = db) {
   const previous = !cached && values.stopTime && Math.abs(Date.now()-Date.parse(values.stopTime)) < 600000 ? await store.read(liveKey(values)) : null;
   const available = cached || previous;
   if (available) return { status:200, report:{ ...available.value, notice:[available.value.notice, `Loaded from FMS database. Last saved: ${available.savedAt}.`, !fresh && "A background refresh is queued; the displayed report retains its saved reporting period."].filter(Boolean).join(" ") } };
-  return { status:202, report:{reportType:"Driverwise Standstill Tracking",generatedAt:new Date().toISOString(),columns:[],rows:[],notice:"Preparing this period in the background. Volvo data is being collected into the FMS database. Retry Generate shortly; repeated requests reuse the same job."} };
+  const job = await store.get("JOB", id);
+  const waiting = job?.dueAt > Date.now();
+  const reason = job?.lastStatus === 429 ? "Volvo has rate-limited collection." : job?.lastStatus === 401 || job?.lastStatus === 403 ? "Volvo rejected collector authentication or API access." : job?.lastStatus ? `Collection encountered an error (HTTP ${job.lastStatus}).` : job?.status === "running" ? "The collector is processing this shift." : "This shift is waiting in the collection queue.";
+  const retry = waiting ? ` Next collection attempt: ${new Date(job.dueAt).toISOString()}.` : "";
+  return { status:202, report:{reportType:"Driverwise Standstill Tracking",generatedAt:new Date().toISOString(),columns:[],rows:[],processing:true,notice:`${reason}${retry} This page checks automatically for the saved report; this is not a no-data result.`} };
 }
 async function processReportJobs(build, store = db, now = Date.now) {
   const candidates = await store.jobs();

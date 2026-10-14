@@ -11,3 +11,9 @@ test('background history cursor advances only after a completed collection',asyn
 test('independent request gates share pacing and cooldown state',async()=>{const db=memory();let time=100000,calls=0;const wait=async ms=>{time+=ms};const a=createDistributedGate(db,()=>time,wait),b=createDistributedGate(db,()=>time,wait);await a(async()=>{calls++;return new Response('',{status:200})},'https://example.com');await b(async()=>{calls++;return new Response('',{status:429,headers:{'retry-after':'60'}})},'https://example.com');assert.ok(time>=102000);await assert.rejects(a(async()=>{calls++},'https://example.com'),{statusCode:429});assert.equal(calls,2);});
 test('cooldown understands HTTP date and reset timestamp',()=>{const now=Date.parse('2026-09-01T00:00:00Z');assert.equal(cooldownMs(new Response('',{headers:{'retry-after':'Tue, 01 Sep 2026 00:02:00 GMT'}}),now),120000);assert.equal(cooldownMs(new Response('',{headers:{'x-rate-limit-reset':String(now/1000+120)}}),now),120000);});
 test('deployed API subtree enables and verifies the collector',()=>{const fs=require('node:fs'),path=require('node:path');const workflow=fs.readFileSync(path.join(__dirname,'../.github/workflows/azure-functionapp-deploy_cmll-fms-api.yml'),'utf8');assert.match(workflow,/AzureWebJobs.volvoReportCollector.Disabled=false/);assert.match(workflow,/node scripts\/verify-volvo-background.js/);});
+
+test('pending shifts expose processing and actual rate-limit reason instead of no data',async()=>{
+ const db=memory();const first=await requestReport(query(),db);assert.equal(first.report.processing,true);
+ await processReportJobs(async()=>{throw Object.assign(Error('limited'),{statusCode:429,retryAfterMs:60000})},db);
+ const pending=await requestReport(query(),db);assert.equal(pending.status,202);assert.match(pending.report.notice,/rate-limited/);assert.match(pending.report.notice,/Next collection attempt/);
+});

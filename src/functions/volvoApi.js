@@ -1015,3 +1015,5 @@ app.http("volvoCollectionStatus", {
     return {jsonBody:{collector:heartbeat?.value || null,historyThrough:cursor?.through || null,queued:jobs.filter(job=>job.status!=="complete").length,completed:jobs.filter(job=>job.status==="complete").length}};
   },
 });
+
+module.exports = { loadDriverStandstillReport };

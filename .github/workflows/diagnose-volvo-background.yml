@@ -1,0 +1,23 @@
+name: Diagnose Volvo background collection
+on:
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  diagnose:
+    if: github.ref == 'refs/heads/azure-functionapp-deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "22.x"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_A2D43B1FDFA0427A91B4128BD4970864 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5A13C6D439A449DCAFDBC77D4DC75AB4 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9B3ECC08B4B04DBFB2CFA4155249F5EE }}
+      - run: npm ci --ignore-scripts
+      - run: node scripts/diagnose-volvo-background.js
