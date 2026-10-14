@@ -28,3 +28,11 @@ test('sync updates available driver and model only and does not resurrect delete
  assert.deepEqual(syncEquipment([], [source]), []);
  assert.deepEqual(syncEquipment([row],[{...source,vehicleModel:'',sourceColumns:{}}]),[]);
 });
+const { equipmentSites } = require('../src/lib/vehicles/equipmentMaster');
+test('equipment site labels prefer master names and consolidate aliases under stable IDs', () => {
+ const imported = [{vin:'A',vehicleNumber:'1',siteId:'site-wcl-sasti-ocm',siteName:'Sasti OCM'}, {vin:'B',vehicleNumber:'2',siteId:'site-wcl-sasti-ocm',siteName:'Sasti OCM'}];
+ const row = {...importedEquipment(imported[0]),location:'Sasti OB'};
+ assert.deepEqual(equipmentSites(imported,[{rowKey:row.id,recordJson:JSON.stringify(row)}]),[{id:'site-wcl-sasti-ocm',name:'Sasti OB'}]);
+ assert.deepEqual(equipmentSites(imported,[{rowKey:row.id,deleted:true}]),[{id:'site-wcl-sasti-ocm',name:'Sasti OCM'}]);
+ assert.deepEqual(equipmentSites([{vin:'C',vehicleNumber:'3',siteName:'Jayant 2',siteId:'site-ncl-jayant-2'}],[]),[{id:'site-ncl-jayant-2',name:'Jayant 2'}]);
+});

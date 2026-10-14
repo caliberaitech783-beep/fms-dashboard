@@ -2,7 +2,7 @@ const { app } = require("@azure/functions");
 const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
 const auth = require("../lib/authStore");
 const { listVehicles } = require("../lib/vehicles/vehicleStore");
-const { normalizeEquipment, mergeEquipment, syncEquipment } = require("../lib/vehicles/equipmentMaster");
+const { normalizeEquipment, mergeEquipment, syncEquipment, equipmentSites } = require("../lib/vehicles/equipmentMaster");
 let setupPromise;
 async function getTable() {
   if (!setupPromise) setupPromise = (async () => {
@@ -32,7 +32,8 @@ async function handle(request, context) {
     if (!token) return response(request, 401, { message: "Authentication required." });
     const payload = auth.verifyToken(token);
     const actor = auth.assertTokenForUser(payload, await auth.getUser(payload.sub));
-    if (!["Super Admin", "MIS User"].includes(actor.role)) return response(request, 403, { message: "Permission denied." });
+    const sitesOnly = request.method === "GET" && request.params.view === "sites";
+    if (!sitesOnly && !["Super Admin", "MIS User"].includes(actor.role)) return response(request, 403, { message: "Permission denied." });
     const table = await getTable();
     async function currentRows() {
       const imported = await listVehicles();
@@ -46,6 +47,11 @@ async function handle(request, context) {
           partitionKey: "EQUIPMENT", ...entity, updatedAt: new Date().toISOString(), updatedBy: actor.userId,
         }, "Replace"]));
       }
+    }
+    if (sitesOnly) {
+      const entities = [];
+      for await (const entity of table.listEntities({ queryOptions: { filter: "PartitionKey eq 'EQUIPMENT'" } })) entities.push(entity);
+      return response(request, 200, { sites: equipmentSites(await listVehicles(), entities) });
     }
     if (request.method === "GET") return response(request, 200, { rows: (await currentRows()).rows });
     const body = await request.json().catch(() => null);
@@ -80,4 +86,4 @@ async function handle(request, context) {
       { message: error.statusCode === 400 ? error.message : "Unable to load or save Equipment Master. Please retry." });
   }
 }
-app.http("equipmentMaster", { route: "equipment-master", authLevel: "anonymous", methods: ["GET", "POST", "OPTIONS"], handler: handle });
+app.http("equipmentMaster", { route: "equipment-master/{view?}", authLevel: "anonymous", methods: ["GET", "POST", "OPTIONS"], handler: handle });

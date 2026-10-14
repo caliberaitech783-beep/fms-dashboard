@@ -1,3 +1,4 @@
+import { equipmentMasterService } from "./equipmentMasterService";
 import { fetchSelectedOemFleet } from "./adapters/volvoRfmsAdapter";
 import { getAuthSession } from "../auth/sessionService";
 import { apiClient } from "./apiClient";
@@ -47,10 +48,11 @@ export function getPortalData(company = "All"): Promise<PortalData> {
 }
 async function loadPortalData(company: string): Promise<PortalData> {
   const selected = await fetchSelectedOemFleet(company);
-  const [sites, vehicles, records] = await Promise.all([
+  const [sites, vehicles, records, masterSites] = await Promise.all([
     apiClient.fleet.fetchSites(),
     selected ? Promise.resolve(selected.vehicles) : apiClient.fleet.fetchVehicles(),
     selected ? Promise.resolve(selected.records) : apiClient.fleet.fetchTelemetry(),
+    equipmentMasterService.sites().catch(() => []),
   ]);
   const normalizedVehicles = vehicles.map(normalizeVehicleModel);
   const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
@@ -65,7 +67,7 @@ async function loadPortalData(company: string): Promise<PortalData> {
   });
 
   return {
-    sites,
+    sites: sites.map(site => ({ ...site, name: masterSites.find(master => master.id === site.id)?.name || site.name })),
     vehicles: normalizedVehicles,
     records: normalizedRecords,
     integrations: [],
