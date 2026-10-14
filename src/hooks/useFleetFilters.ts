@@ -7,9 +7,10 @@ import {
   getWorkbookMakeName,
   getWorkbookModelName,
 } from "../constants/modelMake";
-import { sites as seedSites, vehicles as seedVehicles } from "../data/mock/seed";
+import { vehicles as seedVehicles } from "../data/mock/seed";
 import { getPortalData } from "../services/dataAccess";
 import { applyFleetFilterChange } from "../utils/filterState";
+import { DASHBOARD_SITES, dashboardSiteId } from "../constants/sites";
 import { uniqueSorted } from "../utils/filters";
 
 export const defaultFilters: DashboardFilters = {
@@ -45,6 +46,7 @@ const initialFilterVehicles = seedVehicles.map((vehicle) => {
   const company = getWorkbookMakeName(vehicle.assetType, vehicle.company);
   return {
     ...vehicle,
+    siteId: dashboardSiteId(vehicle.siteId),
     company: company as Vehicle["company"],
     modelNumber: getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber),
   };
@@ -58,7 +60,7 @@ const CATEGORY_OEMS: Partial<Record<Vehicle["assetCategory"], Vehicle["company"]
 
 export function useFleetFilters() {
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
-  const [sites, setSites] = useState<Site[]>(seedSites);
+  const sites: Site[] = DASHBOARD_SITES;
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialFilterVehicles);
 
   useEffect(() => {
@@ -69,9 +71,8 @@ export function useFleetFilters() {
         return;
       }
 
-      setSites(data.sites);
       setVehicles(data.vehicles);
-    });
+    }).catch(() => { /* Site options remain available even if OEM data is unavailable. */ });
 
     return () => {
       mounted = false;

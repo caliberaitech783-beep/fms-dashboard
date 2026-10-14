@@ -1,4 +1,4 @@
-import { equipmentMasterService } from "./equipmentMasterService";
+import { DASHBOARD_SITES, dashboardSiteId } from "../constants/sites";
 import { fetchSelectedOemFleet } from "./adapters/volvoRfmsAdapter";
 import { getAuthSession } from "../auth/sessionService";
 import { apiClient } from "./apiClient";
@@ -30,6 +30,7 @@ function normalizeVehicleModel(vehicle: Vehicle): Vehicle {
   const modelNumber = getWorkbookModelName(vehicle.assetType, company, vehicle.modelNumber);
   return {
     ...vehicle,
+    siteId: dashboardSiteId(vehicle.siteId),
     company: company as Vehicle["company"],
     modelNumber,
   };
@@ -48,11 +49,9 @@ export function getPortalData(company = "All"): Promise<PortalData> {
 }
 async function loadPortalData(company: string): Promise<PortalData> {
   const selected = await fetchSelectedOemFleet(company);
-  const [sites, vehicles, records, masterSites] = await Promise.all([
-    apiClient.fleet.fetchSites(),
+  const [vehicles, records] = await Promise.all([
     selected ? Promise.resolve(selected.vehicles) : apiClient.fleet.fetchVehicles(),
     selected ? Promise.resolve(selected.records) : apiClient.fleet.fetchTelemetry(),
-    equipmentMasterService.sites().catch(() => []),
   ]);
   const normalizedVehicles = vehicles.map(normalizeVehicleModel);
   const normalizedVehicleById = new Map(normalizedVehicles.map((vehicle) => [vehicle.id, vehicle]));
@@ -61,13 +60,14 @@ async function loadPortalData(company: string): Promise<PortalData> {
     if (!vehicle) return record;
     return {
       ...record,
+      siteId: dashboardSiteId(record.siteId),
       company: vehicle.company,
       modelNumber: vehicle.modelNumber,
     };
   });
 
   return {
-    sites: sites.map(site => ({ ...site, name: masterSites.find(master => master.id === site.id)?.name || site.name })),
+    sites: DASHBOARD_SITES,
     vehicles: normalizedVehicles,
     records: normalizedRecords,
     integrations: [],
