@@ -1,5 +1,5 @@
 const { listEquipment } = require("../lib/vehicles/equipmentMasterStore");
-const { importedRoster, rosterRevision } = require("../lib/vehicles/equipmentRoster");
+const { importedRoster, rosterRevision, key } = require("../lib/vehicles/equipmentRoster");
 const { app } = require("@azure/functions");
 const { timingSafeEqual } = require("node:crypto");
 const { loadLocalEnv } = require("../lib/loadLocalEnv");
@@ -530,7 +530,8 @@ async function handleVehicleEvaluation(request, context) {
     const logger = createLogger(context);
     const snapshot = await getLiveScaniaSnapshot({ allowBootstrap: true });
     const equipment = await listEquipment();
-    const reportVehicles = importedRoster(equipment, "Scania", snapshot.vehicles.map(vehicle => vehicle.trackerId));
+    const connected = new Set(snapshot.vehicles.map(vehicle => key(vehicle.trackerId)));
+    const reportVehicles = importedRoster(equipment, "Scania", [...connected]).filter(row => connected.has(key(row.vin))).map(row => ({...row,vin:key(row.vin)}));
     const resource = reportSnapshotResource(body) + "-master-" + rosterRevision(equipment);
     let result;
     try {
@@ -622,7 +623,8 @@ async function handleShiftSummary(request, context) {
     }
     const logger = createLogger(context);
     const statusResult = await getShiftStatusSnapshot(logger);
-    const scaniaSiteMasters = importedRoster(await listEquipment(), "Scania", (statusResult.vehicles || []).map(vehicle => vehicle.trackerId));
+    const connected = new Set((statusResult.vehicles || []).map(vehicle => key(vehicle.trackerId)));
+    const scaniaSiteMasters = importedRoster(await listEquipment(), "Scania", [...connected]).filter(row => connected.has(key(row.vin))).map(row => ({...row,vin:key(row.vin)}));
     const subscribedVins = new Set(scaniaSiteMasters.map(vehicle => vehicle.vin.toUpperCase()));
     const report = buildScaniaShiftSummary({
       vehicles: scaniaSiteMasters.map((vehicle) => ({

@@ -1,7 +1,10 @@
 import type { Vehicle, Company } from '../types/fleet';
 import { equipmentMasterService, type EquipmentRecord } from './equipmentMasterService';
 import { DASHBOARD_SITES } from '../constants/sites';
-const key = (value: string) => value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+const key = (value: string) => {
+  const serial = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^(YV2|YS2)[A-HJ-NPR-Z0-9]{14}[A-Z][0-9]{2}$/.test(serial) ? serial.slice(0, 17) : serial;
+};
 export function masterCompany(row: EquipmentRecord, fallback?: Company): Company | undefined {
   const label = `${row.oem} ${row.model}`.toLowerCase();
   const names: Company[] = ['Volvo', 'Scania', 'LiuGong', 'Eicher', 'Case', 'Tata Hitachi', 'Komatsu'];
@@ -23,13 +26,14 @@ export function equipmentFleet(vehicles: Vehicle[], rows: EquipmentRecord[], sel
   const byVin = new Map(vehicles.map(vehicle => [key(vehicle.trackerId), vehicle]));
   return rows.flatMap(row => {
     const source = byVin.get(key(row.serialNumber));
-    const company = masterCompany(row, source?.company);
+    if (!source) return [];
+    const company = masterCompany(row, source.company);
     if (!company || (selectedCompany !== 'All' && company.toLowerCase() !== selectedCompany.toLowerCase())) return [];
     const site = siteFor(row.location);
     const category = /truck|tipper|haul/i.test(row.category) ? 'Truck' : row.category ? 'HEMM' : source?.assetCategory || (company === 'Volvo' || company === 'Scania' ? 'Truck' : 'Unknown');
     const sources: Partial<Record<Company, Vehicle['source']>> = {Volvo:'VOLVO_RFMS_LIVE',Scania:'SCANIA_RFMS_LIVE',LiuGong:'LIUGONG_NBI_LIVE',Eicher:'EICHER_VECV_LIVE',Case:'CASE_EQUIPMENT_LIVE'};
     return [{ id: source?.id || `equipment-${row.id}`, source: sources[company],
-      vehicleNumber: row.equipment, doorNumber: row.equipment, trackerId: row.serialNumber,
+      vehicleNumber: row.equipment, doorNumber: row.equipment, trackerId: source.trackerId,
       company, assetCategory: category, assetType: source?.assetType || null,
       modelNumber: row.model || source?.modelNumber || null, siteId: site?.id || null, siteName: row.location || null,
       contractType: site?.contractType || null, fuelMeasurementUnit: category === 'Truck' ? 'km/L' : 'L/hr',
