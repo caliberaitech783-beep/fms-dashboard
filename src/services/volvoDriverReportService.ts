@@ -105,6 +105,8 @@ export async function fetchVolvoDriverStandstillReport(
       if (!isReportPreview(payload)) {
         return errorPreview("Volvo RFMS returned an invalid shift report.");
       }
+      // A queued report is not a failed report and must not be cached as completed.
+      if (response.status === 202) return payload;
       if (payload.period && filters.timePeriodMode === "schedule") {
         payload.period.customTimeRange = false;
       }
