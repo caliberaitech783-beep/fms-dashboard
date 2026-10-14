@@ -288,6 +288,7 @@ async function loadSnapshot() {
       });
       return {
         ...normalized,
+        oemCatalogAvailable: vehicle.oemCatalogAvailable,
         active: importedVehicle ? importedVehicle.active : normalized.active,
         serviceStatus: importedVehicle?.serviceStatus || null,
         rawSiteName: importedVehicle?.rawSiteName || null,
@@ -561,6 +562,8 @@ async function loadDriverStandstillReport(request) {
     const siteVehicles = snapshot.vehicles.filter((vehicle) => matchesSite(vehicle, reportSite));
     const siteFilterApplied = siteVehicles.length > 0;
     const selectedVehicles = siteVehicles;
+    // Keep subscribed trucks visible without querying VINs absent from the OEM catalog.
+    const historyVehicles = selectedVehicles.filter(vehicle => vehicle.oemCatalogAvailable !== false);
     const fallbackDriverMap = parseDriverMap(process.env.VOLVO_RFMS_DRIVER_MAP_JSON);
     let driverDirectory = emptyDriverDirectory();
     let liveDriverConnected = false;
@@ -605,7 +608,7 @@ async function loadDriverStandstillReport(request) {
       // instead of caching and presenting a partial historical report.
       continueOnError: false,
     };
-    if (selectedVehicles.length) {
+    if (historyVehicles.length) {
       const candidates = Array.from({ length: fallbackDays + 1 }, (_, dayOffset) => {
         const candidateDate = subtractCalendarDays(dateResolution.date, dayOffset);
         return {
@@ -615,7 +618,7 @@ async function loadDriverStandstillReport(request) {
             : getShiftWindow(scheduleSiteName(reportSite), candidateDate, shift),
         };
       });
-      const history = await fetchReportHistoryCandidates(persistedHistoryClient(client), selectedVehicles, {
+      const history = await fetchReportHistoryCandidates(persistedHistoryClient(client), historyVehicles, {
         ...historyOptions,
         vehicleRequestThreshold: historyStrategy.vehicleRequestThreshold,
         candidates,
