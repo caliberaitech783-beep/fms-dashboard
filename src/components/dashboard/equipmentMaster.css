@@ -33,3 +33,5 @@
 .equipment-master .em-dialog label { display:grid; gap:5px; font-size:13px; }
 .equipment-master .em-import { display:grid; gap:18px; }
 .equipment-master :focus-visible { outline:2px solid #7752b7; outline-offset:3px; }
+
+.fms-theme .equipment-master .em-delete { color:#c52222; border-color:#f0b7b7; background:#fffafa; }

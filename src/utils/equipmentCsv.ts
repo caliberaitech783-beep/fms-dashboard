@@ -2,7 +2,7 @@ import type { EquipmentRecord } from "../services/equipmentMasterService";
 export const equipmentColumns = [
   ["equipment", "Equipment / Door no"], ["serialNumber", "Serial number / VIN"],
   ["category", "Category"], ["model", "Model"], ["oem", "OEM"],
-  ["location", "Location"], ["roadStatus", "Road status"],
+  ["location", "Location"], ["roadStatus", "Road status"], ["driver", "Driver"],
 ] as const;
 export function equipmentCsv(rows: EquipmentRecord[]) {
   const cell = (value: string) => `"${(/^[=+@\-\t\r]/.test(value) ? "'" + value : value).replace(/"/g, '""')}"`;

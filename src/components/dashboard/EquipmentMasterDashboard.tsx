@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Filter, Plus, Printer, Search, Upload, X } from "lucide-react";
+import { ChevronDown, RefreshCw, Trash2, Filter, Plus, Printer, Search, Upload, X } from "lucide-react";
 import { equipmentMasterService, type EquipmentRecord } from "../../services/equipmentMasterService";
 import { equipmentColumns, equipmentCsv, parseEquipmentCsv } from "../../utils/equipmentCsv";
 import "./equipmentMaster.css";
@@ -56,10 +56,33 @@ export function EquipmentMasterDashboard() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to save records."); }
     finally { setSaving(false); }
   }
+  async function sync() {
+    setSaving(true); setMessage("");
+    try {
+      const result = await equipmentMasterService.sync();
+      setRows(await equipmentMasterService.list());
+      setMessage(`Synced drivers and models from the FMS vehicle master: ${result.updated} records updated. Missing source values are retained.`);
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setSaving(false); }
+  }
+  async function remove(all: boolean) {
+    const targets = all ? rows : chosen;
+    if (!targets.length || !window.confirm(`Delete ${all ? "ALL " : ""}${targets.length} equipment records from Equipment Master?${all ? " This includes records hidden by filters." : ""} OEM source data and reports will be retained.`)) return;
+    setSaving(true); setMessage("");
+    try {
+      const result = await equipmentMasterService.remove(targets.map(row => row.id));
+      setRows(await equipmentMasterService.list()); setSelected(new Set());
+      setMessage(`${result.deleted} equipment records deleted.`);
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setSaving(false); }
+  }
   function print() { try { printRows(chosen.length ? chosen : visible); } catch (error) { setMessage((error as Error).message); } }
   return <section className="equipment-master" aria-label="Equipment Master">
     <header className="em-header"><div><h1>Equipment master</h1><p>All equipment · {visible.length.toLocaleString()} records shown</p></div>
       <div className="em-tools">
+        <button disabled={saving || loading} onClick={() => void sync()}><RefreshCw size={18} />Sync drivers &amp; models</button>
+        <button className="em-delete" disabled={saving || loading || !rows.length} onClick={() => void remove(true)}><Trash2 size={18} />Delete all</button>
+        <button className="em-delete" disabled={saving || loading || !chosen.length} onClick={() => void remove(false)}><Trash2 size={18} />Delete selected ({chosen.length})</button>
         <button onClick={() => { setImportOpen(true); setImportRows([]); }}><Upload size={18} />Import</button>
         <details className="em-export"><summary><Printer size={18} />Print/Export<ChevronDown size={16} /></summary><div>
           <button onClick={print} disabled={!visible.length}>Print / Save PDF{chosen.length ? " (selected)" : ""}</button>
@@ -85,14 +108,14 @@ export function EquipmentMasterDashboard() {
     {loading ? <p className="em-message" role="status">Loading equipment…</p> : <>
       <div className="em-table"><table><thead><tr><th><input type="checkbox" aria-label="Select all filtered equipment" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(visible.map(row => row.id)))} /></th>{equipmentColumns.map(([, label]) => <th key={label}>{label}</th>)}<th>Actions</th></tr></thead><tbody>
         {pageRows.map(row => <tr key={row.id}><td><input type="checkbox" aria-label={`Select ${row.equipment}`} checked={selected.has(row.id)} onChange={() => setSelected(previous => { const next = new Set(previous); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; })} /></td>{equipmentColumns.map(([key]) => <td key={key}>{row[key] || "-"}</td>)}<td><button onClick={() => setRecord({ ...row })}>Edit</button></td></tr>)}
-        {!visible.length && <tr><td colSpan={9}>No equipment matches the selected filters.</td></tr>}
+        {!visible.length && <tr><td colSpan={equipmentColumns.length + 2}>No equipment matches the selected filters.</td></tr>}
       </tbody></table></div>
       <footer className="em-pagination"><span>{chosen.length} selected</span><button disabled={!page} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page + 1} of {Math.max(1, Math.ceil(visible.length / 50))}</span><button disabled={(page + 1) * 50 >= visible.length} onClick={() => setPage(page + 1)}>Next</button></footer>
     </>}
     {(record || importOpen) && <div className="em-overlay" onKeyDown={event => { if (event.key === "Escape" && !saving) { setRecord(null); setImportOpen(false); } }}><div className="em-dialog" role="dialog" aria-modal="true" aria-labelledby="em-dialog-title">
       <div className="em-dialog-heading"><h2 id="em-dialog-title">{record ? record.id ? "Edit equipment" : "Add equipment" : "Import equipment"}</h2><button aria-label="Close dialog" disabled={saving} onClick={() => { setRecord(null); setImportOpen(false); }}><X size={20} /></button></div>
       {record ? <form onSubmit={event => { event.preventDefault(); void save([record]); }}>
-        {equipmentColumns.map(([key, label]) => <label key={key}>{label}{key === "roadStatus" ? <select value={record[key]} onChange={event => setRecord({ ...record, [key]: event.target.value })}>{["On road", "Off road", "Unknown"].map(value => <option key={value}>{value}</option>)}</select> : <input autoFocus={key === "equipment"} required={key === "equipment" || key === "serialNumber"} readOnly={key === "serialNumber" && Boolean(record.id)} maxLength={200} value={record[key]} onChange={event => setRecord({ ...record, [key]: event.target.value })} />}</label>)}
+        {equipmentColumns.map(([key, label]) => <label key={key}>{label}{key === "roadStatus" ? <select value={record[key] || ""} onChange={event => setRecord({ ...record, [key]: event.target.value })}>{["On road", "Off road", "Unknown"].map(value => <option key={value}>{value}</option>)}</select> : <input autoFocus={key === "equipment"} required={key === "equipment" || key === "serialNumber"} readOnly={key === "serialNumber" && Boolean(record.id)} maxLength={200} value={record[key] || ""} onChange={event => setRecord({ ...record, [key]: event.target.value })} />}</label>)}
         <button className="em-add" disabled={saving}>{saving ? "Saving…" : "Save record"}</button>
       </form> : <div className="em-import"><p>Import a CSV file with equipment, serial number, category, model, OEM, location and road status. Matching serial numbers update existing Equipment Master records.</p>
         <button onClick={() => download([], "equipment-master-template.csv")}>Download CSV template</button>
