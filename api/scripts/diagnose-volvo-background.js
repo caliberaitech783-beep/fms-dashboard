@@ -7,6 +7,11 @@ const az=args=>JSON.parse(execFileSync("az",args,{encoding:"utf8",stdio:["ignore
  const db=require("../src/lib/volvo/volvoBackgroundStore");
  const jobs=await db.jobs();
  console.log(JSON.stringify({phase:"before",collector:await db.read("collector-status"),cursor:await db.get("CONTROL","HISTORY_CURSOR"),gate:await db.get("CONTROL","REQUEST"),jobs:jobs.map(j=>({query:JSON.parse(j.query),status:j.status,attempts:j.attempts,lastStatus:j.lastStatus,dueAt:j.dueAt,leaseUntil:j.leaseUntil}))}));
+ for(const job of jobs.filter(j=>j.status === "complete")) {
+   const saved=await db.read(job.key);
+   console.log(JSON.stringify({savedReport:JSON.parse(job.query),savedAt:saved?.savedAt,rowCount:saved?.value?.rows?.length,period:saved?.value?.period}));
+ }
+ if(process.env.VOLVO_DIAGNOSTIC_COLLECT !== "true") return;
  const {loadDriverStandstillReport}=require("../src/functions/volvoApi");
  const {processReportJobs}=require("../src/lib/volvo/volvoReportJobs");
  console.log(JSON.stringify(await processReportJobs(async request=>{

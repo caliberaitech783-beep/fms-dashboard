@@ -131,7 +131,9 @@ class VolvoDriverClient {
 
     for (let attempt = 0; attempt <= this.retries; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      let timeout;
+      const onRequestStart = () => { timeout = setTimeout(() => controller.abort(), this.timeoutMs); };
+      if (!this.fetchFn.queuesRequests) onRequestStart();
       try {
         const response = await this.fetchFn(url, {
           method: "GET",
@@ -140,7 +142,7 @@ class VolvoDriverClient {
             Authorization: authorization,
             "Cache-Control": "no-cache",
           },
-          signal: controller.signal,
+          onRequestStart, signal: controller.signal,
         });
         const text = await response.text();
         if (!response.ok) {
