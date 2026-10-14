@@ -1,3 +1,13 @@
+const { listEquipment } = require("../lib/vehicles/equipmentMasterStore");
+const { selectEquipment, equipmentSite } = require("../lib/vehicles/equipmentRoster");
+async function subscribedFleet() {
+ return selectEquipment(await listEquipment(), "LiuGong", service.fleet.map(m=>m.serialNumber)).map(row=>({
+  serialNumber:row.serialNumber,doorNumber:row.equipment,model:row.model,
+  productGroup:/truck|haul/i.test(row.category) || row.serialNumber.startsWith("LGI") ? "Mining Truck" : "Excavator",
+  location: equipmentSite(row)?.id === "site-wcl-sasti-ocm" ? "Sasti" : row.location,
+  siteId:equipmentSite(row)?.id || null,siteName:row.location,
+ }));
+}
 const { app } = require("@azure/functions");
 require("../lib/loadLocalEnv").loadLocalEnv();
 const auth = require("../lib/authStore");
@@ -17,8 +27,9 @@ async function handler(request) {
     auth.assertTokenForUser(payload, actor);
     if (!["Super Admin", "Management", "Fleet Manager"].includes(actor.role)) return { status: 403, headers };
     const from = request.query.get("from"), to = request.query.get("to");
-    const latest = from || to ? null : await store.loadSnapshot(service.fleet[0].serialNumber);
-    const jsonBody = from || to ? await service.report(from, to) : { vehicles: service.vehicles(),
+    const fleet = await subscribedFleet();
+    const latest = from || to || !fleet.length ? null : await store.loadSnapshot(fleet[0].serialNumber);
+    const jsonBody = from || to ? await service.report(from, to, store, fleet) : { vehicles: service.vehicles(fleet),
       integration: { id: "liugong-nbi", company: "LiuGong", sourceType: "API",
         status: latest && Date.now() - Date.parse(latest.fetchedAt) < 30 * 60000 ? "connected" : "delayed",
         lastSyncAt: latest?.fetchedAt || null, nextSyncAt: null, recordsSyncedToday: 0,
@@ -30,6 +41,6 @@ async function handler(request) {
 }
 app.http("liugongFleet", { route: "integrations/liugong/vehicles", authLevel: "anonymous", methods: ["GET", "OPTIONS"], handler });
 app.timer("liugongDailySync", { schedule: "0 */10 * * * *", runOnStartup: true,
-  handler: async (_timer, context) => { try { context.log("LiuGong sync", await service.synchronize()); }
+  handler: async (_timer, context) => { try { context.log("LiuGong sync", await service.synchronize({fleet:await subscribedFleet()})); }
     catch { context.error("LiuGong synchronization failed; previous daily records retained."); } } });
 module.exports = { handler };

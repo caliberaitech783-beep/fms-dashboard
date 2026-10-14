@@ -4,13 +4,13 @@ const number = value => value === null || value === undefined || value === "" ||
 const round = value => value === null ? null : Math.round(value * 100) / 100;
 const ratio = (a, b, scale = 1) => a !== null && b > 0 ? round(a / b * scale) : null;
 const day = date => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(date);
-function vehicles() {
-  return fleet.map(m => ({ id: `liugong-${m.serialNumber}`, vehicleNumber: m.serialNumber, doorNumber: m.doorNumber,
+function vehicles(selectedFleet = fleet) {
+  return selectedFleet.map(m => ({ id: `liugong-${m.serialNumber}`, vehicleNumber: m.serialNumber, doorNumber: m.doorNumber,
     source: "LIUGONG_NBI_LIVE", trackerId: m.serialNumber, trackerProvider: "LiuGong NBI",
     company: "LiuGong", assetCategory: m.productGroup === "Mining Truck" ? "Truck" : "HEMM",
     assetType: m.productGroup === "Mining Truck" ? "Haul Pack" : "Excavator", modelNumber: m.model,
-    siteId: m.location === "Sasti" ? "site-wcl-sasti-ocm" : "site-wcl-gauri-pauni",
-    siteName: m.location === "Sasti" ? "Sasti OCM" : "Gauri Pauni OCM", contractType: null,
+    siteId: m.siteId !== undefined ? m.siteId : (m.location === "Sasti" ? "site-wcl-sasti-ocm" : "site-wcl-gauri-pauni"),
+    siteName: m.siteName ?? (m.location === "Sasti" ? "Sasti OCM" : "Gauri Pauni OCM"), contractType: null,
     fuelMeasurementUnit: m.productGroup === "Mining Truck" ? "km/L" : "L/hr",
     status: "unknown", active: true, capacityM3: null, commissioningDate: null,
     fuelTankCapacityLitres: null, standardFuelNorm: null }));
@@ -71,7 +71,7 @@ async function synchronize(options = {}) {
   const startTime = Date.parse(`${day(new Date(now.getTime()-6*86400000))}T00:00:00+05:30`);
   let updated = 0;
   const failures = [];
-  for (const m of fleet) {
+  for (const m of options.fleet || fleet) {
     try {
     const prior = await storage.loadSnapshot(m.serialNumber);
     const fresh = [];
@@ -93,12 +93,12 @@ async function synchronize(options = {}) {
   }
   return { configured: true, updated, failures };
 }
-async function report(from, to, storage = store) {
+async function report(from, to, storage = store, selectedFleet = fleet) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from || "") || !/^\d{4}-\d{2}-\d{2}$/.test(to || "") || from > to)
     throw Object.assign(new Error("Valid start and end dates are required."), { statusCode: 400 });
-  const snapshots = await Promise.all(fleet.map(m => storage.loadSnapshot(m.serialNumber)));
-  return { generatedAt: new Date().toISOString(), vehicles: vehicles(),
-    rows: fleet.map((m,i) => { const snapshot = snapshots[i];
+  const snapshots = await Promise.all(selectedFleet.map(m => storage.loadSnapshot(m.serialNumber)));
+  return { generatedAt: new Date().toISOString(), vehicles: vehicles(selectedFleet),
+    rows: selectedFleet.map((m,i) => { const snapshot = snapshots[i];
       const rows = (snapshot?.payload?.rows || []).filter(r => r.date >= from && r.date <= to);
       return { serialNumber: m.serialNumber, ...summarize(rows), daysReported: rows.length,
         lastSyncAt: snapshot?.fetchedAt || null }; }),

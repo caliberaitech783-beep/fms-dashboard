@@ -1,3 +1,5 @@
+const { listEquipment } = require("../lib/vehicles/equipmentMasterStore");
+const { importedRoster, rosterRevision } = require("../lib/vehicles/equipmentRoster");
 const { app } = require("@azure/functions");
 const { timingSafeEqual } = require("node:crypto");
 const { loadLocalEnv } = require("../lib/loadLocalEnv");
@@ -6,7 +8,6 @@ loadLocalEnv();
 
 const authStore = require("../lib/authStore");
 const { maskObject, safeErrorMessage, sanitizeText } = require("../lib/tracking/masking");
-const { listVehicles: listImportedVehicles } = require("../lib/vehicles/vehicleStore");
 const {
   ScaniaApiError,
   createScaniaClientFromEnv,
@@ -528,20 +529,9 @@ async function handleVehicleEvaluation(request, context) {
     }
     const logger = createLogger(context);
     const snapshot = await getLiveScaniaSnapshot({ allowBootstrap: true });
-    const scaniaSiteMasters = snapshot.vehicles.map((vehicle) => ({
-      vin: vehicle.trackerId,
-      vehicleNumber: vehicle.vehicleNumber,
-      vehicleModel: vehicle.modelNumber,
-      siteId: vehicle.siteId,
-      siteName: vehicle.siteName,
-      siteGroup: vehicle.siteGroup,
-      contractType: vehicle.contractType,
-      active: vehicle.active,
-    }));
-    // The Scania snapshot already joins API vehicle masters to imported site assignments.
-    // Do not add unrelated OEM master rows when listing vehicles without telemetry.
-    const reportVehicles = scaniaSiteMasters;
-    const resource = reportSnapshotResource(body);
+    const equipment = await listEquipment();
+    const reportVehicles = importedRoster(equipment, "Scania", snapshot.vehicles.map(vehicle => vehicle.trackerId));
+    const resource = reportSnapshotResource(body) + "-master-" + rosterRevision(equipment);
     let result;
     try {
       result = await generateScaniaStatusReport(body, { importedVehicles: reportVehicles });
@@ -631,26 +621,16 @@ async function handleShiftSummary(request, context) {
       };
     }
     const logger = createLogger(context);
-    const [statusResult, importedVehicles] = await Promise.all([
-      getShiftStatusSnapshot(logger),
-      listImportedVehicles(),
-    ]);
-    const scaniaSiteMasters = (statusResult.vehicles || []).map((vehicle) => ({
-      vin: vehicle.trackerId,
-      vehicleNumber: vehicle.vehicleNumber,
-      siteId: vehicle.siteId,
-      siteName: vehicle.siteName,
-      siteGroup: vehicle.siteGroup,
-      contractType: vehicle.contractType,
-      active: vehicle.active,
-    }));
+    const statusResult = await getShiftStatusSnapshot(logger);
+    const scaniaSiteMasters = importedRoster(await listEquipment(), "Scania", (statusResult.vehicles || []).map(vehicle => vehicle.trackerId));
+    const subscribedVins = new Set(scaniaSiteMasters.map(vehicle => vehicle.vin.toUpperCase()));
     const report = buildScaniaShiftSummary({
       vehicles: scaniaSiteMasters.map((vehicle) => ({
         vin: vehicle.vin,
         customerVehicleName: vehicle.vehicleNumber,
       })),
-      statuses: statusResult.records,
-      importedVehicles: [...importedVehicles, ...scaniaSiteMasters],
+      statuses: statusResult.records.filter(row => subscribedVins.has(String(row.vin || row.VIN || "").toUpperCase())),
+      importedVehicles: scaniaSiteMasters,
       request: requestDetails,
     });
     logger("shift_summary_complete", {
