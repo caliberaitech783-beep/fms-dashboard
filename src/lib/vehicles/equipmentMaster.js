@@ -1,5 +1,5 @@
 const { createHash } = require("node:crypto");
-const FIELDS = ["equipment", "serialNumber", "category", "model", "oem", "location", "roadStatus"];
+const FIELDS = ["equipment", "serialNumber", "category", "model", "oem", "location", "roadStatus", "driver"];
 const ROAD_STATUSES = ["On road", "Off road", "Unknown"];
 function normalizeEquipment(input) {
   if (!input || typeof input !== "object") throw Object.assign(new Error("Invalid equipment record."), { statusCode: 400 });
@@ -17,10 +17,28 @@ function importedEquipment(row) {
   const serialNumber = row.vin || "";
   const record = {
     id: serialNumber ? createHash("sha256").update(serialNumber.trim().toUpperCase()).digest("hex") : `imported-${row.rowKey}`,
+    driver: source.Driver || source["Driver Name"] || source.driverName || "",
     equipment: row.vehicleNumber || "", serialNumber, model: row.vehicleModel || "",
     location: row.siteName || row.rawSiteName || "", category: source.Category || source["Product Group"] || "",
     oem: source.OEM || source.Company || "", roadStatus: "Unknown",
   };
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, String(value)]));
 }
-module.exports = { normalizeEquipment, importedEquipment };
+function mergeEquipment(imported, entities) {
+  const rows = new Map(imported.map(row => { const record = importedEquipment(row); return [record.id, record]; }));
+  for (const entity of entities) {
+    if (entity.deleted) rows.delete(entity.rowKey);
+    else { const record = JSON.parse(entity.recordJson); rows.set(record.id, record); }
+  }
+  return [...rows.values()];
+}
+function syncEquipment(rows, imported) {
+  const sources = new Map(imported.map(row => { const record = importedEquipment(row); return [record.id, record]; }));
+  return rows.flatMap(row => {
+    const source = sources.get(row.id);
+    if (!source) return [];
+    const next = { ...row, model: source.model || row.model, driver: source.driver || row.driver || "" };
+    return next.model !== row.model || next.driver !== (row.driver || "") ? [next] : [];
+  });
+}
+module.exports = { normalizeEquipment, importedEquipment, mergeEquipment, syncEquipment };
