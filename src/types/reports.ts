@@ -50,6 +50,7 @@ export interface ReportPreview {
   oem?: string;
   live?: boolean;
   frozen?: boolean;
+  processing?: boolean;
   source?: string;
   notice?: string | null;
   error?: {
