@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Sign in to Azure with OIDC
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_A2D43B1FDFA0427A91B4128BD4970864 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5A13C6D439A449DCAFDBC77D4DC75AB4 }}
